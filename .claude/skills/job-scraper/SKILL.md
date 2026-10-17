@@ -147,6 +147,8 @@ For each new job, do a rapid fit check (NOT the full evaluation from `04-job-eva
 - **Medium match**: Role is adjacent to your experience
 - **Low match**: Role requires significant skills you lack
 
+**Employment type:** while reading the posting for this check, note how it says the engagement is structured and record it as `employment_type` in Step 4 - one of `full_time`, `part_time`, `contract`, `freelance`, or `null`. Take it only from what the posting text states ("permanent", "6-month contract", "freelance", "part-time"); a posting that says nothing, or says something ambiguous, is `null`. Never infer it from the title, the company or the portal.
+
 **Language override:** before assigning a match level, check the posting against `04-job-evaluation.md`'s Language Gate (a required language you haven't declared at all in your CLAUDE.md Languages table). A required language that's entirely undeclared overrides skill fit: mark it **Low** regardless of how well the skills align, and name it in the highlight bullets so it isn't buried under an otherwise-good-looking match. A **declared** language at a requirement that reads higher than your declared level is *not* an override — score fit normally, but add a red-flag bullet under that job's highlights (Step 5) quoting the posting's requirement next to your declared level, so the gap is visible without being auto-downgraded.
 
 ### Step 4: Deduplicate & Store
@@ -170,6 +172,7 @@ It prints one line: the canonical key for that posting. The key must be a pure f
       "first_seen": "YYYY-MM-DD",
       "posted_date": "YYYY-MM-DD" | null,
       "deadline": "YYYY-MM-DD" | null,
+      "employment_type": "full_time" | "part_time" | "contract" | "freelance" | null,
       "fit": "high/medium/low",
       "status": "new/skipped/ranked/expired/unreachable",
       "portal": "<source portal skill, e.g. jobindex-search>",
@@ -196,6 +199,8 @@ The `source` field records which mechanism produced the entry: `cli` for Step 1b
 `deadline` is a base field rather than a `/rank` extension: Step 2's detail fetch already extracts the application deadline, so it is written when the job is first seen and refreshed by `/rank` Step 4 when a scoring agent returns a different value. `null` means the posting states no deadline; a missing key means the entry predates this field - **never infer a deadline** from either, and never backfill by guessing.
 
 `posted_date` is the posting's own publication date, taken from the `date` field Step 2's contract already guarantees on every portal CLI's search output. Step 1b uses that date to scope the run to the last 14 days and then drops it, so nothing downstream can distinguish a posting published yesterday from one published two years ago - `first_seen` is when this scraper first saw the entry, not when the employer posted it. Persisting it makes Step 1b's window auditable after the run and gives `/rank` a freshness signal to weigh, instead of rediscovering the date and recording it in prose that nothing reads. That gap landed for real: a freehire-search posting dated 2024-05-13 was scraped and ranked Strong Fit at position 1 of 133, its own scoring note observing the listing "may be long stale" with nothing able to act on it. `null` means the portal returned no date for that result (the CLIs emit `date: null` when a listing omits it); a missing key means the entry predates this field - **never infer a posting date** from either, and never backfill by guessing.
+
+`employment_type` is what the posting itself says about how the work is engaged, read at Step 3's fit check from text already fetched, so it costs nothing extra. It is descriptive only: it never changes `fit` and nothing in `/scrape` filters on it. `null` means the posting did not say; a missing key means the entry predates this field - **never infer an employment type** from either, and never backfill by guessing. Pay is deliberately not normalised: rates, currencies and salary-versus-day-rate are posting-specific and stay in the posting.
 
 3. Only present jobs NOT already in the seen list (matched by URL or
    company+title) or tracker.

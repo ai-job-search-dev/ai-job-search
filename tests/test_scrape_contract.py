@@ -136,6 +136,49 @@ class SeenJobsPostingDateTests(unittest.TestCase):
         )
 
 
+RANK_COMMAND = REPO_ROOT / ".claude" / "commands" / "rank.md"
+EMPLOYMENT_TYPES = ("full_time", "part_time", "contract", "freelance")
+
+
+class SeenJobsEmploymentTypeTests(unittest.TestCase):
+    """The engagement type a posting states must be stored and surfaced, never guessed.
+
+    Part-time, contract and freelance postings reach the shortlist
+    indistinguishable from permanent roles: Step 3 reads the posting but its
+    only outputs are a fit band and highlights, so a "6-month contract" is only
+    visible if the reader happens to see the title. Persisting it as a nullable
+    field lets /rank show it and flag a mismatch with the user's stated
+    preference, without any new profile field.
+    """
+
+    def test_step4_schema_persists_employment_type(self):
+        self.assertIn(
+            "employment_type",
+            derive_stored_fields(),
+            "Step 4's seen_jobs.json schema stores no employment type",
+        )
+
+    def test_schema_lists_every_allowed_value_and_null(self):
+        text = SCRAPER_SKILL.read_text(encoding="utf-8")
+        line = next(l for l in text.splitlines() if l.strip().startswith('"employment_type"'))
+        for value in EMPLOYMENT_TYPES:
+            self.assertIn(f'"{value}"', line)
+        self.assertIn("null", line)
+
+    def test_employment_type_semantics_are_documented(self):
+        text = SCRAPER_SKILL.read_text(encoding="utf-8")
+        self.assertRegex(
+            text,
+            r"never infer an employment type",
+            "employment_type must carry the same never-backfill rule as `posted_date`",
+        )
+
+    def test_rank_shows_it_as_a_flag_never_a_veto(self):
+        text = RANK_COMMAND.read_text(encoding="utf-8")
+        self.assertIn("employment_type", text, "/rank never reads the stored employment type")
+        self.assertRegex(text, r"never a veto", "the mismatch flag must not veto")
+
+
 class SeenJobsDedupContinuityTests(unittest.TestCase):
     """The new key rule must not replay jobs stored under legacy keys."""
 

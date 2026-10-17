@@ -630,6 +630,14 @@ per-file diff commands.
 
 ### Added
 
+- **`/scrape` records each posting's employment type and `/rank` surfaces it**
+  (`.claude/skills/job-scraper/SKILL.md`, `.claude/commands/rank.md`,
+  `tests/test_scrape_contract.py`) - a nullable `employment_type` (`full_time`, `part_time`,
+  `contract`, `freelance`) in the `seen_jobs.json` entry, taken only from the posting text at
+  Step 3's fit check. `/rank` Step 5 shows it on the shortlist line and adds a ⚠ when it differs
+  from an engagement preference stated in the profile - a flag, never a veto. `null` means the
+  posting did not say and is never guessed; pay is not normalised; no new profile field.
+
 - **One cross-platform command installs every portal CLI: `python3 tools/install_portal_clis.py`**
   (#540, `README.md` quick start step 2, `SETUP.md` section 3,
   `tests/test_install_portal_clis.py`) - the README and SETUP.md each carried a PowerShell and a
