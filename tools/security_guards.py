@@ -53,6 +53,7 @@ Stdlib only. Exit 0 on success, 1 with a failure list otherwise.
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -227,6 +228,16 @@ ALLOWED_IGNORE_NEGATIONS = {
     "!cover_letters/cover_example.tex",
     "!documents/**/.gitkeep",
 }
+
+# Fork-local extension of the negation allowlist. A fork that adds its own tracked
+# directory under a personal-data ignore rule (say, `!leads/.gitkeep`) lists the
+# negation here instead of editing this file, so `git merge upstream/master` never
+# conflicts on ALLOWED_IGNORE_NEGATIONS. One negation per line, `#` comments and blank
+# lines allowed. The file can only EXTEND the negation allowlist: any other
+# non-comment line is a failure. Upstream never ships it (see
+# check_local_negations_absent_upstream).
+LOCAL_NEGATIONS_FILE = ROOT / ".github" / "security-guards-local.txt"
+UPSTREAM_REPO = "ai-job-search-dev/ai-job-search"
 
 # Hook commands the template legitimately ships, as "<Event>:<command>" strings.
 # Empty by design - the template ships no hooks at all.
@@ -578,12 +589,69 @@ def _gitignore_lines(path: Path) -> list[str]:
 
 def _other_gitignores():
     """Every .gitignore below the root, skipping .git and installed dependencies."""
-    import os
-
     for dirpath, dirnames, filenames in os.walk(ROOT):
         dirnames[:] = sorted(d for d in dirnames if d not in (".git", "node_modules"))
         if ".gitignore" in filenames and Path(dirpath) != ROOT:
             yield Path(dirpath) / ".gitignore"
+
+
+def _normalized_pattern(pattern: str) -> str:
+    """A .gitignore pattern with the spellings git treats as the same rule folded.
+
+    A leading ``/`` only anchors the pattern to the .gitignore's directory, and the
+    root ``.gitignore`` is that directory, so ``/salary_data.json`` and
+    ``salary_data.json`` are the same rule for a file at the repo root.
+    """
+    pattern = pattern.strip()
+    while pattern.startswith("./"):
+        pattern = pattern[2:]
+    return pattern.lstrip("/")
+
+
+_REQUIRED_IGNORE_PATTERNS = {
+    _normalized_pattern(rule) for rule in REQUIRED_IGNORE_RULES if not rule.startswith("!")
+}
+
+
+def load_local_negations() -> set[str]:
+    """Negations a fork lists in .github/security-guards-local.txt (empty if absent)."""
+    if not LOCAL_NEGATIONS_FILE.is_file():
+        return set()
+    try:
+        raw = LOCAL_NEGATIONS_FILE.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        errors.append(f".github/security-guards-local.txt: unreadable: {exc}")
+        return set()
+    extra: set[str] = set()
+    for number, line in enumerate(raw, start=1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if not line.startswith("!"):
+            errors.append(
+                f".github/security-guards-local.txt:{number}: {line!r} is not a negation. "
+                "The file may only list `!pattern` lines that extend the .gitignore "
+                "negation allowlist."
+            )
+            continue
+        if _normalized_pattern(line[1:]) in _REQUIRED_IGNORE_PATTERNS:
+            errors.append(
+                f".github/security-guards-local.txt:{number}: {line!r} negates a required "
+                "personal-data ignore rule (REQUIRED_IGNORE_RULES). A fork may re-include "
+                "its own tracked paths, never the rule that keeps personal data out of git."
+            )
+            continue
+        extra.add(line)
+    return extra
+
+
+def check_local_negations_absent_upstream() -> None:
+    """The local-negations file must never exist on the upstream template itself."""
+    if os.environ.get("GITHUB_REPOSITORY") == UPSTREAM_REPO and LOCAL_NEGATIONS_FILE.exists():
+        errors.append(
+            ".github/security-guards-local.txt must not exist on the upstream template: "
+            "it is a fork-only extension point. Remove it from this PR."
+        )
 
 
 def check_gitignore() -> None:
@@ -602,14 +670,17 @@ def check_gitignore() -> None:
                 "or was renamed intentionally, update REQUIRED_IGNORE_RULES in "
                 "tools/security_guards.py in the same PR."
             )
+    check_local_negations_absent_upstream()
+    allowed_negations = ALLOWED_IGNORE_NEGATIONS | load_local_negations()
     for line in lines:
-        if line.startswith("!") and line not in ALLOWED_IGNORE_NEGATIONS:
+        if line.startswith("!") and line not in allowed_negations:
             errors.append(
                 f".gitignore: negation rule not in the reviewed allowlist: {line!r}. "
                 "A negation re-includes a path an earlier rule excluded and can silently "
                 "re-expose personal data (a required ignore rule stays present but stops "
                 "taking effect). If this negation is intentional, add it to "
-                "ALLOWED_IGNORE_NEGATIONS in tools/security_guards.py in the same PR."
+                "ALLOWED_IGNORE_NEGATIONS in tools/security_guards.py in the same PR "
+                "(on a fork, list it in .github/security-guards-local.txt instead)."
             )
     # A .gitignore in a subdirectory outranks the root file for paths under it,
     # so a negation there re-includes personal data the root rules excluded.
