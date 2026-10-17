@@ -33,7 +33,6 @@ function numericEntity(cp: number): string {
  */
 function decodeHtmlEntities(text: string): string {
   return text
-    .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
@@ -50,6 +49,8 @@ function decodeHtmlEntities(text: string): string {
     .replace(/&#(\d+);/g, (_, dec) => numericEntity(parseInt(dec, 10)))
     .replace(/&#[xX]([0-9a-fA-F]+);/g, (_, hex) => numericEntity(parseInt(hex, 16)))
     .replace(/&nbsp;/g, " ")
+    // Last, so the "&" it produces is never re-read as the start of another entity.
+    .replace(/&amp;/g, "&")
 }
 
 /**

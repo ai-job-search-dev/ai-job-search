@@ -68,6 +68,10 @@ describe("toResult — reshape into the portal-skill contract", () => {
   test("detail inherits the cleaned title", () => {
     expect(toDetail(job({ title: "Data &amp; Analytics Intern" })).title).toBe("Data & Analytics Intern");
   });
+
+  test("decodes an entity once: &amp;lt; is the text \"&lt;\", not \"<\"", () => {
+    expect(toResult(job({ title: "R&amp;lt;D &amp;amp; Ops" })).title).toBe("R&lt;D &amp; Ops");
+  });
 });
 
 describe("toDetail — adds cleaned description + enrichment", () => {

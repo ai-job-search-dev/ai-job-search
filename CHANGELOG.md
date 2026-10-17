@@ -67,6 +67,8 @@ per-file diff commands.
 
 ### Fixed
 
+- **Portal CLIs decode HTML entities in one pass** (#625) - escaped named and numeric references remain literal text instead of being decoded again, including in Jobindex detail pages.
+
 - **The four `@bunli/core` portal CLIs typecheck on a clean install again** (#768, closes #765,
   `.agents/skills/{jobbank,jobdanmark,jobindex,jobnet}-search/cli/package.json`,
   `tests/test_portal_cli_types.py`) - `bun-types` accepts any `@types/node`, while `@bunli/core`

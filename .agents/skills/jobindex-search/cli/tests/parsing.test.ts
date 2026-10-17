@@ -43,6 +43,11 @@ describe("decodeHtmlEntities (via parseJobCards)", () => {
     const [c] = parseJobCards(card("h6", "Engineer", "N&#xF8;rrebro ApS"));
     expect(c.company).toBe("Nørrebro ApS");
   });
+
+  test("decodes an entity once: &amp;lt; is the text \"&lt;\", not \"<\"", () => {
+    const [c] = parseJobCards(card("h7", "R&amp;lt;D &amp;amp; Ops"));
+    expect(c.title).toBe("R&lt;D &amp; Ops");
+  });
 });
 
 describe("extractDivContent", () => {
