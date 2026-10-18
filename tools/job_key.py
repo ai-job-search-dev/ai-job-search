@@ -95,7 +95,7 @@ def slugify(text: str) -> str:
         return ""
     # Fold after NFKD so a letter that decomposes into a fold-table letter plus
     # a mark ("ǿ" -> "ø" + acute) is folded too.
-    decomposed = unicodedata.normalize("NFKD", unicodedata.normalize("NFC", str(text)))
+    decomposed = unicodedata.normalize("NFKD", str(text))
     folded = decomposed.translate(_LATIN_FOLD_TABLE)
     ascii_only = folded.encode("ascii", "ignore").decode("ascii")
     return _NON_SLUG.sub("-", ascii_only.lower()).strip("-")
