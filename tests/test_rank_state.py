@@ -870,6 +870,37 @@ class Unreachable(RankStateCase):
                 self.assertIn(f"unknown {field} {value!r}", out["errors"][0]["error"])
                 self.assertEqual(self.read_state()["a"]["status"], "new", "a rejected result never half-writes an entry")
 
+    def test_non_object_entry_is_reported_not_a_traceback(self):
+        """`candidates` and `sweep` read every entry, so either crashed on a non-object
+        one. `apply` only touches the keys its results name, so on master a result
+        naming the bad entry crashed and a result naming only a valid entry exited 0
+        and wrote it. `load_state` now refuses the file for all three, naming the key."""
+        self.write_state({"a": entry(), "b": "oops"})
+        naming_bad = self.results([{"key": "b", "status": "unreachable"}])
+        naming_good = self.results(
+            [{"key": "a", "status": "scored",
+              "scores": {"technical": 80, "experience": 80, "behavioral": 80, "career": 80}}]
+        )
+        for args in (
+            ("candidates", "--tracker", str(self.tmp / "none.csv")),
+            ("sweep",),
+            ("apply", "--results", naming_bad),
+            ("apply", "--results", naming_good),
+        ):
+            with self.subTest(command=args[0], results=args[-1]):
+                proc = subprocess.run(
+                    [sys.executable, str(TOOL), *args, "--state", str(self.state), "--today", TODAY],
+                    capture_output=True, text=True, encoding="utf-8",
+                )
+                self.assertEqual(proc.returncode, 1)
+                self.assertIn("entry is not an object: b", proc.stderr)
+                self.assertNotIn("Traceback", proc.stderr)
+        self.assertEqual(
+            json.loads(self.state.read_text(encoding="utf-8")),
+            {"a": entry(), "b": "oops"},
+            "a refused file is never half-written",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
