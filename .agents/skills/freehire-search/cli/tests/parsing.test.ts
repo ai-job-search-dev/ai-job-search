@@ -70,7 +70,7 @@ describe("toResult — reshape into the portal-skill contract", () => {
   });
 
   test("decodes an entity once: &amp;lt; is the text \"&lt;\", not \"<\"", () => {
-    expect(toResult(job({ title: "R&amp;lt;D &amp;amp; Ops" })).title).toBe("R&lt;D &amp; Ops");
+    expect(toResult(job({ title: "R&amp;lt;D &amp;amp; Ops &#38;amp; &#x26;quot;" })).title).toBe("R&lt;D &amp; Ops &amp; &quot;");
   });
 });
 

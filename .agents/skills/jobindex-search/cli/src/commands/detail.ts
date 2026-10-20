@@ -32,25 +32,13 @@ function numericEntity(cp: number): string {
  * Decode HTML entities in text
  */
 function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    // Danish letters appear as named entities in employer-hosted ad markup.
-    .replace(/&oslash;/g, "ø")
-    .replace(/&Oslash;/g, "Ø")
-    .replace(/&aelig;/g, "æ")
-    .replace(/&AElig;/g, "Æ")
-    .replace(/&aring;/g, "å")
-    .replace(/&Aring;/g, "Å")
-    // Numeric character references: decimal (&#233;) and hexadecimal (&#xE9;).
-    .replace(/&#(\d+);/g, (_, dec) => numericEntity(parseInt(dec, 10)))
-    .replace(/&#[xX]([0-9a-fA-F]+);/g, (_, hex) => numericEntity(parseInt(hex, 16)))
-    .replace(/&nbsp;/g, " ")
-    // Last, so the "&" it produces is never re-read as the start of another entity.
-    .replace(/&amp;/g, "&")
+  const named: Record<string, string> = {"lt": "<", "gt": ">", "quot": "\"", "apos": "'", "nbsp": " ", "amp": "&", "oslash": "ø", "Oslash": "Ø", "aelig": "æ", "AElig": "Æ", "aring": "å", "Aring": "Å"}
+  // Replace references from the original input only; never decode replacement text again.
+  return text.replace(/&(#(?:[xX][0-9a-fA-F]+|[0-9]+)|lt|gt|quot|apos|nbsp|amp|oslash|Oslash|aelig|AElig|aring|Aring);/g, (_, entity: string) => {
+    if (!entity.startsWith("#")) return named[entity]!
+    const hex = entity[1]?.toLowerCase() === "x"
+    return numericEntity(parseInt(entity.slice(hex ? 2 : 1), hex ? 16 : 10))
+  })
 }
 
 /**

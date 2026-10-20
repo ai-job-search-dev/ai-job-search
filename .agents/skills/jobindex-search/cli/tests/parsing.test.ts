@@ -45,8 +45,8 @@ describe("decodeHtmlEntities (via parseJobCards)", () => {
   });
 
   test("decodes an entity once: &amp;lt; is the text \"&lt;\", not \"<\"", () => {
-    const [c] = parseJobCards(card("h7", "R&amp;lt;D &amp;amp; Ops"));
-    expect(c.title).toBe("R&lt;D &amp; Ops");
+    const [c] = parseJobCards(card("h7", "R&amp;lt;D &amp;amp; Ops &#38;amp; &#x26;quot;"));
+    expect(c.title).toBe("R&lt;D &amp; Ops &amp; &quot;");
   });
 });
 

@@ -72,8 +72,8 @@ describe("decodeHtmlEntities (via parseJobCards)", () => {
   });
 
   test("decodes an entity once: &amp;lt; is the text \"&lt;\", not \"<\"", () => {
-    const [card] = parseJobCards(searchCard("127", "R&amp;lt;D &amp;amp; Ops"));
-    expect(card.title).toBe("R&lt;D &amp; Ops");
+    const [card] = parseJobCards(searchCard("127", "R&amp;lt;D &amp;amp; Ops &#38;amp; &#x26;quot;"));
+    expect(card.title).toBe("R&lt;D &amp; Ops &amp; &quot;");
   });
 
   test("decodes supplementary-plane code points with fromCodePoint (&#128512;)", () => {

@@ -130,13 +130,10 @@ export function visibleHtml(html: string): string {
 export function stripHtml(html: string): string {
   return visibleHtml(html)
     .replace(/<[^>]*>/g, " ")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, " ")
-    // Last, so the "&" it produces is never re-read as the start of another entity.
-    .replace(/&amp;/g, "&")
+    .replace(/&(lt|gt|quot|#39|nbsp|amp);/g, (_, entity: string) => {
+      const named: Record<string, string> = { lt: "<", gt: ">", quot: '"', "#39": "'", nbsp: " ", amp: "&" }
+      return named[entity]!
+    })
     .replace(/\s+/g, " ")
     .trim()
 }

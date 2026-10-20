@@ -251,17 +251,13 @@ function numericEntity(cp: number): string {
 }
 
 function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, dec) => numericEntity(parseInt(dec, 10)))
-    .replace(/&#[xX]([0-9a-fA-F]+);/g, (_, hex) => numericEntity(parseInt(hex, 16)))
-    .replace(/&nbsp;/g, " ")
-    // Last, so the "&" it produces is never re-read as the start of another entity.
-    .replace(/&amp;/g, "&")
+  const named: Record<string, string> = {"lt": "<", "gt": ">", "quot": "\"", "apos": "'", "nbsp": " ", "amp": "&"}
+  // Replace references from the original input only; never decode replacement text again.
+  return text.replace(/&(#(?:[xX][0-9a-fA-F]+|[0-9]+)|lt|gt|quot|apos|nbsp|amp);/g, (_, entity: string) => {
+    if (!entity.startsWith("#")) return named[entity]!
+    const hex = entity[1]?.toLowerCase() === "x"
+    return numericEntity(parseInt(entity.slice(hex ? 2 : 1), hex ? 16 : 10))
+  })
 }
 
 /**

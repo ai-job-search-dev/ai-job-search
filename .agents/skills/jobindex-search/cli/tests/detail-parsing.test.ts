@@ -150,3 +150,10 @@ describe("parseDetailPage - external ATS passthrough shape", () => {
     expect(parsed.deadline).toBeNull();
   });
 });
+
+// Browsers decode each character reference once, even when it creates another reference.
+test("detail decodes escaped references only once", () => {
+  const page = NATIVE_PAGE.replaceAll("Udvikler til Camunda/AWS", "R&amp;lt;D &#38;amp; &#x26;quot;");
+  const job = parseDetailPage(page, `${JOBANNONCE_URL}h1690934`, "h1690934");
+  expect(job.title).toBe("R&lt;D &amp; &quot;");
+});
