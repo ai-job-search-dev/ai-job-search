@@ -37,7 +37,7 @@ const argv = process.argv.slice(2)
 const invoked = commands.find((c) => (c as { name?: string }).name === argv[0])
 if (invoked) {
   const options =
-    (invoked as { options?: Record<string, { short?: string } | undefined> }).options ?? {}
+    (invoked as { options?: Record<string, { short?: string; repeatable?: boolean } | undefined> }).options ?? {}
   const known = new Set([...Object.keys(options), "help", "version"])
   const knownShorts = new Set(
     Object.values(options)
@@ -60,6 +60,32 @@ if (invoked) {
     } else if (token.startsWith("-") && token !== "-") {
       const flag = token.slice(1).split("=")[0]
       if (!knownShorts.has(flag)) rejectFlag(`-${flag}`)
+    }
+  }
+  // A declared option that is not `repeatable` keeps only its last value in
+  // bunli, so `--region A --region B` searched B alone and said nothing.
+  // Count every occurrence in both spellings and refuse a repeat; a
+  // repeatable option (jobbank's `--type 3 --type 6`) is unaffected.
+  const optionName = (token: string): string | undefined => {
+    const flag = token.replace(/^-+/, "").split("=")[0]
+    if (token.startsWith("--")) return options[flag] !== undefined ? flag : undefined
+    return Object.entries(options).find(([, o]) => o?.short === flag)?.[0]
+  }
+  const occurrences = new Map<string, number>()
+  for (const token of argv.slice(1)) {
+    if (token === "--") break
+    if (!token.startsWith("-")) continue
+    const name = optionName(token)
+    if (name === undefined || options[name]?.repeatable) continue
+    occurrences.set(name, (occurrences.get(name) ?? 0) + 1)
+  }
+  for (const [name, count] of occurrences) {
+    if (count > 1) {
+      writeError(
+        `option --${name} is given ${count} times - it takes one value, and keeping only the last would silently drop the others`,
+        "BAD_ARG",
+      )
+      process.exit(1)
     }
   }
   // Every declared portal option takes a value; only the built-in help and
