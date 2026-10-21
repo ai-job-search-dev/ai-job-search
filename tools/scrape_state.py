@@ -13,7 +13,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from job_key import make_key
-from rank_state import STATE, TRACKER, load_state, norm, save_state, tracker_pairs
+from rank_state import STATE, TRACKER, _force_utf8_output, load_state, norm, save_state, tracker_pairs
 
 
 def read_jobs(path: Path) -> list:
@@ -127,6 +127,7 @@ def run(args) -> int:
 
 
 def main() -> int:
+    _force_utf8_output()
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("command", choices=("candidates", "store", "history"))
     parser.add_argument("--results", type=Path)
