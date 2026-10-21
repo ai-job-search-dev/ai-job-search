@@ -478,6 +478,34 @@ class InputHandling(GuardFixture):
         self.assertNotIn("--- text ---", out)
         self.assertIn(f"saved={target}", out)
 
+    def test_out_inside_the_repo_is_refused(self):
+        # The gate is pre-approved for agents that must not write files, and
+        # its input is untrusted by definition. An --out that lands in the
+        # repo - a command, agent or skill definition least of all - must be
+        # refused the way fetch_page.py refuses it, before anything is written.
+        repo = Path(posting_guard.ROOT)
+        targets = [
+            repo / ".claude" / "commands" / "ops" / "run.md",
+            repo / "notes.md",
+            Path(str(repo).upper()) / "notes.md",  # case variant on a case-insensitive FS
+        ]
+        for target in targets:
+            with self.subTest(target=str(target)):
+                self.assertFalse(target.exists())
+                self.addCleanup(lambda t=target: t.unlink(missing_ok=True))  # never leave a write behind
+                code, out, err = self.run_main("--text", "--out", str(target), stdin_text="Job.\nPlain.\n")
+                self.assertEqual(code, 2, err)
+                self.assertIn("refusing to write inside the repo", err)
+                self.assertFalse(target.exists())
+                self.assertNotIn("saved=", out)
+
+    def test_out_outside_the_repo_still_writes(self):
+        target = self.tmp / "cleaned.txt"
+        code, out, err = self.run_main("--text", "--out", str(target), stdin_text="Job.\nPlain.\n")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(target.read_text(encoding="utf-8"), "Job.\nPlain.\n")
+        self.assertIn(f"saved={target}", out)
+
     def test_json_findings_shape(self):
         code, out, err = self.run_main("--text", "--json", stdin_text="Plain.")
         f = self.findings_of(out)
