@@ -82,6 +82,28 @@ class ScrapeStateTests(unittest.TestCase):
         self.assertEqual(self.run_tool("store", [good])["added"], ["fresh_builder"])
         self.assertIn("fresh_builder", json.loads(self.state.read_text(encoding="utf-8"))["seen"])
 
+    def test_store_rejects_dates_outside_the_entry_shape_without_writing(self):
+        # SKILL.md's entry shape is first_seen YYYY-MM-DD and posted_date /
+        # deadline YYYY-MM-DD or null. store checked only that the keys were
+        # present, so "13/05/2024" or "" went into the history; rank_state's
+        # defensive parse then reads them as absent and the freshness and
+        # deadline rules cannot act on the posting.
+        base = {"title": "Builder", "company": "Fresh", "url": "https://jobs.test/fresh", "first_seen": "2026-10-21",
+                "posted_date": None, "deadline": None, "fit": "medium", "status": "new",
+                "portal": "jobindex-search", "source": "cli"}
+        bad = [("first_seen", None), ("first_seen", "21.10.2026"), ("first_seen", "2026-10-21T09:00:00"),
+               ("posted_date", "13/05/2024"), ("deadline", ""), ("deadline", "2026-02-30")]
+        for field, value in bad:
+            with self.subTest(field=field, value=value):
+                self.results.write_text(json.dumps([dict(base, **{field: value})]), encoding="utf-8")
+                args = argparse.Namespace(command="store", results=self.results, state=self.state, tracker=self.tracker)
+                with self.assertRaises(ValueError) as caught, contextlib.redirect_stdout(io.StringIO()):
+                    scrape_state.run(args)
+                self.assertIn(f"invalid {field}", str(caught.exception))
+                self.assertFalse(self.state.exists())
+        out = self.run_tool("store", [dict(base, posted_date="2026-10-20", deadline="2026-11-30")])
+        self.assertEqual(out["added"], ["fresh_builder"])
+
     def test_history_counts_portal_and_legacy_host_without_emitting_entries(self):
         self.state.parent.mkdir()
         self.state.write_text(json.dumps({"seen": {
