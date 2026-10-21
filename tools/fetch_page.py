@@ -32,7 +32,8 @@ status - the status is information for the escalation order, not a failure.
 With --text, also prints the tag-stripped page text (script/style/noscript/svg
 and comments removed, entities unescaped, whitespace folded), capped at
 --max-chars (default 6000), after a `--- text ---` line. A saved body that is
-not valid UTF-8 is decoded by the charset the page declares (page_decode.py).
+not valid UTF-8 is decoded by the charset the response's Content-Type or the
+page declares (page_decode.py).
 
 Exit codes: 0 fetched; 1 refused by robots policy (go to escalation step 4);
 2 usage or transport error.
@@ -104,19 +105,32 @@ def build_curl_argv(url: str, out: Path, headers: Path, timeout: float) -> list:
     ]
 
 
-def _location(header_text: str) -> str | None:
-    """Read Location from the final response (a proxy may add an earlier one)."""
+def _header(header_text: str, name: str) -> str | None:
+    """Read a header from the final response (a proxy may add an earlier one)."""
     for block in reversed(re.split(r"\r?\n\r?\n", header_text)):
         if not block.startswith("HTTP/"):
             continue
         for line in block.splitlines():
-            if line.lower().startswith("location:"):
+            if line.lower().startswith(name.lower() + ":"):
                 return line.partition(":")[2].strip()
         break
     return None
 
 
-def fetch_with_curl(url: str, out: Path, timeout: float) -> tuple[int, str | None]:
+def _location(header_text: str) -> str | None:
+    return _header(header_text, "Location")
+
+
+def _charset(content_type: str | None) -> str | None:
+    """The charset parameter of a Content-Type value, or None."""
+    for param in (content_type or "").split(";")[1:]:
+        key, _, value = param.strip().partition("=")
+        if key.strip().lower() == "charset":
+            return value.strip().strip("\"'") or None
+    return None
+
+
+def fetch_with_curl(url: str, out: Path, timeout: float) -> tuple[int, str | None, str | None]:
     fd, header_name = tempfile.mkstemp(prefix=".fetch_page_headers.")
     os.close(fd)  # curl must be able to open it on Windows too
     headers = Path(header_name)
@@ -129,12 +143,14 @@ def fetch_with_curl(url: str, out: Path, timeout: float) -> tuple[int, str | Non
         if proc.returncode != 0:
             raise RuntimeError(f"curl exit {proc.returncode}: {proc.stderr.strip()}")
         code = int(proc.stdout.strip())
-        location = _location(headers.read_text(encoding="iso-8859-1"))
+        header_text = headers.read_text(encoding="iso-8859-1")
+        location = _location(header_text)
+        charset = _charset(_header(header_text, "Content-Type"))
     finally:
         headers.unlink(missing_ok=True)
     if out.stat().st_size > MAX_BYTES:
         raise RuntimeError(f"response exceeds {MAX_BYTES} bytes after decompression")
-    return code, location
+    return code, location, charset
 
 
 class _NoRedirects(HTTPRedirectHandler):
@@ -144,7 +160,7 @@ class _NoRedirects(HTTPRedirectHandler):
         return None
 
 
-def fetch_with_urllib(url: str, out: Path, timeout: float) -> tuple[int, str | None]:
+def fetch_with_urllib(url: str, out: Path, timeout: float) -> tuple[int, str | None, str | None]:
     """Fallback for machines without curl. One GET, gzip/deflate only."""
     request = Request(url, headers={
         "User-Agent": BROWSER,
@@ -160,7 +176,8 @@ def fetch_with_urllib(url: str, out: Path, timeout: float) -> tuple[int, str | N
         code = response.status if hasattr(response, "status") else response.code
         location = response.headers.get("Location")
         if code in (301, 302, 303, 307, 308) and location:
-            return code, location
+            return code, location, None
+        charset = _charset(response.headers.get("Content-Type"))
         encoding = (response.headers.get("Content-Encoding") or "").lower()
         body = response.read(MAX_BYTES + 1)
     if len(body) > MAX_BYTES:
@@ -172,7 +189,7 @@ def fetch_with_urllib(url: str, out: Path, timeout: float) -> tuple[int, str | N
     if len(body) > MAX_BYTES:
         raise RuntimeError(f"response exceeds {MAX_BYTES} bytes after decompression")
     out.write_bytes(body)
-    return code, location
+    return code, location, charset
 
 
 def strip_tags(markup: str, limit: int) -> str:
@@ -266,7 +283,7 @@ def main(argv=None) -> int:
             os.close(fd)  # curl/urllib may reopen the path on Windows
             body = Path(body_name)
             try:
-                code, location = (
+                code, location, charset = (
                     fetch_with_curl(current, body, remaining)
                     if shutil.which("curl") else fetch_with_urllib(current, body, remaining)
                 )
@@ -288,7 +305,7 @@ def main(argv=None) -> int:
     print(f"{status} saved={out}")
     if args.text:
         print("--- text ---")
-        print(strip_tags(decode_page(out.read_bytes()), args.max_chars))
+        print(strip_tags(decode_page(out.read_bytes(), charset), args.max_chars))
     return 0
 
 
