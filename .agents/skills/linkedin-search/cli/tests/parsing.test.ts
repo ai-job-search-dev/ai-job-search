@@ -76,6 +76,11 @@ describe("decodeHtmlEntities (via parseJobCards)", () => {
     expect(card.title).toBe("R&lt;D &amp; Ops &amp; &quot;");
   });
 
+  test("a numeric ampersand decodes one level: &#38;amp; is \"&amp;\", not \"&\"", () => {
+    expect(parseJobCards(searchCard("128", "&#38;amp;"))[0].title).toBe("&amp;");
+    expect(parseJobCards(searchCard("129", "&#x26;amp;"))[0].title).toBe("&amp;");
+  });
+
   test("decodes supplementary-plane code points with fromCodePoint (&#128512;)", () => {
     const [card] = parseJobCards(searchCard("126", "Growth &#128512;"));
     expect(card.title).toBe("Growth 😀");

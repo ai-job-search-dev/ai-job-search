@@ -197,11 +197,30 @@ function numericEntity(cp: number): string {
 /**
  * Decode HTML entities in text
  */
+// The named references this portal's markup carries. The pattern is built from
+// these keys, so the vocabulary and the regex cannot drift apart, and one pass
+// over the text means replacement output is never scanned again: a
+// double-encoded reference such as `&#38;amp;` decodes exactly one level, to
+// the literal text `&amp;`.
+const NAMED_ENTITIES: Record<string, string> = {
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+  amp: "&",
+}
+
+const ENTITY_PATTERN = new RegExp(
+  `&(#(?:[xX][0-9a-fA-F]+|[0-9]+)|${Object.keys(NAMED_ENTITIES)
+    .sort((a, b) => b.length - a.length)
+    .join("|")});`,
+  "g",
+)
+
 function decodeHtmlEntities(text: string): string {
-  const named: Record<string, string> = {"lt": "<", "gt": ">", "quot": "\"", "apos": "'", "nbsp": " ", "amp": "&"}
-  // Replace references from the original input only; never decode replacement text again.
-  return text.replace(/&(#(?:[xX][0-9a-fA-F]+|[0-9]+)|lt|gt|quot|apos|nbsp|amp);/g, (_, entity: string) => {
-    if (!entity.startsWith("#")) return named[entity]!
+  return text.replace(ENTITY_PATTERN, (_, entity: string) => {
+    if (!entity.startsWith("#")) return NAMED_ENTITIES[entity]!
     const hex = entity[1]?.toLowerCase() === "x"
     return numericEntity(parseInt(entity.slice(hex ? 2 : 1), hex ? 16 : 10))
   })

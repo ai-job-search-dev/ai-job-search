@@ -127,13 +127,30 @@ export function visibleHtml(html: string): string {
   return kept.join("")
 }
 
+// The references this parser decodes. The pattern is built from these keys, so
+// the vocabulary and the regex cannot drift apart, and one pass over the text
+// means replacement output is never scanned again: a double-encoded reference
+// such as `&amp;lt;` decodes exactly one level, to the literal text `&lt;`.
+const ENTITIES: Record<string, string> = {
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  "#39": "'",
+  nbsp: " ",
+  amp: "&",
+}
+
+const ENTITY_PATTERN = new RegExp(
+  `&(${Object.keys(ENTITIES)
+    .sort((a, b) => b.length - a.length)
+    .join("|")});`,
+  "g",
+)
+
 export function stripHtml(html: string): string {
   return visibleHtml(html)
     .replace(/<[^>]*>/g, " ")
-    .replace(/&(lt|gt|quot|#39|nbsp|amp);/g, (_, entity: string) => {
-      const named: Record<string, string> = { lt: "<", gt: ">", quot: '"', "#39": "'", nbsp: " ", amp: "&" }
-      return named[entity]!
-    })
+    .replace(ENTITY_PATTERN, (_, entity: string) => ENTITIES[entity]!)
     .replace(/\s+/g, " ")
     .trim()
 }
