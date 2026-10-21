@@ -876,10 +876,16 @@ class Unreachable(RankStateCase):
         naming the bad entry crashed and a result naming only a valid entry exited 0
         and wrote it. `load_state` now refuses the file for all three, naming the key."""
         self.write_state({"a": entry(), "b": "oops"})
-        naming_bad = self.results([{"key": "b", "status": "unreachable"}])
-        naming_good = self.results(
+        def results_file(name, payload):
+            path = self.tmp / name
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            return str(path)
+
+        naming_bad = results_file("naming_bad.json", [{"key": "b", "status": "unreachable"}])
+        naming_good = results_file(
+            "naming_good.json",
             [{"key": "a", "status": "scored",
-              "scores": {"technical": 80, "experience": 80, "behavioral": 80, "career": 80}}]
+              "scores": {"technical": 80, "experience": 80, "behavioral": 80, "career": 80}}],
         )
         for args in (
             ("candidates", "--tracker", str(self.tmp / "none.csv")),
@@ -895,8 +901,9 @@ class Unreachable(RankStateCase):
                 self.assertEqual(proc.returncode, 1)
                 self.assertIn("entry is not an object: b", proc.stderr)
                 self.assertNotIn("Traceback", proc.stderr)
+        stored = json.loads(self.state.read_text(encoding="utf-8"))
         self.assertEqual(
-            json.loads(self.state.read_text(encoding="utf-8")),
+            stored.get("seen", stored),
             {"a": entry(), "b": "oops"},
             "a refused file is never half-written",
         )

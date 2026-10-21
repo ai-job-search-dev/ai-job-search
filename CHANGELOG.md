@@ -67,6 +67,15 @@ per-file diff commands.
 
 ### Fixed
 
+- **`rank_state.py` reports a `seen_jobs.json` entry that is not an object** (#636, `tools/rank_state.py`,
+  `tests/test_rank_state.py`) - `load_state` already exits with a one-line message for a state file that is
+  not an object of entries, but an object whose individual entries were not objects (a string or a number)
+  passed that check. `candidates` and `sweep` read every entry, so either crashed with an `AttributeError`
+  traceback on `.get` for any such entry; `apply` only touches the keys its results name, so it crashed when
+  a result named the bad entry and otherwise exited 0 and wrote the valid ones. `load_state` now validates
+  every entry, so all three exit 1 naming the offending key and leave the file untouched, as
+  `job_key.py --audit` has since #626.
+
 - **The four `@bunli/core` portal CLIs typecheck on a clean install again** (#768, closes #765,
   `.agents/skills/{jobbank,jobdanmark,jobindex,jobnet}-search/cli/package.json`,
   `tests/test_portal_cli_types.py`) - `bun-types` accepts any `@types/node`, while `@bunli/core`
@@ -698,11 +707,6 @@ per-file diff commands.
   not gate on it.
 
 ### Fixed
-
-- **`rank_state.py` reports a `seen_jobs.json` entry that is not an object** (`tools/rank_state.py`,
-  `tests/test_rank_state.py`) - `candidates`, `sweep` and `apply` crashed with an `AttributeError`
-  traceback on `.get` when any entry was a string or number, although `load_state` already exits with a
-  one-line message for a state file that is not an object of entries. It now names the offending key.
 
 - **`.gitignore` ignores `node_modules` without a trailing slash, and `security_guards.py` fails on any tracked `node_modules` path** (`.gitignore`, `tools/security_guards.py`, `tests/test_security_guards.py`) - the old `node_modules/` rule matched directories only, so a symlink named `node_modules` pointing at a contributor's absolute path was committed in a PR, broke `bun install` in CI with a dangling link and checked out as a text file on Windows. The rule loses its slash, and the guard now lists every tracked path with a `node_modules` component (skipped quietly outside a git checkout). Also qualifies the one bare `seen_jobs.json` mention left in `README.md` after #617.
 
