@@ -10,6 +10,7 @@ SSH-administrator posting is flagged with the line quoted, not rejected.
 """
 import contextlib
 import io
+import os
 import json
 import shutil
 import sys
@@ -487,8 +488,16 @@ class InputHandling(GuardFixture):
         targets = [
             repo / ".claude" / "commands" / "ops" / "run.md",
             repo / "notes.md",
-            Path(str(repo).upper()) / "notes.md",  # case variant on a case-insensitive FS
         ]
+        # On a case-insensitive filesystem (macOS, Windows) the repo has other
+        # spellings that a string comparison of resolved paths would miss; on
+        # a case-sensitive one the variant is simply a path that does not exist.
+        variant = Path(str(repo).upper())
+        try:
+            if os.path.samefile(variant, repo):
+                targets.append(variant / "notes.md")
+        except OSError:
+            pass
         for target in targets:
             with self.subTest(target=str(target)):
                 self.assertFalse(target.exists())
