@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.7
+framework_version: 1.1.8
 ---
 
 # Web Research and Fetching
@@ -72,7 +72,7 @@ Try these in order and stop at the first that yields real content:
    ```
    This retrieves the posting directly from the portal's API or resilient detail route, bypassing bot-detection 403s and login walls entirely.
 2. **`WebFetch`** on the target URL (for non-portal URLs, or if the portal CLI is missing or failed). Cheapest for general web pages, returns clean markdown.
-3. **`python3 tools/fetch_page.py '<URL>' --out "$SCRATCHPAD/page.html" --text`** (above). It checks `robots.txt` on every hop, retries with browser headers and strips the tags. Fixes the 403 class of failure. An exit of `1` means the starting URL or a redirect target is disallowed for `*` or `Claude-User`: go to step 4.
+3. **`python3 tools/fetch_page.py '<URL>' --out "${SCRATCHPAD:?set this to the session scratchpad directory from your system prompt}/page.html" --text`** (above). It checks `robots.txt` on every hop, retries with browser headers and strips the tags. Fixes the 403 class of failure. An exit of `1` means the starting URL or a redirect target is disallowed for `*` or `Claude-User`: go to step 4.
 4. **`WebSearch`** for the company or role by name, to find an alternative canonical URL: the employer's own careers portal is almost always richer than the aggregator that surfaced the posting, and it carries the reference ID and grade that aggregators drop.
 5. **Declare it genuinely unavailable** only after 1 to 4 have failed. In `/rank` that means marking the entry `unreachable`, which later runs retry (`expired` is only for a posting shown to be closed - see `rank.md` Step 2); in `/apply` it means telling the user the posting could not be retrieved and stopping rather than drafting from the title.
 
