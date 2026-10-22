@@ -53,11 +53,16 @@ def check_skill(path: Path) -> None:
         if not data.get(key):
             errors.append(f"{rel(path)}: frontmatter missing required key '{key}'")
 
+    # Frontmatter may give allowed-tools as one string or a YAML list; both
+    # are checked. A grant may end in ` *` or `:*` (the shipped skills use
+    # both), and a python tool path is a file to check like a bun one.
     allowed = data.get("allowed-tools", "")
+    if isinstance(allowed, list):
+        allowed = " ".join(item for item in allowed if isinstance(item, str))
     if isinstance(allowed, str):
-        for match in re.finditer(r"bun run ([^\s)]+)", allowed):
-            target = match.group(1).rstrip("*")
-            if not target or target.endswith("/"):
+        for match in re.finditer(r"(?:bun run|python3?) ([^\s)]+)", allowed):
+            target = re.sub(r":?\*+$", "", match.group(1))
+            if not target or target.endswith("/") or target.startswith("-"):
                 continue
             # Targets may contain globs (e.g. .agents/skills/*/cli/src/cli.ts);
             # require at least one existing file to match.
