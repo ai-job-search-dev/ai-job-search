@@ -1,0 +1,13 @@
+.github
+tests
+assets
+.gitignore
+.dockerignore
+Dockerfile
+LISCENSE
+README.md
+CHANGELOG.md
+CONTRIBUTING.md
+SECURITY.md
+SETUP.md
+docker-run.sh
