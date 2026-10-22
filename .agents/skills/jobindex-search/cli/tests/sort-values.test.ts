@@ -52,10 +52,11 @@ describe("--sort values", () => {
       const result = await search(["--query", "python", "--sort", value]);
       expect(result.exitCode).toBe(1);
       expect(result.stdout).toBe("");
+      // The contract shape (add-portal.md): { error, code } on stderr, not
+      // bunli's own { ok: false, error: { kind, option } } envelope.
       const error = JSON.parse(result.stderr);
-      expect(error.ok).toBe(false);
-      expect(error.error.kind).toBe("validation");
-      expect(error.error.option).toBe("sort");
+      expect(error.code).toBe("BAD_ARG");
+      expect(error.error).toContain("--sort");
       expect(result.requests).toHaveLength(0);
     });
   }
