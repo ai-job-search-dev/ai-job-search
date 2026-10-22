@@ -2,6 +2,10 @@
 FROM alpine:latest 
 ARG DEBIAN_FRONTEND=noninteractive
 
+
+WORKDIR /app 
+COPY . .
+
 RUN apk update && \
     apk add \
     bash \
@@ -25,9 +29,8 @@ RUN npm install -g @anthropic-ai/claude-code
 RUN (curl -fsSL https://bun.sh/install | bash)
 ## copy all code to container
 
-
-WORKDIR /app 
-COPY . .
+## install job search dependencies
+RUN python3 tools/install_portal_clis.py 
 
 CMD bash /app/docker_container_init_and_run.sh
 
