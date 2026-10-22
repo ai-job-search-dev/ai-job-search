@@ -65,6 +65,9 @@ def parse_frontmatter(path: Path) -> dict:
     return parse_frontmatter_text(path.read_text(encoding="utf-8"))
 
 def parse_frontmatter_text(text: str) -> dict:
+    # A Windows checkout (core.autocrlf) has CRLF files and Notepad adds a
+    # BOM; neither changes the frontmatter, so neither may hide the marker.
+    text = text.lstrip("\ufeff").replace("\r\n", "\n")
     if not text.startswith("---\n"):
         return {}
     end = text.find("\n---", 4)

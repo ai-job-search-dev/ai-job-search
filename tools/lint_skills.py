@@ -32,8 +32,18 @@ def rel(path: Path) -> str:
     return str(path.relative_to(ROOT))
 
 
+def read_markdown(path: Path) -> str:
+    """The file's text with a UTF-8 BOM dropped and CRLF folded to LF.
+
+    Git for Windows defaults to core.autocrlf=true and the repo pins no line
+    endings, so a Windows checkout has CRLF markdown; Notepad adds a BOM. Both
+    made every frontmatter check here fail on a file that is fine on Linux.
+    """
+    return path.read_text(encoding="utf-8-sig").replace("\r\n", "\n")
+
+
 def check_skill(path: Path) -> None:
-    text = path.read_text(encoding="utf-8")
+    text = read_markdown(path)
     if not text.startswith("---\n"):
         errors.append(f"{rel(path)}: missing YAML frontmatter (file must start with ---)")
         return
@@ -71,7 +81,7 @@ def check_skill(path: Path) -> None:
 
 
 def check_command(path: Path) -> None:
-    lines = path.read_text(encoding="utf-8").lstrip().splitlines()
+    lines = read_markdown(path).lstrip().splitlines()
     first = lines[0] if lines else ""
     if not first.startswith("# /"):
         errors.append(f"{rel(path)}: command file must start with a '# /<name>' title (found: {first[:50]!r})")

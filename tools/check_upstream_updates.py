@@ -49,6 +49,9 @@ def get_remote_url(remote_name: str) -> str:
     return stdout.strip() if rc == 0 else ""
 
 def get_framework_version_from_text(text: str) -> str | None:
+    # A Windows checkout (core.autocrlf) has CRLF files and Notepad adds a
+    # BOM; neither changes the frontmatter, so neither may hide the marker.
+    text = text.lstrip("\ufeff").replace("\r\n", "\n")
     if not text.startswith("---\n"):
         return None
     end = text.find("\n---", 4)
