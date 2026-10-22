@@ -1,7 +1,33 @@
 # Setup Guide
-
 Step-by-step instructions for getting the AI Job Search framework running.
 
+##  Quickstart (with docker)
+- Pull the Docker image:
+```bash
+docker pull ai-job-search:latest 
+```
+- Get an anthropic API key from [this link](https://docs.anthropic.com/en/docs/claude-code).
+
+- Create a location to store you job searching materials
+```bash
+mkdir ~/ai-job
+```
+- Run the docker image 
+```bash
+docker run -it  \
+  -e ANTHROPIC_API_KEY="bmljZSB0cnksIGJ1dCB5b3UgY2Fubm90IHVzZSBteSBBUEkga2V5IGhhaGEK" \
+  -v ~/ai-job:/job \
+  ai-job-search:latest 
+```
+**NOTE:** The ~/ai-job folder should then be populated with the following files if done correctly.  
+```bash
+$ ls ~/ai-job
+AGENTS.md        company_research cv               job_scraper      upskill
+CLAUDE.md        cover_letters    documents        templates
+```
+
+---
+---
 ## 1. Prerequisites
 
 ### Claude Code
