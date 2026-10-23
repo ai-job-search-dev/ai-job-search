@@ -179,8 +179,23 @@ class MixedScriptNamesKeepTheirIdentity(unittest.TestCase):
             with self.subTest(ch=ch):
                 self.assertEqual(slugify(f"x{ch}y"), f"x{folded.lower()}y")
 
+    def test_latin_extended_a_letters_fold_including_capitals(self):
+        cases = {
+            "ı": "i",
+            "ħ": "h", "Ħ": "h",
+            "ĸ": "k",
+            "ŋ": "ng", "Ŋ": "ng",
+            "ŧ": "t", "Ŧ": "t",
+        }
+        for ch, folded in cases.items():
+            with self.subTest(ch=ch):
+                self.assertEqual(slugify(f"x{ch}y"), f"x{folded}y")
+
+    def test_turkish_dotless_i_keeps_its_letters(self):
+        self.assertEqual(slugify("Kılıç"), "kilic")
+
     def test_fold_applies_to_decomposed_input_too(self):
-        # NFC first: "Å" typed as A + combining ring still lands on "a".
+        # "Å" typed as A + combining ring: NFKD keeps the A and the mark is dropped.
         self.assertEqual(slugify("Århus"), "arhus")
 
     def test_letter_that_decomposes_into_a_table_letter_is_folded(self):

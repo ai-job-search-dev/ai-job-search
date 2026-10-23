@@ -73,7 +73,9 @@ _JOB_ID = re.compile(r"(\d{6,})")
 
 
 # Latin letters with no NFKD decomposition, which the ASCII fold would otherwise
-# drop ("Ørsted" keyed as "rsted", "Mærsk" as "mrsk"). Values follow ICU/Unidecode.
+# drop ("Ørsted" keyed as "rsted", "Mærsk" as "mrsk", "Kılıç" as "klc"). Values
+# follow Unidecode 1.4.0; ICU's Latin-ASCII differs only on "ĸ" (q) and "ŋ" (n).
+# "ĸ" and "ı" have no table capital: "ĸ" has none and "ı"'s is plain "I".
 # "å" is deliberately absent: it decomposes to "a" plus a ring without losing a
 # letter, and "å"->"aa" would move keys that work today for no gain (#537).
 _LATIN_FOLD = {
@@ -85,6 +87,11 @@ _LATIN_FOLD = {
     "ð": "d", "Ð": "D",
     "đ": "d", "Đ": "D",
     "ł": "l", "Ł": "L",
+    "ı": "i",
+    "ħ": "h", "Ħ": "H",
+    "ĸ": "k",
+    "ŋ": "ng", "Ŋ": "NG",
+    "ŧ": "t", "Ŧ": "T",
 }
 _LATIN_FOLD_TABLE = str.maketrans(_LATIN_FOLD)
 

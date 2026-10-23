@@ -646,13 +646,16 @@ per-file diff commands.
 
 - **`tools/job_key.py` folds Latin letters that have no NFKD decomposition instead of dropping them,
   and `--audit --migrate` re-keys existing state** (#537, `tools/job_key.py`,
-  `tests/test_job_key.py`, `.claude/skills/job-scraper/SKILL.md`) - `ø æ œ ß þ ð đ ł` (and their
-  capitals) vanished from the slug, so "Ørsted" keyed as `rsted` and "Ærø" and "Rø" collided. A
-  fold table now maps them (`ø`→`o`, `æ`→`ae`, `œ`→`oe`, `ß`→`ss`, `þ`→`th`, `ð`/`đ`→`d`, `ł`→`l`)
-  on NFC text before NFKD; `å` stays `a`. Keys already in `job_scraper/seen_jobs.json` move once:
-  run `python3 tools/job_key.py --audit --migrate`, which backs the file up, rewrites each drifted
-  key in place, reports old→new, leaves any key whose new form already exists untouched, and
-  changes nothing on a second run.
+  `tests/test_job_key.py`, `.claude/skills/job-scraper/SKILL.md`, `.gitignore`,
+  `tools/security_guards.py`) - `ø æ œ ß þ ð đ ł ı ħ ĸ ŋ ŧ` (and their capitals, where they exist)
+  vanished from the slug, so "Ørsted" keyed as `rsted`, "Kılıç" as `klc`, and "Ærø" and "Rø"
+  collided. A fold table now maps them (`ø`→`o`, `æ`→`ae`, `œ`→`oe`, `ß`→`ss`, `þ`→`th`,
+  `ð`/`đ`→`d`, `ł`→`l`, `ı`→`i`, `ħ`→`h`, `ĸ`→`k`, `ŋ`→`ng`, `ŧ`→`t`, following Unidecode) after
+  NFKD, so a letter that decomposes into one of them (`ǿ`→`ø` + acute) folds too; `å` stays `a`.
+  Keys already in `job_scraper/seen_jobs.json` move once: run
+  `python3 tools/job_key.py --audit --migrate`, which backs the file up (`seen_jobs.json.bak-*`,
+  gitignored), rewrites each drifted key in place, reports old→new, leaves any key whose new form
+  already exists untouched, and changes nothing on a second run.
   If you use /notion-sync, migrated keys will appear as new rows on the next sync.
 
 - **`/apply` and `/rank` route matching portal URLs to installed CLI `detail` before `WebFetch`**
