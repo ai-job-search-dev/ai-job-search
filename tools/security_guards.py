@@ -168,6 +168,7 @@ REQUIRED_IGNORE_RULES = [
     # to its own directory, so the state file lands under .claude/skills/... and
     # a repo-rooted rule silently fails to match it.
     "**/job_scraper/seen_jobs.json",
+    "**/job_scraper/seen_jobs.json.bak-*",
     "**/job_scraper/notion_sync.json",
     "**/job_scraper/*.md",
     "*_BehavioralReport.pdf",
