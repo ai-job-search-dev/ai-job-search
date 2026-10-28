@@ -1,17 +1,20 @@
 # Changelog
 
-All notable changes to this project are documented here. The format is based on
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
-to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+**This file is frozen at 1.7.4.** Later releases are published weekly and documented in
+[GitHub Releases](https://github.com/ai-job-search-dev/ai-job-search/releases), with notes
+generated from the titles of the PRs each release contains. Don't add entries here.
 
-Releases are vetted checkpoints of `master`. If you maintain a personalized fork,
-prefer updating to a tagged release over pulling raw `master` (see
+The entries below follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
+project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+Releases are weekly checkpoints of `master` that passed CI. If you maintain a personalized
+fork, prefer updating to a tagged release over pulling raw `master` (see
 [SETUP.md, section 8](SETUP.md#8-pulling-upstream-updates-into-your-fork)). The
 `framework_version` markers on methodology files tell you which of your customized
 files a release touched; `python3 tools/check_upstream_updates.py` lists them with
 per-file diff commands.
 
-## [Unreleased]
+## [1.7.4] - 2026-11-02
 
 ### Added
 
@@ -24,6 +27,16 @@ per-file diff commands.
   CI. The five Linux legs keep their names, so required checks are unchanged.
 
 ### Changed
+
+- **Releases are weekly and automatic, and this changelog is frozen** (`.github/workflows/release.yml`,
+  `tools/next_version.py`, `tests/test_next_version.py`, `tests/test_changelog_structure.py`) - every
+  PR edited `[Unreleased]` by hand, so every PR after the first conflicted on this file, and only one
+  maintainer could cut a release. From now on a workflow tags `master` every Monday at 06:00 UTC and
+  publishes a GitHub Release whose notes list the merged PR titles. The version is SemVer, bumped from
+  the merged commit types: `type!:` or a `BREAKING CHANGE:` footer is major, `feat` is minor, anything
+  else is patch. A week without merges is skipped, and a `master` commit whose CI failed is never
+  released. Forks keep updating to tags as before; release notes now live in GitHub Releases, and a
+  test keeps `[Unreleased]` from coming back.
 
 - **The repository moved to the `ai-job-search-dev` organization** - the canonical URL is now
   `https://github.com/ai-job-search-dev/ai-job-search`. GitHub redirects the old
@@ -2829,7 +2842,7 @@ At this baseline the framework provides:
 - **Cross-runtime support** - a root `AGENTS.md` pointer so Codex and Antigravity can
   discover the portable portal skills, with Claude Code as the reference runtime.
 
-[Unreleased]: https://github.com/ai-job-search-dev/ai-job-search/compare/v1.7.3...HEAD
+[1.7.4]: https://github.com/ai-job-search-dev/ai-job-search/compare/v1.7.3...v1.7.4
 [1.7.3]: https://github.com/ai-job-search-dev/ai-job-search/compare/v1.7.2...v1.7.3
 [1.7.2]: https://github.com/ai-job-search-dev/ai-job-search/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/ai-job-search-dev/ai-job-search/compare/v1.7.0...v1.7.1
