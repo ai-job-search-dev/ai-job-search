@@ -66,6 +66,7 @@ This is a decision, not a dogma: if cross-runtime standards mature to the point 
 
 ## Practical notes
 
+- **PR titles are the release notes, and they set the version**: don't edit `CHANGELOG.md` (it's frozen at 1.7.4). Every Monday a workflow publishes a GitHub Release listing the titles of the PRs merged that week, so write the title for a fork owner and use a [Conventional Commits](https://www.conventionalcommits.org/) type: `feat` makes the release a minor bump, `type!:` (or a `BREAKING CHANGE:` footer) a major one, and anything else a patch. `python3 tools/next_version.py <last-tag>` previews the next version.
 - **Portal-skill contract**: `search`/`detail` commands, `--format json|table|plain`, stderr JSON errors with exit 1, backoff on 429/5xx, zero runtime dependencies by default. See `/add-portal`'s spec and `linkedin-search` as the reference implementation.
 - **Personal-use boundaries**: portal skills that touch ToS-restricted sources carry a prominent personal-use-only warning, and CI deliberately makes no live portal requests. Don't "fix" that.
 - **LaTeX changes**: both templates must compile (`lualatex` for the CV, `xelatex` for the cover letter) and hold their exact page counts. CI smoke-checks this.
