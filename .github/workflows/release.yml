@@ -2,9 +2,8 @@
 # with GitHub-generated notes (one line per merged PR title), replacing the
 # hand-edited CHANGELOG.md, which is frozen at 1.7.4.
 #
-# The version is SemVer, bumped by tools/next_version.py from the commits
-# merged since the last release: `type!:` or a BREAKING CHANGE footer is major,
-# `feat` is minor, anything else is patch. A manual run can override it.
+# The SemVer version comes from tools/next_version.py; a manual run can
+# override it.
 #
 # It skips a week with no new commits and refuses to release a master commit
 # whose CI run did not pass. The release is created through the API, so it
@@ -23,8 +22,7 @@ on:
         required: false
 
 permissions:
-  contents: write
-  actions: read
+  contents: read
 
 concurrency:
   group: release
@@ -34,6 +32,9 @@ jobs:
     name: Tag and publish the weekly release
     if: github.repository == 'ai-job-search-dev/ai-job-search'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -56,16 +57,24 @@ jobs:
           fi
           ci=$(gh run list -w ci.yml -b master -c "$head" -L 1 --json conclusion -q '.[0].conclusion')
           if [ "$ci" != success ]; then
-            echo "::error::CI on $head is '${ci:-not finished}', not releasing"
+            echo "::error::CI on $head is '${ci:-missing or not finished}', not releasing"
             exit 1
           fi
           if [ -n "$VERSION" ]; then
             next="v$VERSION"
           else
-            next=$(python3 tools/next_version.py "$last" "$head")
+            next=$(python3 tools/next_version.py "$last")
           fi
           if ! [[ "$next" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::'$next' is not a vMAJOR.MINOR.PATCH tag"
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/$next" >/dev/null; then
+            echo "::error::$next already exists"
+            exit 1
+          fi
+          if [ "$(printf '%s\n' "${last#v}" "${next#v}" | sort -V | tail -n1)" != "${next#v}" ]; then
+            echo "::error::$next is not newer than $last"
             exit 1
           fi
           gh release create "$next" --target "$head" --generate-notes --notes-start-tag "$last"

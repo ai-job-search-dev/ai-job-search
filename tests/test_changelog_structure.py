@@ -10,10 +10,16 @@ import hashlib
 import unittest
 from pathlib import Path
 
+try:
+    from tests._upstream import is_upstream_checkout
+except ImportError:  # `python -m unittest discover -s tests` imports test modules top-level
+    from _upstream import is_upstream_checkout
+
 CHANGELOG = Path(__file__).resolve().parent.parent / "CHANGELOG.md"
-FROZEN_SHA256 = "c45bc7d6c6979a188544b506e454ef7a7d55ccd56c3ccec9f5f02b2b457f8a22"
+FROZEN_SHA256 = "ff890d3567e99956fd39fe6f26b3d5fd1c0d60a64802ef3d97642185a54bc697"
 
 
+@unittest.skipIf(not is_upstream_checkout(), "the freeze guards the upstream changelog; forks may keep their own")
 class FrozenChangelogTests(unittest.TestCase):
     def test_changelog_is_unchanged(self):
         # Line endings normalized so a CRLF checkout on Windows hashes the same.

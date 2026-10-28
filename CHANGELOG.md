@@ -14,7 +14,7 @@ fork, prefer updating to a tagged release over pulling raw `master` (see
 files a release touched; `python3 tools/check_upstream_updates.py` lists them with
 per-file diff commands.
 
-## [1.7.4] - 2026-11-02
+## [1.7.4]
 
 ### Added
 
@@ -36,7 +36,7 @@ per-file diff commands.
   the merged commit types: `type!:` or a `BREAKING CHANGE:` footer is major, `feat` is minor, anything
   else is patch. A week without merges is skipped, and a `master` commit whose CI failed is never
   released. Forks keep updating to tags as before; release notes now live in GitHub Releases, and a
-  test keeps `[Unreleased]` from coming back.
+  test fails any PR that still edits this file.
 
 - **The repository moved to the `ai-job-search-dev` organization** - the canonical URL is now
   `https://github.com/ai-job-search-dev/ai-job-search`. GitHub redirects the old
