@@ -54,6 +54,18 @@ per-file diff commands.
 
 ### Fixed
 
+- **`/upskill <URL>` runs the posting integrity gate before reading the posting**
+  (`.claude/skills/upskill/SKILL.md`, `tools/security_guards.py`, `tests/test_posting_gate_wiring.py`) -
+  targeted mode fetched the posting with WebFetch and extracted skills straight from it. The trust-boundary
+  line added on 2026-10-18 told the skill the text was untrusted but named no gate, and `allowed-tools`
+  granted no Bash, so the step could not have run one. The fetched text is now written to the scratchpad
+  and passed through `python3 tools/posting_guard.py --text --json` exactly as `/apply` Step 0 does for
+  pasted text, with the verdict shown and a ⚠ posting confirmed by the user before anything is extracted;
+  the skill's `allowed-tools` carries the scoped `Bash(python3 tools/posting_guard.py:*)` grant, allowlisted
+  in `security_guards.py`. The wiring test now derives every command and skill that WebFetches a posting
+  and requires each to name the gate (`/scrape`'s WebSearch branch is the one exemption: it fills listing
+  fields and hands the text to `/rank`, whose scorer gates it). Two tests fail on master.
+
 - **The four `@bunli/core` portal CLIs typecheck on a clean install again** (#768, closes #765,
   `.agents/skills/{jobbank,jobdanmark,jobindex,jobnet}-search/cli/package.json`,
   `tests/test_portal_cli_types.py`) - `bun-types` accepts any `@types/node`, while `@bunli/core`
