@@ -54,6 +54,14 @@ per-file diff commands.
 
 ### Fixed
 
+- **`/interview` Rule 5 names all three writes it makes outside the archive** (`.claude/commands/interview.md`,
+  `tests/test_interview_write_rules.py`) - the rule said "write only to the application archive - with one
+  exception", then listed two (STAR examples appended to `07-interview-prep.md`, new facts written to
+  `01-candidate-profile.md`) and left out the company research cache that Step 2 writes or refreshes, so
+  following Step 2 read as breaking Rule 5. The rule now names the cache, the STAR append and the profile
+  and says three; a test pins each write the body orders to a mention in the rule and checks the stated
+  count against the paths named. Two tests fail on master.
+
 - **The four `@bunli/core` portal CLIs typecheck on a clean install again** (#768, closes #765,
   `.agents/skills/{jobbank,jobdanmark,jobindex,jobnet}-search/cli/package.json`,
   `tests/test_portal_cli_types.py`) - `bun-types` accepts any `@types/node`, while `@bunli/core`
