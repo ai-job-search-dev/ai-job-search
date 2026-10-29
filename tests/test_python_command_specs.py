@@ -43,6 +43,8 @@ SPECS = sorted(
 KNOWN_TOOL_SPECS = {
     ".claude/commands/rank.md",
     ".claude/commands/apply.md",
+    ".claude/commands/interview.md",
+    ".claude/commands/outcome.md",
     ".claude/skills/job-scraper/SKILL.md",
     ".claude/skills/job-application-assistant/04-job-evaluation.md",
     ".claude/skills/job-application-assistant/05-cv-templates.md",
@@ -55,14 +57,28 @@ WINDOWS_NOTE = "> **Windows:** run these tools as `python`, not `python3`."
 # optionally behind list indentation. `python3` is the settled spelling and
 # never flagged; `python` (bare) and any `"$PY"`/probe reintroduction are.
 LINE_INTERPRETER = re.compile(r"""^\s*(python3|python|"\$PY"|PY=)""")
+# A tool run mid-sentence, in backticks: /interview Step 1 and /outcome Step 3
+# run the posting gate this way. It is the same invocation as a fenced line
+# and the same Windows failure, so it counts as a first use and takes the
+# same spelling rule.
+INLINE_INTERPRETER = re.compile(r"""`(python3|python|"\$PY")\s+tools/[^`]*`""")
+
+
+def invocations(line):
+    """Yield the interpreter token of every invocation on this line."""
+    m = LINE_INTERPRETER.match(line)
+    if m:
+        yield m.group(1)
+    for m in INLINE_INTERPRETER.finditer(line):
+        yield m.group(1)
 
 
 def command_lines(text):
-    """Yield (lineno, line) for every line-leading interpreter invocation."""
+    """Yield (lineno, line, token) for every invocation not spelled python3."""
     for lineno, line in enumerate(text.splitlines(), 1):
-        m = LINE_INTERPRETER.match(line)
-        if m and m.group(1) != "python3":
-            yield lineno, line, m.group(1)
+        for token in invocations(line):
+            if token != "python3":
+                yield lineno, line, token
 
 
 class SpecPythonSpellingTest(unittest.TestCase):
@@ -90,7 +106,7 @@ class SpecPythonSpellingTest(unittest.TestCase):
             text = (REPO / spec).read_text(encoding="utf-8")
             lines = text.splitlines()
             first_use = next(
-                (i for i, l in enumerate(lines) if LINE_INTERPRETER.match(l)), None
+                (i for i, l in enumerate(lines) if any(invocations(l))), None
             )
             notes = text.count(WINDOWS_NOTE)
             if first_use is None:

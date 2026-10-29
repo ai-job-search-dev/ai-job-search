@@ -54,6 +54,17 @@ per-file diff commands.
 
 ### Fixed
 
+- **Every spec that runs a tool mid-sentence carries the Windows note, and the guard sees those invocations**
+  (`tests/test_python_command_specs.py`, `.claude/commands/{interview,outcome,add-portal,apply}.md`,
+  `.claude/agents/{posting-fetcher,posting-scorer}.md`,
+  `.claude/skills/job-application-assistant/{SKILL,09-web-research}.md`) - the #669 guard matched only
+  line-leading `python3 ...` lines, so `/interview` Step 1, `/outcome` Step 3, `/add-portal` Step 1, the
+  assistant skill's Step 1 and both fetch agents, which run `tools/posting_guard.py` or `tools/fetch_page.py`
+  inside backticks, were never asked for the note and had none, while `/apply` and `09-web-research.md`
+  placed theirs after an inline first use. The detector now also matches a backticked `python3 tools/...`
+  invocation, the six specs gained their one note before first use, and the two late notes moved up.
+  `SKILL.md` 1.3.7 → 1.3.8, `09-web-research.md` 1.1.7 → 1.1.8. Fails on master.
+
 - **The four `@bunli/core` portal CLIs typecheck on a clean install again** (#768, closes #765,
   `.agents/skills/{jobbank,jobdanmark,jobindex,jobnet}-search/cli/package.json`,
   `tests/test_portal_cli_types.py`) - `bun-types` accepts any `@types/node`, while `@bunli/core`
