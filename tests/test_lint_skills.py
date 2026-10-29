@@ -111,6 +111,32 @@ class SettingsShapeTests(LinterRepoFixture):
                 self.assertEqual(result.returncode, 1)
                 self.assertIn("expected permissions.allow to be a list", result.stdout)
                 self.assertNotIn("Traceback", result.stderr)
+class NonUtf8FileTests(LinterRepoFixture):
+    """A skill or command saved in a Windows code page (cp1252 é) used to end
+    the run with a UnicodeDecodeError traceback before any report was printed;
+    every other malformed input the linter meets becomes a finding."""
+
+    def test_non_utf8_skill_is_a_finding_not_a_traceback(self):
+        skill = self.root / ".claude" / "skills" / "example" / "SKILL.md"
+        skill.write_bytes("---\nname: example\ndescription: Café skill\n---\n".encode("cp1252"))
+
+        result = run_linter(self.root)
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(".claude/skills/example/SKILL.md: not valid UTF-8", result.stdout)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_non_utf8_command_is_a_finding_not_a_traceback(self):
+        command = self.root / ".claude" / "commands" / "setup.md"
+        command.write_bytes("# /setup - Café setup\n".encode("cp1252"))
+
+        result = run_linter(self.root)
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(".claude/commands/setup.md: not valid UTF-8", result.stdout)
+        self.assertNotIn("Traceback", result.stderr)
+
+
 class SkillAndCommandCheckTests(LinterRepoFixture):
     """check_skill()/check_command() are the linter's main job and were
     previously untested - only check_settings() had coverage, so deleting
