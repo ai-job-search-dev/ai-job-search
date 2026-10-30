@@ -54,6 +54,13 @@ per-file diff commands.
 
 ### Fixed
 
+- **`upstream_triage.py` reads touched paths with non-ASCII names unquoted** (`tools/upstream_triage.py`,
+  `tests/test_upstream_triage.py`) - `git show --name-only` prints a path with a non-ASCII byte as
+  `"caf\303\251.md"` (core.quotePath), and that spelling exists in no tree, so the existence checks all
+  failed: an upstream edit to a file the fork had deleted was reported under "worth reviewing" with the
+  escaped name, where the same file spelled `cafe.md` was correctly skipped. The listing now runs with
+  `core.quotePath=false`. Two tests fail on master.
+
 - **The four `@bunli/core` portal CLIs typecheck on a clean install again** (#768, closes #765,
   `.agents/skills/{jobbank,jobdanmark,jobindex,jobnet}-search/cli/package.json`,
   `tests/test_portal_cli_types.py`) - `bun-types` accepts any `@types/node`, while `@bunli/core`
