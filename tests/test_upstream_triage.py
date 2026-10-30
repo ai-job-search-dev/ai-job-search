@@ -57,7 +57,9 @@ class TriageRepoFixture(unittest.TestCase):
     def run_triage(self, *args) -> subprocess.CompletedProcess:
         return subprocess.run(
             [sys.executable, str(self.root / "tools" / "upstream_triage.py"), *args],
-            cwd=self.root, capture_output=True, text=True,
+            # The tool forces UTF-8 stdout; read it as such, not as the
+            # Windows locale code page, or a non-ASCII path arrives garbled.
+            cwd=self.root, capture_output=True, text=True, encoding="utf-8",
         )
 
 
