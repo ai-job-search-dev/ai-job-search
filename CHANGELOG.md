@@ -54,6 +54,15 @@ per-file diff commands.
 
 ### Fixed
 
+- **`rank_state.py apply` rejects a non-ISO fresh deadline instead of storing it over the real one**
+  (`tools/rank_state.py`, `tests/test_rank_state.py`) - Step 2's contract is `"deadline": "YYYY-MM-DD" | null`,
+  but `apply` took any truthy scorer value ("ASAP", an ISO timestamp, a number) over the stored date in the
+  expiry check, where rule 6's defensive parse read it as "no deadline", so a job whose stored deadline had
+  already passed was ranked instead of expired; then the value was persisted verbatim, the real closing date
+  was gone, and the sweep reported the entry as unparseable on every later run. A fresh deadline that is not
+  `YYYY-MM-DD` or null is now a contract error like a misspelt status: the row lands in `errors`, the entry is
+  untouched, the rest of the batch still applies. Four subtests fail on master.
+
 - **The four `@bunli/core` portal CLIs typecheck on a clean install again** (#768, closes #765,
   `.agents/skills/{jobbank,jobdanmark,jobindex,jobnet}-search/cli/package.json`,
   `tests/test_portal_cli_types.py`) - `bun-types` accepts any `@types/node`, while `@bunli/core`
