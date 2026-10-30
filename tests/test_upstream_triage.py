@@ -86,6 +86,38 @@ class RelevanceFilterTests(TriageRepoFixture):
         self.assertIn("touches only files not in this fork", result.stdout)
         self.assertIn("Probably skip", result.stdout)
 
+    def test_removed_file_with_a_non_ascii_name_is_still_skipped(self):
+        # Same shape as the test above with one é in the filename. git quotes
+        # such a path in --name-only output unless core.quotePath is off, and
+        # the quoted spelling exists in no tree, so the fork's deletion went
+        # unseen and the commit was reported worth reviewing as `"caf\303\251.md"`.
+        self.write("café.md", "base\n")
+        self.commit("shared: add café")
+        self.write("café.md", "upstream edit\n")
+        self.commit("upstream: edit café")
+        self.set_upstream_to_head()
+        git(self.root, "reset", "--hard", "HEAD~1")
+        git(self.root, "rm", "-q", "café.md")
+        self.commit("fork: remove café")
+
+        result = self.run_triage()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("touches only files not in this fork", result.stdout)
+        self.assertNotIn("\\303\\251", result.stdout, "paths must be read unquoted")
+
+    def test_kept_file_with_a_non_ascii_name_is_listed_by_its_real_name(self):
+        self.write("café.md", "base\n")
+        self.commit("shared: add café")
+        self.write("café.md", "upstream edit\n")
+        self.commit("upstream: edit café")
+        self.set_upstream_to_head()
+        git(self.root, "reset", "--hard", "HEAD~1")
+
+        result = self.run_triage()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("`café.md`", result.stdout)
+        self.assertNotIn("\\303\\251", result.stdout)
+
     def test_commit_touching_kept_files_is_worth_reviewing(self):
         self.write("kept.py", "print('changed')\n")
         self.commit("upstream: change kept.py")
