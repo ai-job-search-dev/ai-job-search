@@ -67,6 +67,14 @@ per-file diff commands.
 
 ### Fixed
 
+- **`/html-report` no longer credits a new application with an older one's interview**
+  (`tools/report_data.py`, `tests/test_html_report_command.py`) - archives were found by globbing
+  `documents/applications/*/outcome.md`, so a new application's folder, which has no `outcome.md`
+  until `/outcome` runs, was invisible to the company+role match. A second application at the same
+  company then fell back to the first one's archive and counted as having reached its interview
+  stages, inflating the funnel. Every archive folder is now a match candidate, with empty stages
+  when `outcome.md` is absent.
+
 - **The four `@bunli/core` portal CLIs typecheck on a clean install again** (#768, closes #765,
   `.agents/skills/{jobbank,jobdanmark,jobindex,jobnet}-search/cli/package.json`,
   `tests/test_portal_cli_types.py`) - `bun-types` accepts any `@types/node`, while `@bunli/core`

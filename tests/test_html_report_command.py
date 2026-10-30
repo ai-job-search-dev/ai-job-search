@@ -5,9 +5,12 @@ properties of the real repo, testing the things CI would catch if the
 command file or gitignore rule were wrong.
 """
 
+import csv
+import json
 import re
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -138,6 +141,70 @@ class HtmlReportGitignoreTests(unittest.TestCase):
             rules,
             "reports/ must be listed in .gitignore — generated dashboards are personal output",
         )
+
+
+class HtmlReportScriptTests(unittest.TestCase):
+    """tools/html_report.py renders a fixture tracker safely and offline."""
+
+    SCRIPT = REPO_ROOT / "tools" / "html_report.py"
+    HEADER = HtmlReportTrackerFieldTests.CANONICAL_HEADER
+
+    def render(self, rows, archives=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with open(root / "job_search_tracker.csv", "w", newline="", encoding="utf-8") as f:
+                csv.writer(f).writerows([self.HEADER] + rows)
+            for name, outcome in (archives or {}).items():
+                d = root / "documents" / "applications" / name
+                d.mkdir(parents=True)
+                if outcome is not None:
+                    (d / "outcome.md").write_text(outcome, encoding="utf-8")
+            out = root / "out.html"
+            result = subprocess.run([sys.executable, str(self.SCRIPT), "--root", str(root), "--out", str(out)],
+                                    check=True, capture_output=True, text=True, cwd=REPO_ROOT)
+            return out.read_text(encoding="utf-8"), result.stdout
+
+    def row(self, company, role, status, source=""):
+        values = {"date": "2026-10-01", "company": company, "role": role, "status": status,
+                  "sector": "AI", "channel": "online", "source": source}
+        return [values.get(h, "") for h in self.HEADER]
+
+    def test_values_are_escaped_and_page_is_offline(self):
+        html, _ = self.render([
+            self.row("<script>alert(1)</script>", "Engineer", "applied", "https://example.com/job"),
+            self.row("Acme", "Frontend", "rejected", "javascript:alert(1)"),
+            self.row("Draftco", "Dev", "drafted"),
+        ])
+        self.assertNotIn("<script>alert(1)</script>", html)
+        self.assertIn("&lt;script&gt;", html)
+        self.assertNotIn("href='javascript:", html)
+        external = re.findall(r'(?:src|href)=["\'](https?://[^"\']+)', html)
+        self.assertEqual(external, ["https://example.com/job"])
+        self.assertNotIn("@font-face", html)
+
+    def test_out_must_be_an_html_file(self):
+        """settings.json pre-approves the script, so --out must not overwrite arbitrary files."""
+        result = subprocess.run([sys.executable, str(self.SCRIPT), "--out", "notes.txt"],
+                                capture_output=True, text=True, cwd=REPO_ROOT)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--out must end in .html", result.stderr)
+
+    def test_settings_and_guards_allow_the_script(self):
+        allow = json.loads((REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))["permissions"]["allow"]
+        guards = (REPO_ROOT / "tools" / "security_guards.py").read_text(encoding="utf-8")
+        for entry in ("Bash(python tools/html_report.py:*)", "Bash(python3 tools/html_report.py:*)"):
+            self.assertIn(entry, allow, f"{entry} missing from .claude/settings.json")
+            self.assertIn(entry, guards, f"{entry} missing from security_guards.py's reviewed allowlist")
+
+    def test_new_archive_without_outcome_is_not_matched_to_older_same_company_archive(self):
+        """A second application at one company must not inherit the first one's interview."""
+        _, summary = self.render(
+            [self.row("Revolut", "Frontend Software Engineer", "rejected"),
+             self.row("Revolut", "Software Engineer (Frontend)", "applied")],
+            {"revolut_frontend_software_engineer": "- [x] Phone screen\n- [x] Technical interview\n",
+             "revolut_software_engineer_frontend": None},
+        )
+        self.assertIn("past CV screen 50%", summary)
 
 
 @unittest.skipUnless(
