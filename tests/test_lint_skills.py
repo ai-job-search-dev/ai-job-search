@@ -123,7 +123,8 @@ class NonUtf8FileTests(LinterRepoFixture):
         result = run_linter(self.root)
 
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn(".claude/skills/example/SKILL.md: not valid UTF-8", result.stdout)
+        # rel() prints native separators; Windows shows backslashes.
+        self.assertIn(".claude/skills/example/SKILL.md: not valid UTF-8", result.stdout.replace("\\", "/"))
         self.assertNotIn("Traceback", result.stderr)
 
     def test_non_utf8_command_is_a_finding_not_a_traceback(self):
@@ -133,7 +134,8 @@ class NonUtf8FileTests(LinterRepoFixture):
         result = run_linter(self.root)
 
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn(".claude/commands/setup.md: not valid UTF-8", result.stdout)
+        # rel() prints native separators; Windows shows backslashes.
+        self.assertIn(".claude/commands/setup.md: not valid UTF-8", result.stdout.replace("\\", "/"))
         self.assertNotIn("Traceback", result.stderr)
 
 
