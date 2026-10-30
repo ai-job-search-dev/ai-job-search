@@ -25,7 +25,9 @@
       "Bash(python tools/fetch_page.py:*)",
       "Bash(python3 tools/fetch_page.py:*)",
       "Bash(python tools/posting_guard.py:*)",
-      "Bash(python3 tools/posting_guard.py:*)"
+      "Bash(python3 tools/posting_guard.py:*)",
+      "Bash(python tools/html_report.py:*)",
+      "Bash(python3 tools/html_report.py:*)"
     ],
     "ask": [
       "Edit(.claude/settings.json)",

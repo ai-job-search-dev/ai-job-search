@@ -101,6 +101,10 @@ ALLOWED_PERMISSIONS = {
     # Reads a file or stdin, writes only to an explicit --out, never fetches.
     "Bash(python tools/posting_guard.py:*)",
     "Bash(python3 tools/posting_guard.py:*)",
+    # /html-report. Reads the tracker and archives, writes one .html file;
+    # the script refuses any --out that does not end in .html.
+    "Bash(python tools/html_report.py:*)",
+    "Bash(python3 tools/html_report.py:*)",
 }
 
 # Rules that must stay in .claude/settings.json permissions.ask. An ask rule

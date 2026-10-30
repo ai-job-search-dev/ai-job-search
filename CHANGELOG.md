@@ -25,6 +25,23 @@ per-file diff commands.
 
 ### Changed
 
+- **`/html-report` renders the dashboard from a script instead of hand-written HTML**
+  (`.claude/commands/html-report.md`, `tools/html_report.py`, `tools/report_data.py`,
+  `tests/test_html_report_command.py`, `README.md`, `.claude/settings.json`,
+  `tools/security_guards.py`) - the command used to have the agent read the
+  tracker into the conversation and write the whole page by hand, so the figures, layout and
+  escaping were redone on every run and could drift between runs. `tools/report_data.py` now
+  computes every figure (the Step 1 status buckets, the Step 2 funnel and rejection rate, which
+  the command file still documents) and `tools/html_report.py` renders one offline page from it:
+  a KPI strip; funnel, status mix, weekly, stage-reached, sector and channel charts drawn in SVG
+  and CSS; a "waiting longest for a reply" table; and a sortable, filterable applications table.
+  It uses system fonts with light and dark themes and makes no network requests. Every tracker
+  value is HTML-escaped, and source links render only for `http(s)` URLs, which a new fixture
+  test checks along with the absence of remote resources. The script gets `python`/`python3`
+  allow entries in `.claude/settings.json` and the guard allowlist, like `rank_state.py`, and
+  refuses any `--out` that does not end in `.html`, so the standing grant cannot overwrite other
+  files. The default output path (`reports/application-dashboard.html`) is unchanged.
+
 - **The repository moved to the `ai-job-search-dev` organization** - the canonical URL is now
   `https://github.com/ai-job-search-dev/ai-job-search`. GitHub redirects the old
   `MadsLorentzen/ai-job-search` address for web links, `git` remotes, raw files and the API, so
@@ -53,6 +70,14 @@ per-file diff commands.
   entries in `.claude/settings.json` and the guard allowlist, like `rank_state.py`.
 
 ### Fixed
+
+- **`/html-report` no longer credits a new application with an older one's interview**
+  (`tools/report_data.py`, `tests/test_html_report_command.py`) - archives were found by globbing
+  `documents/applications/*/outcome.md`, so a new application's folder, which has no `outcome.md`
+  until `/outcome` runs, was invisible to the company+role match. A second application at the same
+  company then fell back to the first one's archive and counted as having reached its interview
+  stages, inflating the funnel. Every archive folder is now a match candidate, with empty stages
+  when `outcome.md` is absent.
 
 - **The four `@bunli/core` portal CLIs typecheck on a clean install again** (#768, closes #765,
   `.agents/skills/{jobbank,jobdanmark,jobindex,jobnet}-search/cli/package.json`,
