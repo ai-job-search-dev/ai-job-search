@@ -20,7 +20,7 @@ RUN apk update && \
 ### uncomment this for latex compilation, but a much larger docker image 
 ### needs to happen for resume and cover letter creation, but is otherwise 
 ### functional
-# RUN apk add texlive-full
+RUN apk add texlive-full
 
 ## install claude 
 RUN npm install -g @anthropic-ai/claude-code
