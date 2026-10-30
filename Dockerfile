@@ -17,6 +17,10 @@ RUN apk update && \
     unzip 
 
 
+
+### note for tests, py3-yaml and git also need to be installed in the container  
+# RUN apk add py3-yaml git 
+
 ### uncomment this for latex compilation, but a much larger docker image 
 ### needs to happen for resume and cover letter creation, but is otherwise 
 ### functional
@@ -33,8 +37,6 @@ RUN (curl -fsSL https://bun.sh/install | bash)
 RUN python3 tools/install_portal_clis.py 
 
 CMD bash /app/docker_container_init_and_run.sh
-
-
 
 ### USE THE FOLLOWING COMMAND TO BUILD THE IMAGE
 # docker build . -t ai-job-search:latest 
