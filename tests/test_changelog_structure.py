@@ -16,7 +16,7 @@ except ImportError:  # `python -m unittest discover -s tests` imports test modul
     from _upstream import is_upstream_checkout
 
 CHANGELOG = Path(__file__).resolve().parent.parent / "CHANGELOG.md"
-FROZEN_SHA256 = "ff890d3567e99956fd39fe6f26b3d5fd1c0d60a64802ef3d97642185a54bc697"
+FROZEN_SHA256 = "21fad87b6dff190e384c4bdd9704e97cef492e87a1b5db1cbf0bd4f73f5c8db3"
 
 
 @unittest.skipIf(not is_upstream_checkout(), "the freeze guards the upstream changelog; forks may keep their own")
