@@ -39,7 +39,10 @@ workflow reads. The ⚠ in the verdict is for the user and fires only on signals
 that indicate targeting (instruction-shaped lines, tampering characters,
 invisible text, mixed-script words); hidden blocks and hidden URLs are reported as context,
 because navigation chrome is hidden on nearly every real page. It advises; it
-never blocks. The archive gets counts only (see /apply Step 6b); excerpts are
+never blocks. Hidden salary/requirement content also triggers review so it is
+not silently lost. Stylesheets trigger a visibility warning: this static
+extractor cannot resolve CSS layout and never fetches linked CSS. Warnings
+are included as `visibility_warnings` when present. The archive gets counts only (see /apply Step 6b); excerpts are
 for the terminal.
 
 Usage:
@@ -98,13 +101,14 @@ VARIATION_RUN = re.compile("[︀-️\U000E0100-\U000E01EF]{2,}")
 
 HIDDEN_STYLE = re.compile(
     r"display\s*:\s*none"
-    r"|visibility\s*:\s*hidden"
-    r"|opacity\s*:\s*0(?![.\d]*[1-9])"
+    r"|visibility\s*:\s*(?:hidden|collapse)"
+    r"|opacity\s*:\s*(?:0(?:\.0*)?|\.0*)\b(?![.\d]*[1-9])"
     r"|font-size\s*:\s*0(?:\.0+)?(?:px|pt|em|rem|%)?(?![\d.])"
     r"|color\s*:\s*transparent"
     r"|clip\s*:\s*rect\(\s*0"
-    r"|clip-path\s*:\s*inset\(\s*100%"
-    r"|(?:left|top|text-indent)\s*:\s*-\d{4,}px",
+    r"|clip-path\s*:\s*inset\(\s*(?:50|100)%"
+    r"|transform\s*:\s*scale(?:[xy])?\(\s*0\s*\)"
+    r"|(?:left|right|top|bottom|text-indent)\s*:\s*-\d{3,}(?:px|em|rem|%)",
     re.I,
 )
 PRESTRIP = re.compile(r"<!DOCTYPE[^>]*>|<\?[^>]*\?>", re.I)
@@ -123,6 +127,8 @@ HTML_HINT = re.compile(r"<\s*(html|body|div|p)\b", re.I)
 URL = re.compile(r"https?://[^\s<>\"')\]]+")
 INSTRUCTION_PATTERNS = [re.compile(p, re.I) for p in (
     r"\bignore (all|any|the|previous|prior|above|earlier)\b",
+    r"\b(?:ignore|disregard|forget) (?:all |any |your )?(?:prior|previous|above|earlier) guidance\b",
+    r"\byou are now (?:an?|the) (?:[\w-]+ ){0,5}(?:bot|assistant|agent|model)\b",
     # The same instruction with its other two verbs. These take an explicit
     # object ("previous instructions"), because "forget the" and "disregard
     # the" are ordinary prose where "ignore the" already is not.
@@ -258,7 +264,45 @@ def _is_hidden(raw_attrs: str) -> bool:
     style = _style(attrs)
     if HIDDEN_STYLE.search(style):
         return True
+    declarations = dict(re.findall(r"([\w-]+)\s*:\s*([^;!]+)", style.lower()))
+    for prop, limit in (("opacity", .01), ("font-size", 2)):
+        value = declarations.get(prop, "").strip()
+        match = re.fullmatch(r"([\d.]+)(px|pt|pc|in|cm|mm|em|rem|%)?", value)
+        if match:
+            # Relative font sizes use a 16px reference. Stylesheets are separately
+            # reported as uncertain; this is deliberately not a layout engine.
+            factors = {None: 1, "px": 1, "pt": 4 / 3, "pc": 16, "in": 96,
+                       "cm": 96 / 2.54, "mm": 96 / 25.4, "em": 16, "rem": 16, "%": .16}
+            try:
+                size = float(match[1]) * (factors[match[2]] if prop == "font-size" else 1)
+            except ValueError:
+                continue
+            if size <= limit:
+                return True
+    foreground = _rgb(declarations.get("color", ""))
+    background = _rgb(declarations.get("background-color", declarations.get("background", "")))
+    if foreground is not None and background is not None:
+        def luminance(rgb):
+            channels = [v / 12.92 if v <= .04045 else ((v + .055) / 1.055) ** 2.4 for v in rgb]
+            return sum(v * weight for v, weight in zip(channels, (.2126, .7152, .0722)))
+        light, dark = sorted((luminance(foreground), luminance(background)))
+        if (dark + .05) / (light + .05) < 1.25:
+            return True
     return bool(COLLAPSED_BOX.search(style) and CLIPPED.search(style))
+
+
+def _rgb(value):
+    value = value.strip()
+    value = {"white": "#ffffff", "black": "#000000", "red": "#ff0000",
+             "blue": "#0000ff", "green": "#008000"}.get(value, value)
+    if re.fullmatch(r"#[0-9a-f]{3}", value):
+        value = "#" + "".join(c * 2 for c in value[1:])
+    if re.fullmatch(r"#[0-9a-f]{6}", value):
+        return tuple(int(value[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    match = re.fullmatch(r"rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)", value)
+    if match:
+        return tuple(min(255, int(c)) / 255 for c in match.groups())
+    return None
 
 
 def clean_html(markup: str):
@@ -274,6 +318,7 @@ def clean_html(markup: str):
     """
     hidden_parts = []
     hidden_blocks = []
+    hidden_content = []
 
     def collect(match):
         inner = re.sub(r"<!--|-->", " ", match.group(0))
@@ -288,11 +333,17 @@ def clean_html(markup: str):
     visible = []
     hidden_buf = []
     stack = []  # open element names, innermost last
+    hidden_indices = set()
+    visible_summaries = set()
     hidden_at = None  # stack index of the element that started the hidden run
     pos = 0
 
     def emit(text):
-        (visible if hidden_at is None else hidden_buf).append(text)
+        # The summary of a closed details element remains visible.
+        summary = (hidden_at in visible_summaries and
+                   len(stack) > hidden_at + 1 and stack[hidden_at + 1] == "summary" and
+                   not any(i > hidden_at for i in hidden_indices))
+        (visible if hidden_at is None or summary else hidden_buf).append(text)
 
     def flush_hidden():
         nonlocal hidden_at
@@ -305,9 +356,12 @@ def clean_html(markup: str):
             # guard() counts and decodes them. Clean before cutting, or a run of
             # invisible characters at the front would leave an empty excerpt.
             hidden_blocks.append(clean_text(block)[0][:EXCERPT])
+            hidden_content.append(clean_text(block)[0])
             hidden_parts.append(block)
 
     def pop_to(index):
+        hidden_indices.difference_update(range(index, len(stack)))
+        visible_summaries.difference_update(range(index, len(stack)))
         del stack[index:]
         if hidden_at is not None and hidden_at >= len(stack):
             flush_hidden()
@@ -336,14 +390,21 @@ def clean_html(markup: str):
         elif name in CLOSES_P and stack and stack[-1] == "p":
             pop_to(len(stack) - 1)
         stack.append(name)
-        if hidden_at is None and _is_hidden(raw_attrs):
-            hidden_at = len(stack) - 1
+        attrs = _attrs(raw_attrs)
+        styled_hidden = _is_hidden(raw_attrs)
+        if name == "details" and "open" not in attrs and not styled_hidden:
+            visible_summaries.add(len(stack) - 1)
+        if styled_hidden or (name in {"details", "dialog"} and "open" not in attrs):
+            hidden_indices.add(len(stack) - 1)
+            if hidden_at is None:
+                hidden_at = len(stack) - 1
     emit(markup[pos:])
     if hidden_at is not None:
         flush_hidden()
 
     text = html.unescape("".join(visible))
-    return _fold(text), {"hidden_blocks": hidden_blocks, "hidden_text": "\n".join(hidden_parts)}
+    return _fold(text), {"hidden_blocks": hidden_blocks, "hidden_text": "\n".join(hidden_parts),
+                         "hidden_content": hidden_content}
 
 
 def _excerpt(line: str, at: int) -> str:
@@ -373,7 +434,9 @@ def scan(visible: str, hidden: str) -> dict:
         stripped = line.strip()
         if not stripped or stripped in seen:
             continue
-        match = next((m for m in (p.search(stripped) for p in INSTRUCTION_PATTERNS) if m), None)
+        # Preserve original excerpts and offsets while recognising common leetspeak.
+        folded = stripped.translate(str.maketrans("013457", "oleast"))
+        match = next((m for m in (p.search(folded) for p in INSTRUCTION_PATTERNS) if m), None)
         if match:
             seen.add(stripped)
             instruction_like.append(_excerpt(stripped, match.start()))
@@ -399,6 +462,8 @@ def _plural(n: int, one: str, many: str) -> str:
 
 def verdict(findings: dict) -> str:
     alarms = []
+    if findings.get("visibility_warnings"):
+        alarms.append("visibility requires review")
     n = len(findings.get("instruction_like") or [])
     if n:
         alarms.append(_plural(n, "instruction-like line", "instruction-like lines"))
@@ -453,6 +518,22 @@ def guard(raw: str, mode: str):
     tf["invisible_text"] += hidden_tf["invisible_text"]
     hidden_text = "\n".join([hidden_text, *tf["invisible_text"]])
     findings = {"hidden_blocks": hidden_blocks, **tf, **scan(text, hidden_text)}
+    warnings = []
+    if mode == "html":
+        # A static text extractor cannot resolve the cascade, remote CSS or
+        # viewport-dependent rules. Never claim a verified clean page in their
+        # presence, and never fetch URLs supplied by the untrusted posting.
+        if re.search(r"<style\b", raw, re.I) or any(
+            "stylesheet" in html.unescape(_attrs(m.group(3)).get("rel", "")).lower().split()
+            for m in TAG.finditer(raw) if m.group(2).lower() == "link"
+        ):
+            warnings.append("Stylesheet present; text visibility cannot be verified without rendering.")
+        for line in hf["hidden_content"]:
+            match = re.search(r"\b(?:salary|pay|compensation|requirements?|required|must|experience)\b|[$€£]", line, re.I)
+            if match:
+                warnings.append("Hidden posting content: " + _excerpt(line, match.start()))
+    if warnings:
+        findings["visibility_warnings"] = warnings
     findings["verdict"] = verdict(findings)
     return text, findings
 
@@ -463,6 +544,8 @@ def _plain_findings(findings: dict) -> str:
         items = findings[key]
         lines.append(f"{key} ({len(items)}):")
         lines.extend(f'  - "{item}"' for item in items)
+    for warning in findings.get("visibility_warnings", []):
+        lines.append("visibility: " + warning)
     lines.append("invisible_chars: " + (", ".join(f"{k}={v}" for k, v in findings["invisible_chars"].items()) or "none"))
     lines.append(f"invisible_flagged: {findings['invisible_flagged']}")
     lines.append(f"visible_url_count: {findings['visible_url_count']}")
