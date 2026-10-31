@@ -67,6 +67,13 @@ per-file diff commands.
 
 ### Fixed
 
+- **`/add-template`'s name rule offers the update path its design principle promises**
+  (`.claude/commands/add-template.md`, `tests/test_add_template_reregistration.py`) - Step 2.1 said the name
+  "must not collide with an existing folder in `templates/`" while Design Principles say "re-running with the
+  same name offers to update the existing template rather than duplicating it"; the model read both on every
+  run. The name rule now treats an existing folder as a re-registration (update in place or pick another
+  name, never a second copy), and a test keeps the two statements agreeing. Fails on master.
+
 - **The four `@bunli/core` portal CLIs typecheck on a clean install again** (#768, closes #765,
   `.agents/skills/{jobbank,jobdanmark,jobindex,jobnet}-search/cli/package.json`,
   `tests/test_portal_cli_types.py`) - `bun-types` accepts any `@types/node`, while `@bunli/core`
