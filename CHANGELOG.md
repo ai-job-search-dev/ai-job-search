@@ -18,6 +18,15 @@ per-file diff commands.
 
 ### Added
 
+- **`hn-hiring-search` portal skill** (`.agents/skills/hn-hiring-search/`) - a third
+  country-agnostic portal next to `linkedin-search` and `freehire-search`. It reads the latest
+  "Ask HN: Who is hiring?" thread (hn.algolia.com) and YC startup job posts (the official
+  hacker-news.firebaseio.com API): public, keyless JSON APIs, zero runtime dependencies. Each
+  thread holds several hundred employer posts, many remote, and most of those startups never post
+  on LinkedIn or the aggregators, so `/scrape` had no way to see them. Follows the portal-skill
+  contract (`search`/`detail`, `--format json|table|plain`, JSON errors on stderr with exit 1,
+  backoff on 429/5xx), with offline bun tests for parsing and argument errors.
+
 - **CI runs the Python suite on Windows** (`.github/workflows/ci.yml` `python-tests-windows`) - every
   job ran on Ubuntu, so a Windows-only failure reached master with all checks green: #480's test
   (an atomic rename that Windows file locking refuses) and #486's (a tool printing non-ASCII JSON
