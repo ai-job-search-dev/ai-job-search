@@ -283,6 +283,8 @@ ALLOWED_SKILL_TOOLS = {
     "Bash(bun --version)",
     "Bash(python tools/job_key.py:*)",
     "Bash(python3 tools/job_key.py:*)",
+    "Bash(python tools/posting_guard.py:*)",
+    "Bash(python3 tools/posting_guard.py:*)",
     "Bash(python tools/scrape_state.py:*)",
     "Bash(python3 tools/scrape_state.py:*)",
 }
