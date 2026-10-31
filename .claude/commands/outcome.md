@@ -26,6 +26,7 @@ Follow these steps **in order**.
 - `followup <company>`, e.g. `/outcome followup acme` → draft a follow-up for that application now, regardless of threshold
 - `stale` or `sweep` → enter the stale application sweep branch (Step 2c) over open applications quiet for **60+ days**
 - `stale <N>` or `sweep <N>`, e.g. `/outcome stale 90` → stale sweep branch with an N-day threshold
+- A path to an audio or video recording of a call or interview (alongside a company name, or alone), e.g. `/outcome acme '/path/to/call.mp4'` → target that application as above, and source Step 2 from the recording (see **Recordings** in Step 2)
 
 ---
 
@@ -84,6 +85,19 @@ Also collect, without interrogating - one or two open questions are enough:
 - Dates for the stages reached
 - Any feedback received, verbatim where the user remembers it
 - What they'd do differently, and any signal about what the company valued (these feed `/setup`'s calibration and STAR-candidate mining, so concrete beats polished)
+
+### Recordings
+
+When the user supplies a recording (`.mp4`, `.m4a`, `.mp3`, `.wav`, `.ogg`, `.opus`, WhatsApp voice/call exports, etc.), transcribe it locally rather than asking them to retell the call:
+
+1. **Check the tool.** Run `bash tools/install_transcribe.sh --check`. `transcribe` is a local faster-whisper wrapper (`~/.local/bin/transcribe` → `~/.local/share/whisper/`) that the repo installs from `tools/transcribe.py`. **Never send the audio to an external transcription service or API** - the recording is personal data from a third party's call.
+   **If it is not installed**, offer to install it and wait for a yes, because it downloads about 470 MB of Python packages now and a speech model of about 460 MB on first use (after that it runs fully offline):
+   - On a yes, run `bash tools/install_transcribe.sh` in the background. It needs `python3` with venv (Debian/Ubuntu: `sudo apt install python3-venv`, which the user must run themselves with `! sudo apt install python3-venv`) and works on Linux, macOS and WSL. If it reports that `~/.local/bin` is not on PATH, call `~/.local/bin/transcribe` by its full path for this run. On a failure, show the error and fall back as below.
+   - On native Windows (no bash), or if the user declines, ask for a written summary of the call instead and continue with the normal Step 2 flow.
+2. **Transcribe** in the background, since a 30-minute call takes several minutes on CPU: `transcribe "<input path>" /tmp/outcome-transcript-<company>.txt`. Quote the path (Windows paths under `/mnt/c/` often contain spaces). Use `--model small` instead of the default `small.en` when the call is not in English. Output is one `[MM:SS] text` line per segment.
+3. **Read the whole transcript**, then extract the Step 2 data from it: stage reached and date, interviewer name and role, next steps and timeline, questions they asked and how the user answered, signals about what the company valued, compensation and logistics discussed, and any moment worth doing differently (e.g. a weak answer to a salary question). Expect speech-to-text errors in names and jargon (e.g. "cloud code" for Claude Code, a mangled company or street name). Correct the obvious ones from context and never build a conclusion on a garbled passage.
+4. **Present a short summary** (stage reached, next step, key takeaways) before writing, and ask only about whatever the transcript leaves unclear. The transcript replaces the retelling, not the user's confirmation.
+5. **Archive the transcript** in Step 3 (item 4).
 
 ---
 
@@ -188,6 +202,8 @@ appended per update with a date, never overwritten>
 
 Update rules: tick stage checkboxes as they are reached (add the date in parentheses), append dated entries to Notes, and only change `Status` from `in_progress` to a final value on resolution. Re-running `/outcome` on the same application is idempotent - it appends new information, never duplicates or rewrites history.
 
+4. **`call_transcript_YYYY-MM-DD.md`** - only when Step 2 transcribed a recording. Dated by the call, not the run. Write a short header (stage, interviewer name and role, approximate length, a note that it was auto-transcribed locally, and the obvious misheard terms with their corrections), then the raw transcript lines **unedited**. Corrections go in the header and in `outcome.md`, never into the transcript body. In `outcome.md` Notes, reference the file by name instead of pasting the transcript. If the file already exists, leave it. Delete the `/tmp` transcript afterwards. The audio file itself is never copied into the archive. This is safe by the same convention as `followup_*.md`: `/setup` reads only the four named archive files, and `/interview` can use the transcript as context for later rounds.
+
 **Thank-you note trigger:** when this step ticks a newly completed interview stage, offer in the same turn: "Want a short thank-you note for the interviewer? A prompt one is standard practice." If accepted, draft it under Step 2b's drafting and logging rules (same voice, same no-new-claims boundary, same `followup_YYYY-MM-DD.md` archive convention). Recording the stage is the trigger - no scanning for recent stages is ever needed.
 
 ---
@@ -243,3 +259,4 @@ If the recorded status is `hired`, congratulate the user warmly first - this is 
 7. **Follow-ups: no new claims.** Every substantive statement in a follow-up or thank-you note comes from the archived submitted materials. Rule 3 applies with no exceptions.
 8. **Maximum two follow-ups per application.** After the second silent follow-up, the honest move is recording the resolution, not persistence.
 9. **Stale sweep: user confirms before writing.** The stale sweep branch never marks applications as no_response automatically. It always presents the qualifying candidate list and waits for explicit user confirmation (all, select, or skip).
+10. **Recordings stay local.** Transcribe only with the local `transcribe` tool. Never upload audio or a transcript to any external service. Record what the transcript says, not what you infer beyond it (Rule 3).
