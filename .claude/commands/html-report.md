@@ -10,6 +10,20 @@ Generate a self-contained HTML dashboard from `job_search_tracker.csv` and the a
 
 Create `reports/` if it does not exist.
 
+### Application records (mandatory)
+
+> **Windows:** run these tools as `python`, not `python3`.
+
+```bash
+python3 tools/application_state.py list
+```
+
+Use the returned records and per-attempt `archive` paths throughout this command,
+following **Application attempt identity** in `documents/README.md`. Keep
+`application_id` when joining records. A null archive means ambiguous legacy
+ownership: skip that archive and report missing history. Never attach one shared
+archive to multiple attempts. This command never writes the tracker.
+
 ---
 
 ## Step 1: Collect Data
@@ -21,7 +35,8 @@ Read in parallel:
 
    Rows written before `deadline` existed have thirteen fields and no fourteenth value. Treat the missing field as empty - never drop the row, and never infer a deadline from its `date`.
 
-2. **`documents/applications/*/outcome.md`** — for each resolved application, read the outcome file to get the exact interview stages reached (the checkboxes) and any notes. Merge this into the matching tracker row by company+role fuzzy match (lowercase, ignore punctuation). If an archive exists for a row but there is no match, attach it as extra context anyway.
+2. **`documents/applications/*/outcome.md`** — read only the `outcome.md` in each selected record's resolved `archive`. Merge interview-stage checkboxes and notes into that exact attempt. Never use company+role fuzzy matching for ID-bearing rows, and never merge an ambiguous shared legacy archive into multiple rows. Skip unresolved legacy archives and report the missing history once.
+
 
 Status normalisation — map tracker values to six canonical buckets before computing stats:
 - `drafted` → **Drafted** (documents written by `/apply`, not yet submitted)

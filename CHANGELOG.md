@@ -78,6 +78,13 @@ per-file diff commands.
   resolver's placement, and a Python test fails if a CLI depending on `@bunli/core` drops the pin.
   `freehire-search` and `linkedin-search` never pull `image-q` and are untouched.
 
+- **Keep repeated applications separate.** A new application after a final outcome now
+  gets its own stable `application_id`, draft filenames and archive. The shared
+  `tools/application_state.py` helper owns tracker writes and archive selection;
+  apply, outcome, interview, Gmail, Notion, reporting and setup use that identity.
+  Existing shared legacy archives are flagged for verification rather than reused
+  silently. CSV quoting preserves notes and extra columns; stale writes are rejected.
+
 - **`freehire-search detail` no longer asks the API for a slug cut out of a URL on another
   host** (#623, fixes #622, `.agents/skills/freehire-search/cli/src/helpers.ts`, `tests/parsing.test.ts`,
   `tests/commands.test.ts`, `SKILL.md`) - `normalizeSlug` took the segment after `/jobs/` from

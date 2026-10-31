@@ -84,6 +84,8 @@ ALLOWED_PERMISSIONS = {
     "Bash(python3 tools/job_key.py:*)",
     "Bash(python tools/scrape_state.py:*)",
     "Bash(python3 tools/scrape_state.py:*)",
+    "Bash(python tools/application_state.py:*)",
+    "Bash(python3 tools/application_state.py:*)",
     "Bash(python tools/verify_pdf.py:*)",
     "Bash(python3 tools/verify_pdf.py:*)",
     "Bash(python tools/verify_layout.py:*)",
@@ -190,6 +192,8 @@ REQUIRED_IGNORE_RULES = [
     # /interview's prep packs land under documents/applications/**, above.
     "documents/interview/**",
     "job_search_tracker.csv",
+    "job_search_tracker.csv.lock",
+    ".applications.*.tmp",
     "gmail_sync/",
     "reports/",
     "upskill/*.md",
@@ -285,6 +289,8 @@ ALLOWED_SKILL_TOOLS = {
     "Bash(python3 tools/job_key.py:*)",
     "Bash(python tools/scrape_state.py:*)",
     "Bash(python3 tools/scrape_state.py:*)",
+    "Bash(python tools/application_state.py:*)",
+    "Bash(python3 tools/application_state.py:*)",
 }
 
 # The tools a shipped .claude/agents/*.md may list. These agents read untrusted

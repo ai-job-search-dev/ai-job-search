@@ -8,6 +8,24 @@ Unlike `/outcome` (which asks the user what happened), `/gmail-sync` classifies 
 
 Follow these steps **in order**.
 
+### Application records (mandatory)
+
+> **Windows:** run these tools as `python`, not `python3`.
+
+```bash
+python3 tools/application_state.py list
+```
+
+Use the returned records and per-attempt `archive` paths throughout this command,
+following **Application attempt identity** in `documents/README.md`. An
+`application_id` identifies an attempt; company and role are display/search fields.
+A null archive means ambiguous legacy ownership: report it, skip archive reads and
+writes, and ask for verified materials. Never guess or attach one archive to
+multiple tracker rows. All tracker changes use `application_state.py update
+--input <JSON_FILE>` with the exact selected record as `expected`, approved
+`changes` and an optional `note`; never edit CSV by hand. Keep existing user
+approval steps. The tool preserves unrelated fields and quotes notes correctly.
+
 ---
 
 ## Step 0: Prerequisites
@@ -30,7 +48,7 @@ Confirm the Gmail MCP tools (`mcp__claude_ai_Gmail__*`) are available. If not, t
 
 1. Read `job_search_tracker.csv`. If it does not exist, tell the user there is nothing to sync against yet (suggest `/outcome` or `/apply` first) and stop. Do not create it here - `/gmail-sync` never originates new applications, only updates existing ones.
 2. Read `gmail_sync/state.json` (create if missing: `{"last_sync": null, "processed_message_ids": []}`).
-3. Build the set of **open applications**: tracker rows whose `status` is not **Final** (per the **Tracker status vocabulary** in `/outcome`). For each, derive its archive folder `documents/applications/<company>_<role>/` by the **Subfolder naming** rule in `documents/README.md` and check whether `outcome.md` exists there. Reuse this exact derived path for any write in Step 7a.
+3. Build the set of **open applications**: tracker rows whose `status` is not **Final** (per the **Tracker status vocabulary** in `/outcome`). For each, use its resolved `archive` from the tool per **Application attempt identity** in `documents/README.md` and check whether `outcome.md` exists there. The **Subfolder naming** rule is legacy only. Reuse this exact selected path for any write in Step 7a.
 
    **`drafted` rows stay in this set, and are the reason it is worth searching.** `/apply` writes them but never submits; the user submits by hand and may not think to run `/outcome`. A reply arriving against a row still marked `drafted` is exactly that case, and the row holds the company name the search needs.
 4. If `$ARGUMENTS` named a company, filter this set to the matching row(s) (case-insensitive). No match → tell the user and stop, do not guess.
@@ -126,16 +144,15 @@ Approving the whole batch in one reply is expected UX - the requirement is that 
 
 For every row the user approved:
 
-1. **Tracker (`job_search_tracker.csv`):** update the matched row's `status` column per the Step 5 table, and append to `notes`: `<date> gmail-sync: <signal> ("<email subject>")`, **with every comma, double quote and line break deleted from the subject first**. No writer here emits a quoted tracker field and no reader unquotes one, so an unescaped comma splits the row identically for a naive split and for the `csv.DictReader` the shipped reader actually uses (`tools/rank_state.py`): `cv_file`, `cover_letter_file` and `source` each shift a column left. A line break is worse - it ends the row and starts a second one. The double quote is stripped as cheap insurance for the day something does quote a field; on today's readers it is harmless. The subject is a human-readable breadcrumb here, not data anything reads back - item 2 below keeps it verbatim in `outcome.md`, which is Markdown and carries no such constraint. This matters more than it looks: `/gmail-sync` is the only tracker writer that copies *third-party* text, and the only one that runs unattended, so nobody is watching the row it edits.
+1. **Tracker (`job_search_tracker.csv`):** use the selected record's snapshot with `application_state.py update --input <JSON_FILE>`. Set `changes.status` per Step 5 and append to `notes` using `note`: `<date> gmail-sync: <signal> ("<email subject>")`. Preserve the subject verbatim; CSV quoting is owned by the tool. Never restructure the CSV, reorder rows, or touch unrelated rows; the tool preserves `deadline` and every other field.
 
-   Never restructure the CSV, reorder rows, or touch unrelated rows - same rule `/outcome` follows. The rewrite touches only `status`, `notes` (and `date` when the drafted-rule below fires): preserve every other field of the row, parsed or not, so the `deadline` column written by `/apply` Step 6b - or any column added in the future - is never blanked by a status sync.
+   **If the matched row was still `drafted`,** supply `changes.date` with the submission date the user approved in Step 6 (the email date is only an upper bound). Never silently leave the drafting date in place.
 
-   **If the matched row was still `drafted`,** also set `date` to the email's date. The employer replying proves the user submitted by hand without running `/outcome`, so the drafting date now in that column is wrong. The email's date is an upper bound on the real submission date, tight for an ack and loose for a rejection weeks later, which is why Step 6 shows it and lets the user supply the actual date instead.
 2. **`outcome.md`:** tick the relevant stage checkbox (adding the date in parentheses) or update `Status`/`Date resolved` per the table. Append a dated entry to `## Notes`, never overwrite existing Notes history:
    ```
    YYYY-MM-DD (via /gmail-sync): <one-line summary of what the email said>. Source: "<subject>" from <sender>, <email date>.
    ```
-3. If no archive folder/`outcome.md` exists yet for a matched application, create the folder and a minimal `outcome.md` following the exact format in `documents/README.md`, same as `/outcome` would. This is the normal case for a row that was still `drafted`: `/apply` Step 6b writes the tracker row and only `/outcome` Step 3 ever creates the archive, so the folder legitimately does not exist yet. It is also the case for a row added by hand.
+3. If no archive folder/`outcome.md` exists yet for a matched application, create only its resolved per-attempt archive folder and a minimal `outcome.md` following the exact format in `documents/README.md`, same as `/outcome` would. This is the normal case for a row that was still `drafted`: `/apply` Step 6b writes the tracker row and only `/outcome` Step 3 ever creates the archive, so the folder legitimately does not exist yet. It is also the case for a row added by hand.
 
 Rows the user skipped are left untouched - no tracker write, no `outcome.md` write - but their message IDs are still marked processed in Step 8, so the same email isn't re-proposed every run.
 
@@ -143,7 +160,7 @@ Rows the user skipped are left untouched - no tracker write, no `outcome.md` wri
 
 ## Step 8: Update State
 
-Add every message ID processed this run - approved, skipped, unmatched, or filtered as noise - to `gmail_sync/state.json`'s `processed_message_ids`, and set `last_sync` to today's date. This makes re-running idempotent - the same email never produces a duplicate proposal, tracker note, or Notes entry.
+After each approved tracker and archive update, record that message ID as processed immediately. On failure stop and report partial progress; re-read the affected record and finish its missing writes before marking that message processed. Before retrying an archive note, check its source message ID so the same email cannot append duplicate history. Include that ID with the source in the archive note. Only after every approved tracker and archive write succeeds, add every remaining message ID processed this run - approved, skipped, unmatched, or filtered as noise - to `gmail_sync/state.json`'s `processed_message_ids`, and set `last_sync` to today's date. This makes re-running idempotent - the same email never produces a duplicate proposal, tracker note, or Notes entry.
 
 ---
 

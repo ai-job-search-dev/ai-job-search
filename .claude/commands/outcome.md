@@ -13,6 +13,24 @@ The command also owns the stretch *before* there is an outcome to record: the **
 
 Follow these steps **in order**.
 
+### Application records (mandatory)
+
+> **Windows:** run these tools as `python`, not `python3`.
+
+```bash
+python3 tools/application_state.py list
+```
+
+Use the returned records and per-attempt `archive` paths throughout this command,
+following **Application attempt identity** in `documents/README.md`. An
+`application_id` identifies an attempt; company and role are display/search fields.
+A null archive means ambiguous legacy ownership: report it, skip archive reads and
+writes, and ask for verified materials. Never guess or attach one archive to
+multiple tracker rows. All tracker changes use `application_state.py update
+--input <JSON_FILE>` with the exact selected record as `expected`, approved
+`changes` and an optional `note`; never edit CSV by hand. Keep existing user
+approval steps. The tool preserves unrelated fields and quotes notes correctly.
+
 ---
 
 ## Step 0: Parse Input
@@ -31,11 +49,11 @@ Follow these steps **in order**.
 
 ## Step 1: Load State and Identify the Application
 
-1. Read `job_search_tracker.csv`. If it does not exist, create it with the standard header:
+1. Load records with the tool above. For an externally made application with no tracker row, first use `plan`, then `draft` with its known company, role, source and document paths, then `update` to record its actual submitted state and date. The legacy standard header is:
    ```
    date,company,sector,role,role_type,channel,status,contact_person,fit_rating,notes,cv_file,cover_letter_file,source,deadline
    ```
-   **If the file exists and its header does not end in `,deadline`, append `,deadline` to the header line only** - no data row is touched. Legacy rows then read as an empty deadline. This is the one edit to an existing tracker this command may make outside a matched row, and Step 4's "never restructure the CSV" governs that row, not this header line.
+   The tool adds missing columns, including `application_id`, through CSV-aware serialization; never append columns to the raw header.
 2. **With an argument:** match rows case-insensitively on company (and role, if given). One match → proceed. Several → list them and ask. None → the application was made outside the workflow; collect company, role, date applied, channel, and posting URL from the user and add a tracker row.
 3. **Without an argument:** list all rows whose status is not final (see **Tracker status vocabulary** below) as a numbered table (company, role, date applied, current status, deadline, days quiet, follow-ups sent) and ask which to update. The two derived columns come straight from existing data: **days quiet** counts from the row's `date` or the latest dated entry in `notes`, whichever is more recent; **follow-ups sent** counts the `followed up YYYY-MM-DD` markers in `notes`. If any open row is 10+ days quiet with fewer than two follow-ups sent, add one line under the table: "Some of these have gone quiet - want a follow-up draft? (Step 2b)". If any open rows are 60+ days quiet, also offer: "You have applications quiet for 60+ days — run `/outcome stale` to batch-resolve them (Step 2c)." If every row is resolved, say so and stop.
 
@@ -43,7 +61,7 @@ Follow these steps **in order**.
 
    **Deadline urgency is the one clock that does apply to a drafted row.** Show the `deadline` column when the row has one and leave it blank otherwise. Mark a deadline within 7 days with 🔥 and one that has already passed with ⚠, on the same 7-day threshold `/rank` Step 3 uses so the two commands never disagree. A passed deadline on a `drafted` row is the failure this column exists to catch - documents written, never sent, and now unsendable - so name it in one line under the table rather than leaving the user to compare dates. This changes nothing about the follow-up offer: a drafted row is still never chased, because nobody is late replying to something that was never sent.
 
-4. Derive the archive folder name: `documents/applications/<company>_<role>/` by the **Subfolder naming** rule in `documents/README.md`. Check whether the folder and an `outcome.md` already exist - if so, you are updating, not creating.
+4. Derive the archive folder name only from the selected tool record: use its returned `archive`, per **Application attempt identity** in `documents/README.md`. The **Subfolder naming** rule applies only to unambiguous legacy records. Check whether the folder and an `outcome.md` already exist - if so, you are updating, not creating.
 
 ---
 
@@ -150,7 +168,7 @@ Wait for the user's explicit response before writing anything.
 **Execution.** For each application the user confirms:
 
 1. **Update Tracker:** update the row's `status` column to `no_response` (using the canonical spelling from **Tracker status vocabulary**). Append `stale resolved no_response (YYYY-MM-DD)` to `notes`. Follow Step 4's rule: never restructure the CSV, preserve all other columns intact.
-2. **Update Archive:** derive `documents/applications/<company>_<role>/` per the **Subfolder naming** rule. If the folder exists, update or write `outcome.md` with:
+2. **Update Archive:** use the selected record's resolved `archive`, per **Application attempt identity**. If the folder exists, update or write `outcome.md` with:
    - `**Status:** no_response`
    - `**Date resolved:** YYYY-MM-DD`
    - Append to `## Notes`: `- Stale resolution: marked no_response after [N] days quiet (YYYY-MM-DD)`
@@ -161,9 +179,9 @@ Wait for the user's explicit response before writing anything.
 
 ## Step 3: Archive the Application Materials
 
-Create or update `documents/applications/<company>_<role>/`. All content here is personal data - the folder is already gitignored (`documents/applications/**`), so nothing needs redacting.
+Create or update only the selected record's resolved `archive` (`documents/applications/<company>_<role>/` in path examples), per **Application attempt identity** in `documents/README.md`. All content here is personal data - the folder is already gitignored (`documents/applications/**`), so nothing needs redacting.
 
-1. **`cv_draft.tex` and `cover_letter.tex`** - copy (never move) the submitted files. Locate them via the tracker row's `cv_file`/`cover_letter_file` columns; if those are empty, look for `cv/main_<company>_<role>.*` and `cover_letters/cover_<company>_<role>.*`, deriving `<company>_<role>` by the **Subfolder naming** rule in `documents/README.md`. **Never widen those globs to the company alone** - two roles at one company both match it, and the first hit wins silently. If a file already exists in the archive, leave it - the archived version is what was actually submitted. If nothing matches (application made outside `/apply`), skip with a note rather than widening the search: a sibling role's CV recorded as what you submitted is worse than no file at all.
+1. **`cv_draft.tex` and `cover_letter.tex`** - copy (never move) the submitted files. Locate them via the tracker row's `cv_file`/`cover_letter_file` columns; if those are empty, look for `cv/main_<company>_<role>.*` and `cover_letters/cover_<company>_<role>.*`, using the selected attempt stem (the **Subfolder naming** rule in `documents/README.md` is legacy only). For an ID-bearing attempt, do not fall back to name-based files. **Never widen those globs to the company alone** - two roles at one company both match it, and the first hit wins silently. If a file already exists in the archive, leave it - the archived version is what was actually submitted. If nothing matches (application made outside `/apply`), skip with a note rather than widening the search: a sibling role's CV recorded as what you submitted is worse than no file at all.
 2. **`job_posting.md`** - if it already exists, leave it. Otherwise try WebFetch on the tracker row's `source` URL, retrying a 403 with browser headers per `.claude/skills/job-application-assistant/09-web-research.md`, run the result through `python3 tools/posting_guard.py` (`--html` on a saved page, `--text` otherwise) and save the **cleaned** text plus a `## posting_guard` section with the verdict and finding counts only, exactly as `/apply` Step 6b does. If the URL is dead (postings expire fast - this is exactly why the archive matters), ask the user to paste the posting, or write a stub noting the posting is unavailable. **Never reconstruct a posting from memory.**
 3. **`outcome.md`** - write or update it in exactly the format documented in `documents/README.md`, so `/setup` Path A parses it without special cases:
 
@@ -194,7 +212,8 @@ Update rules: tick stage checkboxes as they are reached (add the date in parenth
 
 ## Step 4: Update the Tracker
 
-Update the matched row's `status` column using the canonical spellings from **Tracker status vocabulary** above (e.g. `drafted` → `applied` → `interview` → `offer` → `hired` / `rejected` / `no_response` / `offer_declined` / `withdrawn`) and append a short dated note to the `notes` column, **containing no commas, double quotes or line breaks**. No writer here emits a quoted tracker field, so a comma in the note shifts `cv_file`, `cover_letter_file` and `source` a column left for `csv.DictReader` (`tools/rank_state.py`) as much as for a naive split, and a line break ends the row - `rejected, no feedback given` is exactly the sentence that corrupts it; write `rejected - no feedback given`. `/gmail-sync` Step 7a applies the same rule to the email subjects it appends. Never restructure the CSV, reorder rows, or touch other rows. The rewrite touches only the `status` and `notes` columns: preserve every other field of the row, parsed or not, so a value the row carries - the `deadline` written by `/apply` Step 6b, or any column added in the future - is never blanked by a status update.
+Update the matched row through `python3 tools/application_state.py update --input "<update-json>"`. Pass its exact record as `expected`, the new `status` in `changes` using canonical spellings from **Tracker status vocabulary** (e.g. `drafted` → `applied` → `interview` → `offer` → `hired` / `rejected` / `no_response` / `offer_declined` / `withdrawn`), and append a short dated note using `note`. Commas, double quotes and line breaks are preserved safely by CSV quoting. Never restructure the CSV, reorder rows, or touch other rows yourself. The tool preserves every other field, including `deadline` and future columns. Follow-up logging and stale resolution also use this tool; refreshing the exact snapshot after each successful update prevents stale writes. A failed archive write is reported and repaired before reporting success; do not blindly replay an already committed tracker update.
+
 
 **Moving a row off `drafted`:** rows written by `/apply` Step 6b carry the date the documents were drafted, not the date they were sent. Whenever this step advances such a row to any other status - `applied`, or straight to `interview` or `rejected` when the user reports an outcome for something they submitted without recording it - overwrite its `date` column with the actual submission date. The `date` column is read as "applied on" by `/notion-sync` and drives `/html-report`'s year/season grouping and this command's own days-quiet count, so leaving the draft date in place would misreport the application.
 
