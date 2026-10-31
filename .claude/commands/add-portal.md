@@ -33,6 +33,8 @@ Ask the user (skip anything already answered by `$ARGUMENTS`):
 
 ## Step 2: Investigate the Portal
 
+> **Windows:** run these tools as `python`, not `python3`. A python.org install ships no `python3`, so that name reaches the Microsoft Store alias, which either exits 49 with no output (#669) or starts a separate Store Python without the packages `pip` installed (such as pypdf). `.claude/settings.json` allows both spellings.
+
 Do reconnaissance before writing any code. Use WebFetch (or `python3 tools/fetch_page.py '<URL>' --text` via Bash when WebFetch is refused) on the portal:
 
 1. **Find the search URL pattern.** Load the portal's search page, run a search in the URL bar mentally or via fetch, and identify: the search endpoint, the query parameter, and any parameters for location, posting age, and pagination. Prefer a JSON API if one backs the site (check for `/api/` XHR endpoints in the page source); otherwise plan to parse the HTML results page.
