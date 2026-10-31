@@ -67,6 +67,13 @@ per-file diff commands.
 
 ### Fixed
 
+- **`rank_state.py apply` refuses a results file that is a single scoring object** (`tools/rank_state.py`,
+  `tests/test_rank_state.py`) - a bare object was taken for an envelope without a `results` key and defaulted
+  to `[]`, so a one-job batch written without the surrounding array applied nothing, reported every array
+  empty with `errors: []`, exited 0 and rewrote the state file, leaving the job `new`. Only an object whose
+  `results` key holds the array is unwrapped now; anything else gets the existing "must be a JSON array"
+  exit, as `scrape_state.py` already does for the same input. Fails on master.
+
 - **The four `@bunli/core` portal CLIs typecheck on a clean install again** (#768, closes #765,
   `.agents/skills/{jobbank,jobdanmark,jobindex,jobnet}-search/cli/package.json`,
   `tests/test_portal_cli_types.py`) - `bun-types` accepts any `@types/node`, while `@bunli/core`
