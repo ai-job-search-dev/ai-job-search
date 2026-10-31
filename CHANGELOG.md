@@ -67,6 +67,15 @@ per-file diff commands.
 
 ### Fixed
 
+- **`/add-template --use default` resolves which guidance file it deactivates** (`.claude/commands/add-template.md`,
+  `tests/test_add_template_switch_default.py`) - Switch Mode derived `<type>` from the chosen template's
+  manifest, but `default` has no manifest, so the spec sent it to Step 5 with no type while Step 5 edits "the
+  relevant guidance file" by type: with a CV and a cover letter template both active, which managed block was
+  removed was undefined. Step 1 now looks for the `ACTIVE-TEMPLATE` block in `05-cv-templates.md` and
+  `06-cover-letter-templates.md`, takes the one file that carries it, asks which to restore (or reads
+  `--use default cv|cover`) when both do, and stops when neither does; the Step 5 rule removes only the
+  resolved block. Fails on master.
+
 - **The four `@bunli/core` portal CLIs typecheck on a clean install again** (#768, closes #765,
   `.agents/skills/{jobbank,jobdanmark,jobindex,jobnet}-search/cli/package.json`,
   `tests/test_portal_cli_types.py`) - `bun-types` accepts any `@types/node`, while `@bunli/core`
