@@ -18,6 +18,14 @@ per-file diff commands.
 
 ### Added
 
+- **`/apply` runs a mechanical fact check before compiling** (`tools/fact_guard.py`,
+  `tests/test_fact_guard.py`, `.claude/commands/apply.md`, `CLAUDE.md`) - the reviewer's
+  Factual Grounding Audit was the only grounding check, and it is an LLM reading carefully. The
+  new tool lists every number, capitalised name or acronym, and credential word in the drafts
+  that appears in none of the three grounding sources or the posting, so an escalated metric, an
+  invented employer or certificate, or a leftover template placeholder cannot slip through on a
+  missed read. It complements the audit: invented wording with no number or name passes it.
+
 - **CI runs the Python suite on Windows** (`.github/workflows/ci.yml` `python-tests-windows`) - every
   job ran on Ubuntu, so a Windows-only failure reached master with all checks green: #480's test
   (an atomic rename that Windows file locking refuses) and #486's (a tool printing non-ASCII JSON

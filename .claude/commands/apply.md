@@ -232,6 +232,14 @@ Once the reviewer agent returns its feedback:
 
 After all edits are applied, the two files on disk are the final drafts.
 
+**Mechanical fact check.** Run the fact guard on both drafts, with the posting text you hold from Step 0 saved to a file in the scratchpad:
+
+```bash
+python3 tools/fact_guard.py cv/main_<company>_<role><CV_EXT> cover_letters/cover_<company>_<role><COVER_EXT> --posting "${SCRATCHPAD:?}/posting.txt"
+```
+
+It lists every number, capitalised name or acronym, and credential word in the drafts that appears nowhere in the three grounding sources (`01-candidate-profile.md`, `cv/main_example.tex`, `CLAUDE.md`) or the posting, and exits 1 when anything is flagged. Resolve each flag before compiling: fix the draft when it is drift, or ask the user when it may be a real fact they have not recorded yet (then write it to `01-candidate-profile.md` per the standing rule above). A clean result does not replace the reviewer's Factual Grounding Audit: invented wording with no number or name in it passes this check.
+
 ---
 
 ## Step 5: DRAFTER - Compile & Inspect PDFs (MANDATORY)
