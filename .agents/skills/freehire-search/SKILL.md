@@ -2,14 +2,14 @@
 name: freehire-search
 version: 1.0.0
 description: >
-  Use this skill to search live software / tech / data / engineering job listings
-  across many countries and markets (and remote) via the freehire.me aggregator's
-  public API, or to look up a specific posting. It aggregates roles from ~50 ATS
-  platforms into one schema, so a single skill covers many markets — but its faceted
-  filtering (skills, category, seniority) is tuned tech-first, so scope triggers to
-  technical roles. Trigger phrases: find a tech job, software job search, developer
-  jobs, engineering vacancies, data/ML jobs, DevOps roles, remote developer jobs,
-  "are there any <tech role> jobs in <place>", look up this freehire job posting.
+  Use this skill to search live job listings across many countries and markets (and
+  remote) via the freehire.me aggregator's public API, or to look up a specific
+  posting. It aggregates roles from ~50 ATS platforms into one schema, so a single
+  skill covers many markets. The catalogue spans tech and non-tech work (healthcare,
+  sales, skilled trades, logistics, hospitality, finance, ...), each filterable by
+  category; the skills facet is tuned tech-first. Trigger phrases: find a job, job
+  search, developer jobs, engineering vacancies, nursing jobs, sales roles, remote
+  jobs, "are there any <role> jobs in <place>", look up this freehire job posting.
 context: fork
 enabled: true  # set to false to keep this portal installed but have /scrape skip it
 allowed-tools: Bash(bun run .agents/skills/freehire-search/cli/src/cli.ts *)
@@ -18,7 +18,7 @@ allowed-tools: Bash(bun run .agents/skills/freehire-search/cli/src/cli.ts *)
 # freehire Search Skill
 
 Search live job listings from the **[freehire.me](https://freehire.me)** job
-aggregator — an open-source IT job board that normalizes postings from ~50 ATS
+aggregator — an open-source job board that normalizes postings from ~50 ATS
 platforms across many countries into one schema. No authentication, no API key,
 and **zero runtime dependencies** — it runs with just `bun`. The market is chosen
 per query via facet flags (`--region`, `--country`), so the same skill works for a
@@ -29,14 +29,19 @@ forker in any market out of the box.
 > public JSON API, so results are structured (skills, seniority, region facets)
 > rather than parsed from markup.
 
-## ⚠️ Scope: tech-focused
+## Scope: tech and non-tech
 
-freehire's corpus already includes some non-tech postings (it crawls whole company
-career pages), **but its faceted filtering — skills, categories, and seniority
-dictionaries — is tuned tech-first today**, so this skill scopes its triggers to
-software / data / engineering / tech roles, where the filtering is strong. Non-tech
-coverage exists but is still maturing; don't rely on this skill for general
-(non-technical) job coverage yet.
+freehire started as an IT job board and has since widened its catalogue to
+non-technical work. Every posting with a resolved role category is kept, so a search
+returns nurses, electricians and sales managers alongside engineers, and
+`--category` narrows to either side (`healthcare`, `sales`, `skilled_trades`,
+`logistics`, `hospitality`, `finance`, `education`, `retail`, ... as well as
+`backend`, `devops`, ...). The live list, with counts, is `data.facets.categories`
+from `/api/v1/jobs/facets`.
+
+What is still tech-first is the **skills** facet: its dictionary is built from
+technical stacks, so `--skills` is a strong filter for engineering roles and a weak
+one elsewhere. For a non-technical role, search by keyword and `--category` instead.
 
 ## ℹ️ Hosted-service dependency (best-effort, no SLA)
 
@@ -66,7 +71,7 @@ at the hosted API.
 
 ## When to use this skill
 
-- Search for tech job openings by keyword, in a given region/country or remotely —
+- Search for job openings by keyword, in a given region/country or remotely —
   each result comes back with its **full description**, no per-hit follow-up needed
 - Filter by seniority, category, skills, or recency (posted within N days)
 - Look one freehire posting up by its slug (including a closed one)
@@ -126,7 +131,7 @@ Facet filters (values come from freehire's controlled vocabularies; comma-separa
 - `--country <codes>` — ISO-3166 alpha-2, e.g. `--country DE,GB`
 - `--city <names>` — city name(s), e.g. `--city Berlin`
 - `--seniority <levels>` — `junior`, `middle`, `senior`, `staff`, `principal`, `lead`, …
-- `--category <cats>` — `backend`, `frontend`, `fullstack`, `devops`, `ml_ai`, `qa`, …
+- `--category <cats>` — `backend`, `frontend`, `fullstack`, `devops`, `ml_ai`, `qa`, `healthcare`, `sales`, `skilled_trades`, `logistics`, …
 - `--skill <names>` — canonical skill(s), e.g. `--skill go,kubernetes`
 - `--company <slug>` — company slug (from a result's `company_slug`)
 - `--remote <mode>` — `remote` | `hybrid` | `onsite` (`work_mode` facet). A bare `--remote` means `remote`. Comma-separate for OR (`remote,hybrid`; `on-site` normalises to `onsite`). An unknown item exits 1 with `BAD_ARG`.

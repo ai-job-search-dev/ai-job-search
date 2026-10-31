@@ -71,7 +71,7 @@ function commaList(raw: FlagValue): string[] {
     .filter(Boolean)
 }
 
-const HELP = `freehire-cli — search the freehire.me job aggregator (many markets, tech-focused)
+const HELP = `freehire-cli — search the freehire.me job aggregator (many markets, tech and non-tech)
 
 USAGE
   bun run src/cli.ts search [-q "<keywords>"] [facet flags] [--format json|table|plain]
@@ -97,7 +97,8 @@ FACET FILTERS (values from freehire.me's controlled vocabularies; comma = OR)
   --country <codes>       ISO-3166 alpha-2, e.g. --country DE,GB
   --city <names>          City name(s), e.g. --city Berlin
   --seniority <levels>    junior, middle, senior, staff, principal, lead, ...
-  --category <cats>       backend, frontend, fullstack, devops, ml_ai, qa, ...
+  --category <cats>       backend, frontend, devops, ml_ai, qa, healthcare,
+                          sales, skilled_trades, logistics, ...
   --skill <names>         Canonical skill(s), e.g. --skill go,kubernetes
   --company <slug>        Company slug (from a result's company_slug).
   --remote <mode>         remote | hybrid | onsite (work_mode facet).
