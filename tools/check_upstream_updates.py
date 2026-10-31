@@ -138,7 +138,13 @@ def main() -> int:
             continue
 
         # Get local version
-        local_text = local_path.read_text(encoding="utf-8")
+        try:
+            local_text = local_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError as exc:
+            # Report it with the other configuration errors instead of ending
+            # the run with a traceback before any file is compared.
+            errors.append(f"Local file is not valid UTF-8 (byte {exc.start}): {rel_path}; save it as UTF-8")
+            continue
         local_ver = get_framework_version_from_text(local_text)
         
         # Get upstream version

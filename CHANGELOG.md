@@ -67,6 +67,15 @@ per-file diff commands.
 
 ### Fixed
 
+- **`lint_skills.py`, `check_framework_version.py` and `check_upstream_updates.py` report a non-UTF-8 file
+  instead of crashing** (`tools/lint_skills.py`, `tools/check_framework_version.py`,
+  `tools/check_upstream_updates.py`, their tests) - all three read skill, command and framework files with
+  `read_text(encoding="utf-8")` unwrapped, so a file re-saved in a Windows code page (an é in a description
+  or a name) ended the run with a `UnicodeDecodeError` traceback and no report, where `security_guards.py`
+  already records the same case as a finding. Each tool now names the file and byte offset: the linter and
+  the version check as a failing finding, the upstream check as a configuration error beside a missing local
+  file, on its existing warn-and-exit-0 contract. Four tests fail on master.
+
 - **The four `@bunli/core` portal CLIs typecheck on a clean install again** (#768, closes #765,
   `.agents/skills/{jobbank,jobdanmark,jobindex,jobnet}-search/cli/package.json`,
   `tests/test_portal_cli_types.py`) - `bun-types` accepts any `@types/node`, while `@bunli/core`
