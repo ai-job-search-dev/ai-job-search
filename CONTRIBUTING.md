@@ -43,7 +43,7 @@ Reviews here are empirical. Bug reports are reproduced on master before the fix 
 ## Building for your own market? Do this instead
 
 1. Fork the repo and run `/add-portal` with your local job board - it scaffolds a portal skill matching the shipped contract, and `/scrape` picks it up automatically.
-2. Announce your fork in the pinned [Community forks & adaptations](https://github.com/MadsLorentzen/ai-job-search/discussions/78) discussion so others can find it.
+2. Announce your fork in the pinned [Community forks & adaptations](https://github.com/ai-job-search-dev/ai-job-search/discussions/78) discussion so others can find it.
 3. Run the framework update checker (`python3 tools/check_upstream_updates.py`) in your fork to check if upstream has updated any framework files and compare them with your personalized variants.
 
 Market-specific skills are genuinely valuable - they just live in forks, where their maintainers can test them and their users can find them.
@@ -60,44 +60,45 @@ What upstream maintains for other runtimes instead:
 - The root `AGENTS.md` points any agent at the canonical workflow specs and the profile entry point.
 - Framework instruction files carry `framework_version` markers, so a runtime fork can track methodology changes precisely (`python3 tools/check_upstream_updates.py`).
 
-Announce your runtime fork in the pinned [Community forks & adaptations](https://github.com/MadsLorentzen/ai-job-search/discussions/78) discussion and it gets listed alongside the market adaptations. The proven shape is a thin pointer: reference the specs here instead of copying them, so upstream improvements reach your fork on rebase.
+Announce your runtime fork in the pinned [Community forks & adaptations](https://github.com/ai-job-search-dev/ai-job-search/discussions/78) discussion and it gets listed alongside the market adaptations. The proven shape is a thin pointer: reference the specs here instead of copying them, so upstream improvements reach your fork on rebase.
 
-This is a decision, not a dogma: if cross-runtime standards mature to the point where these specs run unmodified elsewhere, or the community's center of gravity moves to runtime forks, the trade-off gets re-evaluated. Background: the architecture thread in [Community forks & adaptations](https://github.com/MadsLorentzen/ai-job-search/discussions/78).
+This is a decision, not a dogma: if cross-runtime standards mature to the point where these specs run unmodified elsewhere, or the community's center of gravity moves to runtime forks, the trade-off gets re-evaluated. Background: the architecture thread in [Community forks & adaptations](https://github.com/ai-job-search-dev/ai-job-search/discussions/78).
 
 ## Practical notes
 
+- **PR titles are the release notes, and they set the version**: don't edit `CHANGELOG.md` (it's frozen at 1.7.4). Every Monday a workflow publishes a GitHub Release listing the titles of the PRs merged that week, so write the title for a fork owner and use a [Conventional Commits](https://www.conventionalcommits.org/) type: `feat` makes the release a minor bump, `type!:` (or a `BREAKING CHANGE:` footer) a major one, and `fix`, `refactor` or `perf` a patch; a week of only `docs`, `chore`, `ci` and similar ships nothing on its own. [commitizen](https://commitizen-tools.github.io/commitizen/) computes it: `uvx --from commitizen cz bump --get-next` previews the next version.
 - **Portal-skill contract**: `search`/`detail` commands, `--format json|table|plain`, stderr JSON errors with exit 1, backoff on 429/5xx, zero runtime dependencies by default. See `/add-portal`'s spec and `linkedin-search` as the reference implementation.
 - **Personal-use boundaries**: portal skills that touch ToS-restricted sources carry a prominent personal-use-only warning, and CI deliberately makes no live portal requests. Don't "fix" that.
 - **LaTeX changes**: both templates must compile (`lualatex` for the CV, `xelatex` for the cover letter) and hold their exact page counts. CI smoke-checks this.
 
-Questions and proposals are welcome in [Discussions](https://github.com/MadsLorentzen/ai-job-search/discussions) - an Idea thread costs nothing and can save you building the wrong thing :-)
+Questions and proposals are welcome in [Discussions](https://github.com/ai-job-search-dev/ai-job-search/discussions) - an Idea thread costs nothing and can save you building the wrong thing :-)
 
-[#17]: https://github.com/MadsLorentzen/ai-job-search/issues/17
-[#30]: https://github.com/MadsLorentzen/ai-job-search/issues/30
-[#31]: https://github.com/MadsLorentzen/ai-job-search/issues/31
-[#35]: https://github.com/MadsLorentzen/ai-job-search/issues/35
-[#36]: https://github.com/MadsLorentzen/ai-job-search/issues/36
-[#37]: https://github.com/MadsLorentzen/ai-job-search/issues/37
-[#39]: https://github.com/MadsLorentzen/ai-job-search/issues/39
-[#41]: https://github.com/MadsLorentzen/ai-job-search/issues/41
-[#43]: https://github.com/MadsLorentzen/ai-job-search/issues/43
-[#44]: https://github.com/MadsLorentzen/ai-job-search/issues/44
-[#49]: https://github.com/MadsLorentzen/ai-job-search/issues/49
-[#52]: https://github.com/MadsLorentzen/ai-job-search/issues/52
-[#54]: https://github.com/MadsLorentzen/ai-job-search/issues/54
-[#55]: https://github.com/MadsLorentzen/ai-job-search/issues/55
-[#56]: https://github.com/MadsLorentzen/ai-job-search/issues/56
-[#59]: https://github.com/MadsLorentzen/ai-job-search/issues/59
-[#60]: https://github.com/MadsLorentzen/ai-job-search/issues/60
-[#63]: https://github.com/MadsLorentzen/ai-job-search/issues/63
-[#64]: https://github.com/MadsLorentzen/ai-job-search/issues/64
-[#66]: https://github.com/MadsLorentzen/ai-job-search/issues/66
-[#67]: https://github.com/MadsLorentzen/ai-job-search/issues/67
-[#68]: https://github.com/MadsLorentzen/ai-job-search/issues/68
-[#72]: https://github.com/MadsLorentzen/ai-job-search/issues/72
-[#73]: https://github.com/MadsLorentzen/ai-job-search/issues/73
-[#75]: https://github.com/MadsLorentzen/ai-job-search/issues/75
-[#76]: https://github.com/MadsLorentzen/ai-job-search/issues/76
-[#155]: https://github.com/MadsLorentzen/ai-job-search/pull/155
-[#162]: https://github.com/MadsLorentzen/ai-job-search/pull/162
-[#165]: https://github.com/MadsLorentzen/ai-job-search/pull/165
+[#17]: https://github.com/ai-job-search-dev/ai-job-search/issues/17
+[#30]: https://github.com/ai-job-search-dev/ai-job-search/issues/30
+[#31]: https://github.com/ai-job-search-dev/ai-job-search/issues/31
+[#35]: https://github.com/ai-job-search-dev/ai-job-search/issues/35
+[#36]: https://github.com/ai-job-search-dev/ai-job-search/issues/36
+[#37]: https://github.com/ai-job-search-dev/ai-job-search/issues/37
+[#39]: https://github.com/ai-job-search-dev/ai-job-search/issues/39
+[#41]: https://github.com/ai-job-search-dev/ai-job-search/issues/41
+[#43]: https://github.com/ai-job-search-dev/ai-job-search/issues/43
+[#44]: https://github.com/ai-job-search-dev/ai-job-search/issues/44
+[#49]: https://github.com/ai-job-search-dev/ai-job-search/issues/49
+[#52]: https://github.com/ai-job-search-dev/ai-job-search/issues/52
+[#54]: https://github.com/ai-job-search-dev/ai-job-search/issues/54
+[#55]: https://github.com/ai-job-search-dev/ai-job-search/issues/55
+[#56]: https://github.com/ai-job-search-dev/ai-job-search/issues/56
+[#59]: https://github.com/ai-job-search-dev/ai-job-search/issues/59
+[#60]: https://github.com/ai-job-search-dev/ai-job-search/issues/60
+[#63]: https://github.com/ai-job-search-dev/ai-job-search/issues/63
+[#64]: https://github.com/ai-job-search-dev/ai-job-search/issues/64
+[#66]: https://github.com/ai-job-search-dev/ai-job-search/issues/66
+[#67]: https://github.com/ai-job-search-dev/ai-job-search/issues/67
+[#68]: https://github.com/ai-job-search-dev/ai-job-search/issues/68
+[#72]: https://github.com/ai-job-search-dev/ai-job-search/issues/72
+[#73]: https://github.com/ai-job-search-dev/ai-job-search/issues/73
+[#75]: https://github.com/ai-job-search-dev/ai-job-search/issues/75
+[#76]: https://github.com/ai-job-search-dev/ai-job-search/issues/76
+[#155]: https://github.com/ai-job-search-dev/ai-job-search/pull/155
+[#162]: https://github.com/ai-job-search-dev/ai-job-search/pull/162
+[#165]: https://github.com/ai-job-search-dev/ai-job-search/pull/165

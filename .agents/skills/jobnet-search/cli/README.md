@@ -74,6 +74,7 @@ bun run src/cli.ts search [flags]
 | `--job-type` | string | — | Announcement type: `Ordinaert`, `Efterloenner`, `Foertidspension` |
 | `--occupation-area` | string | — | Occupation area identifier, e.g. `10000` |
 | `--occupation-group` | string | — | Occupation group identifier, e.g. `10060` |
+| `--occupation` | string | — | One ESCO occupation: the `conceptUriDa` from `occupations`, or its trailing UUID (sent as `occupations`) |
 | `--page` | number | `1` | Page number (1-indexed) |
 | `--per-page` | number | `10` | Results per page |
 | `--limit` | number | — | Cap total results returned by CLI |
@@ -153,7 +154,8 @@ bun run src/cli.ts search \
       "location": "Viborg",
       "date": "2026-03-13",
       "deadline": "2026-04-05",
-      "url": "https://jobnet.dk/find-job/9ef43bce-d82b-4ea1-a098-7ff6520f99be"
+      "url": "https://jobnet.dk/find-job/9ef43bce-d82b-4ea1-a098-7ff6520f99be",
+      "applyUrl": null
     }
   ]
 }
@@ -161,7 +163,7 @@ bun run src/cli.ts search \
 
 > **Note**: The `description` field (raw HTML) is intentionally omitted from `search` results for brevity. Use `detail` to retrieve the full job description.
 
-> **Note**: Every result also carries the cross-portal contract fields `company`, `location`, `date`, `deadline` and `url` - derived respectively from `hiringOrgName`, `postalDistrictName`/`municipality`, and the destination URL (the employer's `jobAdUrl` for external ads, or `/find-job/{jobAdId}` for internal ones). `/scrape` Step 2 expects search output to include title, company, location, date, and URL, and dates follow the `YYYY-MM-DD` convention of the other portal CLIs. The API's `1900-01-01` deadline sentinel (deadline not disclosed) maps to `null`. The native fields above are preserved unchanged.
+> **Note**: Every result also carries the cross-portal contract fields `company`, `location`, `date`, `deadline`, `url`, and `applyUrl` - derived respectively from `hiringOrgName`, `postalDistrictName`/`municipality`, and the canonical portal URL `https://jobnet.dk/find-job/{jobAdId}`. `url` is always canonical on jobnet.dk for all ads so that deduplication, health checks, and `/apply` host routing identify the portal correctly. External ads carry their employer ATS destination in `applyUrl` (and `jobAdUrl`), while internal ads set `applyUrl` to `null`. `/scrape` Step 2 expects search output to include title, company, location, date, and URL, and dates follow the `YYYY-MM-DD` convention of the other portal CLIs. The API's `1900-01-01` deadline sentinel (deadline not disclosed) maps to `null`. The native fields above are preserved unchanged.
 
 > **Note**: `resultsPerPage` and `pageNumber` must always be provided — omitting them while also providing `searchString` causes the API to return error 1014 ("Fejl i formatering af inputs").
 
@@ -169,10 +171,10 @@ bun run src/cli.ts search \
 
 ## `detail` — Full job ad detail
 
-**Endpoint**: `GET /FindJob/JobAdDetails/{id}`
+**Endpoint**: `GET /FindJob/JobAdDetails/{id}` (falls back to `GET /FindJob/Search?searchString={id}` on 404 for external ads)
 
 ```bash
-bun run src/cli.ts detail <id> [--format json|plain]
+bun run src/cli.ts detail <id> [--format json|table|plain]
 ```
 
 The `id` is the `jobAdId` UUID from `search` results.
@@ -251,6 +253,8 @@ bun run src/cli.ts detail 9ef43bce-d82b-4ea1-a098-7ff6520f99be --format plain
 
 > **Note**: `body` contains raw HTML. In `--format plain` output the CLI strips HTML tags to produce readable text.
 
+> **Note**: The optional `source` field indicates whether detail was synthesized from the search endpoint fallback (`"search-fallback"`) when `JobAdDetails` returned 404 for an external ad. Direct responses omit `source`. When present, plain and table formats render a `Source: search-fallback (detail unavailable, synthesised from search)` line.
+
 > **Note**: `application.url` may be empty for some job ads — the employer may only accept applications through Jobnet's internal system.
 
 ---
@@ -263,7 +267,7 @@ bun run src/cli.ts detail 9ef43bce-d82b-4ea1-a098-7ff6520f99be --format plain
 bun run src/cli.ts occupations --search-string <text> [flags]
 ```
 
-Use this command to find occupation identifiers (ESCO concept URIs) to pass as filters to `search`.
+Use this command to find occupation identifiers (ESCO concept URIs) to pass to `search --occupation`.
 
 ### Flags
 
@@ -297,7 +301,7 @@ bun run src/cli.ts occupations --search-string "sygeplejerske" --per-page 5
 ]
 ```
 
-> **Note**: `conceptUriDa` is the full ESCO concept URI. The UUID portion (last path segment) can be used to build occupation filters for `search`.
+> **Note**: `conceptUriDa` is the full ESCO concept URI. Pass it, or its UUID (last path segment), to `search --occupation`. The numeric `--occupation-area` / `--occupation-group` codes are a different taxonomy and match no ads for a UUID.
 
 ---
 
@@ -362,10 +366,10 @@ https://jobnet.dk/find-job/{jobAdId}
 ```
 
 The legacy `https://jobnet.dk/job/{jobAdId}` route redirects anonymous visitors into the
-MitID login flow, so it is never emitted. External ads (`isExternal: true`) 404 on `/find-job/`
-and hit the login wall on `/job/` - the search command routes external ads to their destination
-in `jobAdUrl` (falling back to `/find-job/{jobAdId}` when missing or not http(s)) instead of
-emitting a broken link.
+MitID login flow, so it is never emitted. External ads (`isExternal: true`) return 404 in a browser
+on `/find-job/` and hit the login wall on `/job/`. The search command keeps `url` canonical
+as `https://jobnet.dk/find-job/{jobAdId}` for all ads to preserve portal identity and route
+to `jobnet detail`, while providing the external destination in `applyUrl` (and `jobAdUrl`).
 
 Company logo images (prefix relative logoUrl from API):
 
@@ -384,4 +388,4 @@ Example: `https://jobnet.dk/bff/SharedComponents/JobAdCard/CompanyLogo/ByJobAdId
 - Pagination is 1-indexed (`--page 1` is the first page).
 - `search` results intentionally omit the HTML `description` field — use `detail` to fetch it.
 - `body` in `detail` responses is raw HTML; use `--format plain` to get stripped text.
-- The `occupations` command helps discover ESCO occupation URIs usable as `--occupation-area` / `--occupation-group` seeds for narrowing search results.
+- The `occupations` command helps discover ESCO occupation URIs to pass to `search --occupation` for narrowing search results.

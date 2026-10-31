@@ -32,26 +32,32 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   triage:
     name: Triage upstream commits
     # No-op on the upstream template itself. Pinned by
     # tests/test_upstream_triage.py so a template clone never runs it by surprise.
-    if: github.repository != 'MadsLorentzen/ai-job-search'
+    if: github.repository != 'ai-job-search-dev/ai-job-search'
     runs-on: ubuntu-latest
+    # Issue write is granted to this one job, not the workflow, so a job added
+    # later starts read-only.
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
+          # The fetch below reads a public remote; nothing here pushes.
+          persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
 
       - name: Fetch upstream template
         run: |
-          git remote add upstream https://github.com/MadsLorentzen/ai-job-search.git 2>/dev/null || true
+          git remote add upstream https://github.com/ai-job-search-dev/ai-job-search.git 2>/dev/null || true
           git fetch --quiet upstream master
 
       - name: Build triage report

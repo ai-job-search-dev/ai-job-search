@@ -13,10 +13,15 @@ One command for every shell, since Python is already a prerequisite - the
 README previously carried a PowerShell and a Bash loop, each with its own
 hand-copied list of portal names.
 
-A manifest that declares an npm/bun lifecycle script or trustedDependencies is
-skipped and reported instead of installed: those are the hooks that run code
-during `bun install`, and tools/security_guards.py forbids them in-tree. A
-borrowed portal that carries one gets read by a human before it runs.
+A manifest that declares an npm/bun lifecycle script, trustedDependencies or
+workspaces, or that has a bunfig.toml or .npmrc beside it, is skipped and reported
+instead of installed: those are the doors that run code or reconfigure the
+install during `bun install`, and tools/security_guards.py forbids them
+in-tree. A borrowed portal that carries one gets read by a human before it
+runs.
+
+Every install also passes --ignore-scripts, including on older Bun releases
+that run a built-in list of dependency hooks without trustedDependencies.
 
 Each CLI installs independently; one failure does not stop the rest. Exit 0
 when every CLI installed, 1 when bun is missing, a manifest was skipped, or an
@@ -33,7 +38,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from security_guards import FORBIDDEN_SCRIPTS  # noqa: E402
+from security_guards import FORBIDDEN_SCRIPTS, INSTALL_CONFIG_FILES  # noqa: E402
 
 
 def discover(root: Path = ROOT) -> list[Path]:
@@ -55,6 +60,14 @@ def unsafe_reason(cli_dir: Path) -> str | None:
         return f"declares lifecycle script(s) {bad}"
     if "trustedDependencies" in data:
         return "declares trustedDependencies"
+    if "workspaces" in data:
+        # Workspace packages carry their own lifecycle scripts, which the check
+        # above never reads; a workspace postinstall ran under Bun 1.3.10.
+        return "declares workspaces"
+    for name in INSTALL_CONFIG_FILES:
+        if (cli_dir / name).exists():
+            # Reconfigures the install itself: registry, scopes, trusted packages.
+            return f"carries a {name}"
     return None
 
 
@@ -72,7 +85,7 @@ def install(cli_dirs: list[Path], bun: str, dry_run: bool, root: Path = ROOT, ru
             print(f"would install  {name}")
             continue
         print(f"installing  {name}", flush=True)
-        if run([bun, "install"], cwd=cli_dir).returncode != 0:
+        if run([bun, "install", "--ignore-scripts"], cwd=cli_dir).returncode != 0:
             print(f"FAIL  {name}: bun install exited non-zero")
             failures.append(name)
     if failures:

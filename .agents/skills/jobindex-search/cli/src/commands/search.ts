@@ -16,7 +16,9 @@ export const search = defineCommand({
     jobage: option(z.coerce.number().int().min(1).default(9999), {
       description: "Max age of posting in days: 1, 7, 14, 30, or 9999 (all)",
     }),
-    sort: option(z.string().default("score"), {
+    // An enum, not a free string: jobindex answers an unknown sort with an
+    // unrelated order and no error, so a typo silently lost the date sort.
+    sort: option(z.enum(["score", "date"]).default("score"), {
       description: "Sort order: score (relevance) or date (newest first)",
     }),
     limit: option(z.coerce.number().int().min(1).optional(), {

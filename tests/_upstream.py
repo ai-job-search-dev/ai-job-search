@@ -10,7 +10,7 @@ import os
 import subprocess
 from pathlib import Path
 
-UPSTREAM = "MadsLorentzen/ai-job-search"
+UPSTREAM = "ai-job-search-dev/ai-job-search"
 
 REPO = Path(__file__).resolve().parent.parent
 

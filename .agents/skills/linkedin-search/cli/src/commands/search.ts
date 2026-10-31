@@ -4,6 +4,7 @@ import {
   parseJobCards,
   jobageToTPR,
   minutesToTPR,
+  stripInvisible,
   workTypeFlag,
   writeError,
   type JobCard,
@@ -56,7 +57,7 @@ function renderTable(cards: JobCard[]): string {
 export async function runSearch(opts: SearchOpts): Promise<number> {
   try {
     const html = await htmlFetch(buildUrl(opts))
-    let cards = parseJobCards(html)
+    let cards = stripInvisible(parseJobCards(html))
     if (opts.limit !== undefined && opts.limit >= 0) cards = cards.slice(0, opts.limit)
 
     if (opts.format === "table") {

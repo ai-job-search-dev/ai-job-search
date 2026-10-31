@@ -47,8 +47,58 @@ class GuardRepoFixture(unittest.TestCase):
         self.manifest.parent.mkdir(parents=True)
         self.write_manifest({"name": "example-cli", "scripts": {"start": "bun run src/cli.ts"}})
 
-    def write_settings(self, allow):
-        self.settings.write_text(json.dumps({"permissions": {"allow": list(allow)}}))
+        # Frontmatter grants: one core skill, one portal skill granting its own
+        # CLI, one command with no frontmatter at all. All pass as written.
+        self.core_skill = self.root / ".claude" / "skills" / "example" / "SKILL.md"
+        self.core_skill.parent.mkdir(parents=True)
+        self.write_skill(self.core_skill, "Read, Glob, Grep, WebFetch, Edit, Write")
+        self.portal_skill = self.root / ".agents" / "skills" / "example-search" / "SKILL.md"
+        self.write_skill(
+            self.portal_skill, "Bash(bun run .agents/skills/example-search/cli/src/cli.ts *)"
+        )
+        self.command = self.root / ".claude" / "commands" / "example.md"
+        self.command.parent.mkdir(parents=True)
+        self.command.write_text("# /example - A command with no frontmatter\n", encoding="utf-8")
+
+        # One agent definition with a least-privilege tools list. Passes as written.
+        self.agent = self.root / ".claude" / "agents" / "example.md"
+        self.agent.parent.mkdir(parents=True)
+        self.write_agent("Read, Grep, WebFetch, WebSearch, Bash")
+
+    def write_agent(self, tools, path=None, omit_tools=False):
+        path = path or self.agent
+        tools_line = "" if omit_tools else f"tools: {tools}\n"
+        path.write_text(
+            "---\nname: example\ndescription: An example agent that reads postings.\n"
+            f"{tools_line}model: sonnet\n---\n\nYou read postings and report.\n",
+            encoding="utf-8",
+        )
+
+    def write_skill(self, path, allowed_tools, extra_frontmatter=""):
+        allowed = (
+            f"allowed-tools: {allowed_tools}\n"
+            if isinstance(allowed_tools, str)
+            else "allowed-tools:\n" + "".join(f"  - {t}\n" for t in allowed_tools)
+        )
+        path.write_text(
+            "---\n"
+            f"name: {path.parent.name}\n"
+            "description: >\n"
+            "  Folded description line one,\n"
+            "  line two mentions Bash, Edit, Write on purpose.\n"
+            f"{extra_frontmatter}"
+            f"{allowed}"
+            "---\n\n# Body\n",
+            encoding="utf-8",
+        )
+
+    def write_settings(self, allow, ask=None, deny=None):
+        permissions = {
+            "allow": list(allow),
+            "ask": list(security_guards.REQUIRED_ASK_RULES if ask is None else ask),
+            "deny": list(security_guards.REQUIRED_DENY_RULES if deny is None else deny),
+        }
+        self.settings.write_text(json.dumps({"permissions": permissions}))
 
     def write_gitignore(self, rules):
         self.gitignore.write_text("\n".join(rules) + "\n")
@@ -107,6 +157,319 @@ class PermissionGuardTests(GuardRepoFixture):
                 self.assertNotIn("Traceback", result.stderr)
 
 
+class AskDenyRuleTests(GuardRepoFixture):
+    """settings.json ships deny rules (block in every mode, bypass included) and
+    ask rules (always prompt, even over a skill's allowed-tools grant). Removing
+    one silently re-opens the hole it closed, so each is required, like the
+    personal-data gitignore rules."""
+
+    def test_missing_required_deny_rule_fails(self):
+        deny = list(security_guards.REQUIRED_DENY_RULES)
+        dropped = deny.pop()
+        self.write_settings(sorted(security_guards.ALLOWED_PERMISSIONS), deny=deny)
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("required deny rule missing", result.stdout)
+        self.assertIn(dropped, result.stdout)
+
+    def test_missing_required_ask_rule_fails(self):
+        ask = list(security_guards.REQUIRED_ASK_RULES)
+        dropped = ask.pop(0)
+        self.write_settings(sorted(security_guards.ALLOWED_PERMISSIONS), ask=ask)
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("required ask rule missing", result.stdout)
+        self.assertIn(dropped, result.stdout)
+
+    def test_extra_deny_and_ask_rules_pass(self):
+        # Narrowing further is always fine; only removal is guarded.
+        self.write_settings(
+            sorted(security_guards.ALLOWED_PERMISSIONS),
+            ask=list(security_guards.REQUIRED_ASK_RULES) + ["Bash(git commit:*)"],
+            deny=list(security_guards.REQUIRED_DENY_RULES) + ["WebFetch(domain:pastebin.com)"],
+        )
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_required_rules_are_the_shipped_shapes(self):
+        # The constants are the contract SECURITY.md describes; pin the two
+        # groups that matter most so a rename cannot quietly drop them.
+        self.assertIn("Read(.env)", security_guards.REQUIRED_DENY_RULES)
+        self.assertIn("Read(~/.ssh/**)", security_guards.REQUIRED_DENY_RULES)
+        self.assertIn("Bash(ssh:*)", security_guards.REQUIRED_DENY_RULES)
+        # The obvious siblings of the listed upload shapes.
+        for sibling in ("Bash(curl -XPOST:*)", "Bash(curl --request POST:*)", "Bash(wget --method=POST:*)"):
+            self.assertIn(sibling, security_guards.REQUIRED_DENY_RULES)
+        self.assertIn("Edit(.claude/settings.json)", security_guards.REQUIRED_ASK_RULES)
+        self.assertIn("Edit(.claude/skills/*/SKILL.md)", security_guards.REQUIRED_ASK_RULES)
+        # A command's frontmatter is a grant too (check 4 parses it), so writing
+        # one must prompt - otherwise a steered session could add
+        # `allowed-tools: Bash` to apply.md with no prompt and the next /apply
+        # would be pre-approved for bare Bash.
+        self.assertIn("Edit(.claude/commands/*.md)", security_guards.REQUIRED_ASK_RULES)
+        self.assertIn("Bash(git push:*)", security_guards.REQUIRED_ASK_RULES)
+        # The posting integrity gate runs inside fetch agents with no prompt.
+        self.assertIn("Bash(python tools/posting_guard.py:*)", security_guards.ALLOWED_PERMISSIONS)
+        self.assertIn("Bash(python3 tools/posting_guard.py:*)", security_guards.ALLOWED_PERMISSIONS)
+
+    def test_malformed_ask_or_deny_shape_fails_cleanly(self):
+        for permissions, message in [
+            ({"allow": [], "deny": "Bash(ssh:*)"}, "permissions.deny must be a list of strings"),
+            ({"allow": [], "ask": [1]}, "permissions.ask must be a list of strings"),
+            ({"allow": []}, "required deny rule missing"),
+        ]:
+            with self.subTest(permissions=permissions):
+                self.settings.write_text(json.dumps({"permissions": permissions}))
+                result = run_guards(self.root)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(message, result.stdout)
+                self.assertNotIn("Traceback", result.stderr)
+
+
+class SkillGrantGuardTests(GuardRepoFixture):
+    """A skill's or command's allowed-tools pre-approves those tools for the turn
+    that invokes it, with no prompt, in untrusted folders too. settings.json is
+    allowlisted; this holds the frontmatter to the same bar."""
+
+    def test_bare_bash_in_skill_fails(self):
+        self.write_skill(self.core_skill, "Read, Bash, Edit")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("allowed-tools entry not in the reviewed allowlist", result.stdout)
+        self.assertIn("'Bash'", result.stdout)
+        self.assertIn(".claude/skills/example/SKILL.md", result.stdout.replace("\\", "/"))
+
+    def test_glob_cli_grant_in_skill_fails(self):
+        self.write_skill(self.core_skill, "Read, Bash(bun run .agents/skills/*/cli/src/cli.ts *)")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("wildcard", result.stdout)
+        self.assertIn(".agents/skills/*/cli/src/cli.ts", result.stdout)
+
+    def test_portal_skill_may_grant_only_its_own_cli(self):
+        for own in (
+            "Bash(bun run .agents/skills/example-search/cli/src/cli.ts *)",
+            "Bash(bun run .agents/skills/example-search/cli/src/cli.ts:*)",
+        ):
+            with self.subTest(own=own):
+                self.write_skill(self.portal_skill, own)
+                result = run_guards(self.root)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.write_skill(
+            self.portal_skill, "Bash(bun run .agents/skills/other-search/cli/src/cli.ts *)"
+        )
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("other-search", result.stdout)
+
+    def test_portal_skill_may_not_grant_core_tools(self):
+        # SECURITY.md promises "exactly that portal's own cli/src/cli.ts and
+        # nothing else"; the guard has to make that true.
+        self.write_skill(
+            self.portal_skill,
+            "Read, Edit, Bash(bun run .agents/skills/example-search/cli/src/cli.ts *)",
+        )
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("'Edit'", result.stdout)
+
+    def test_bom_prefixed_frontmatter_is_parsed(self):
+        # Windows editors prepend a BOM; the file must parse, not fail as
+        # "missing frontmatter".
+        self.write_skill(self.core_skill, "Read")
+        self.core_skill.write_bytes(b"\xef\xbb\xbf" + self.core_skill.read_bytes())
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_non_utf8_skill_fails_cleanly(self):
+        self.core_skill.write_bytes(b"---\nname: x\nallowed-tools: Read\ndescription: caf\xe9\n---\n")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("unreadable", result.stdout)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_flow_list_allowed_tools_is_parsed(self):
+        self.write_skill(self.core_skill, "[Read, Grep, Bash]")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("'Bash'", result.stdout)
+        self.assertNotIn("'[Read'", result.stdout)
+
+    def test_core_skill_may_not_grant_a_portal_cli(self):
+        # Per-portal grants live in settings.json; a core skill naming one would
+        # hardcode a portal and bypass the settings allowlist.
+        self.write_skill(
+            self.core_skill, "Bash(bun run .agents/skills/example-search/cli/src/cli.ts *)"
+        )
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("allowed-tools entry not in the reviewed allowlist", result.stdout)
+
+    def test_command_frontmatter_is_checked(self):
+        self.command.write_text(
+            "---\ndescription: Example\nallowed-tools: Bash\n---\n# /example\n", encoding="utf-8"
+        )
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("'Bash'", result.stdout)
+        self.assertIn("commands/example.md", result.stdout.replace("\\", "/"))
+
+    def test_command_without_frontmatter_passes(self):
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_list_form_allowed_tools_is_parsed(self):
+        self.write_skill(self.core_skill, ["Read", "Grep", "Bash"])
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("'Bash'", result.stdout)
+
+    def test_folded_description_does_not_confuse_parser(self):
+        # The fixture's description folds across lines that mention Bash, Edit,
+        # Write. Only the allowed-tools line counts.
+        self.write_skill(self.core_skill, "Read")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_entry_with_mid_pattern_wildcard_fails(self):
+        self.write_skill(self.core_skill, "Read, Bash(python tools/*.py:*)")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("wildcard", result.stdout)
+
+    def test_allowlisted_shipped_entries_pass(self):
+        self.write_skill(
+            self.core_skill,
+            "Read, Write, Edit, Glob, Grep, Bash(bun --version), Bash(python tools/job_key.py:*), "
+            "Bash(python3 tools/job_key.py:*), WebFetch, WebSearch, Agent, AskUserQuestion",
+        )
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_skill_without_frontmatter_fails_cleanly(self):
+        self.core_skill.write_text("# No frontmatter\n", encoding="utf-8")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("frontmatter", result.stdout)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_skill_hooks_frontmatter_fails(self):
+        # A skill-scoped hook runs while the skill is active, with no prompt.
+        self.write_skill(
+            self.core_skill,
+            "Read",
+            extra_frontmatter="hooks:\n  PreToolUse:\n    - hooks:\n        - type: command\n          command: ./x.sh\n",
+        )
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("frontmatter `hooks`", result.stdout)
+        self.assertIn(".claude/skills/example/SKILL.md", result.stdout.replace("\\", "/"))
+
+    def test_dynamic_context_line_fails_in_skills_and_commands(self):
+        # !`command` runs at load and splices its output in, with no permission check.
+        line = "Today's tracker: !`cat job_scraper/seen_jobs.json`\n"
+        for path in (self.core_skill, self.command):
+            with self.subTest(path=path.name):
+                original = path.read_text(encoding="utf-8")
+                path.write_text(original + line, encoding="utf-8")
+                result = run_guards(self.root)
+                path.write_text(original, encoding="utf-8")
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("dynamic-context line", result.stdout)
+                self.assertIn("!`cat job_scraper/seen_jobs.json`", result.stdout)
+
+    def test_inline_code_and_exclamation_marks_pass(self):
+        self.core_skill.write_text(
+            self.core_skill.read_text(encoding="utf-8")
+            + "Run `python3 tools/job_key.py` first! Then `!important` is CSS, not a command.\n",
+            encoding="utf-8",
+        )
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+class AgentGrantGuardTests(GuardRepoFixture):
+    """A .claude/agents/*.md definition's `tools:` list is an allowlist at tool-name
+    granularity (verified empirically: a `Bash(echo *)` entry resolves to plain
+    Bash). A missing key means every tool. These agents read untrusted postings,
+    so none may edit or write."""
+
+    def test_agent_without_tools_key_fails(self):
+        self.write_agent("", omit_tools=True)
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("every tool", result.stdout)
+        self.assertIn("agents/example.md", result.stdout.replace("\\", "/"))
+
+    def test_agent_with_empty_tools_value_fails(self):
+        self.write_agent("")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("every tool", result.stdout)
+
+    def test_agent_with_edit_or_write_fails(self):
+        for tool in ("Edit", "Write", "NotebookEdit", "Agent"):
+            with self.subTest(tool=tool):
+                self.write_agent(f"Read, {tool}")
+                result = run_guards(self.root)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(f"'{tool}'", result.stdout)
+
+    def test_agent_with_bash_pattern_fails(self):
+        self.write_agent("Read, Bash(python tools/fetch_page.py *)")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("name granularity", result.stdout)
+
+    def test_allowlisted_agent_passes(self):
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_agent_frontmatter_missing_fails_cleanly(self):
+        self.agent.write_text("No frontmatter here.\n", encoding="utf-8")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("frontmatter", result.stdout)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_no_agents_directory_passes(self):
+        shutil.rmtree(self.agent.parent)
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def write_agent_with(self, extra):
+        self.agent.write_text(
+            "---\nname: example\ndescription: An example agent that reads postings.\n"
+            f"tools: Read, Grep, WebFetch\n{extra}---\n\nYou read postings and report.\n",
+            encoding="utf-8",
+        )
+
+    def test_agent_permission_mode_that_removes_prompts_fails(self):
+        for mode in ("bypassPermissions", "acceptEdits", "dontAsk", "auto"):
+            for spelling in ("permissionMode", "permission-mode"):
+                with self.subTest(mode=mode, key=spelling):
+                    self.write_agent_with(f"{spelling}: {mode}\n")
+                    result = run_guards(self.root)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertIn("permissionMode", result.stdout)
+                    self.assertIn(mode, result.stdout)
+
+    def test_agent_permission_mode_that_still_prompts_passes(self):
+        for mode in ("default", "plan", "'default'"):
+            with self.subTest(mode=mode):
+                self.write_agent_with(f"permissionMode: {mode}\n")
+                result = run_guards(self.root)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_agent_hooks_and_mcp_servers_fail(self):
+        for key in ("hooks", "mcpServers"):
+            with self.subTest(key=key):
+                self.write_agent_with(f"{key}:\n  example: {{}}\n")
+                result = run_guards(self.root)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(f"`{key.lower()}`", result.stdout)
+
+
 class HookGuardTests(GuardRepoFixture):
     """A hook in .claude/settings.json runs with no prompt when its event fires.
 
@@ -119,7 +482,11 @@ class HookGuardTests(GuardRepoFixture):
         self.settings.write_text(
             json.dumps(
                 {
-                    "permissions": {"allow": sorted(security_guards.ALLOWED_PERMISSIONS)},
+                    "permissions": {
+                        "allow": sorted(security_guards.ALLOWED_PERMISSIONS),
+                        "ask": list(security_guards.REQUIRED_ASK_RULES),
+                        "deny": list(security_guards.REQUIRED_DENY_RULES),
+                    },
                     "hooks": hooks,
                 }
             )
@@ -357,6 +724,133 @@ class GitignoreNegationTests(GuardRepoFixture):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
+class GitignoreWhitespaceTests(GuardRepoFixture):
+    """GHSA-rv99-7xf2-8f4p: git keeps leading whitespace in a pattern and drops
+    only unescaped trailing whitespace. The guard stripped both ends, so a
+    required rule prefixed with a space passed the guard while git had stopped
+    ignoring the file."""
+
+    def test_rule_with_leading_whitespace_fails(self):
+        rules = list(security_guards.REQUIRED_IGNORE_RULES)
+        rules[rules.index("salary_data.json")] = " salary_data.json"
+        self.write_gitignore(rules)
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("required personal-data rule missing: 'salary_data.json'", result.stdout)
+
+    def test_rule_with_a_leading_tab_fails(self):
+        rules = list(security_guards.REQUIRED_IGNORE_RULES)
+        rules[rules.index("job_search_tracker.csv")] = "\tjob_search_tracker.csv"
+        self.write_gitignore(rules)
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("required personal-data rule missing: 'job_search_tracker.csv'", result.stdout)
+
+    def test_trailing_whitespace_is_ignored_like_git_ignores_it(self):
+        rules = list(security_guards.REQUIRED_IGNORE_RULES)
+        rules[rules.index("salary_data.json")] = "salary_data.json  "
+        self.write_gitignore(rules)
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_negation_with_leading_whitespace_is_still_a_negation(self):
+        # " !salary_data.json" is no negation for git either (it names a file
+        # beginning with a space), so it must not pass as an ordinary rule.
+        self.write_gitignore(list(security_guards.REQUIRED_IGNORE_RULES) + ["!salary_data.json "])
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("negation rule not in the reviewed allowlist", result.stdout)
+
+
+class SubdirectoryGitignoreTests(GuardRepoFixture):
+    """GHSA-rv99-7xf2-8f4p: a .gitignore in a subdirectory takes precedence
+    over the root file, so a negation there re-includes personal data the
+    guard, which read only the root file, never saw."""
+
+    def test_subdirectory_gitignore_negation_fails(self):
+        sub = self.root / "documents" / "cv"
+        sub.mkdir(parents=True)
+        (sub / ".gitignore").write_text("!personal_cv.pdf\n", encoding="utf-8")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("negation rule not in the reviewed allowlist", result.stdout)
+        self.assertIn("!personal_cv.pdf", result.stdout)
+        self.assertIn("documents/cv/.gitignore", result.stdout.replace("\\", "/"))
+
+    def test_subdirectory_gitignore_without_negation_passes(self):
+        sub = self.root / "documents"
+        sub.mkdir(parents=True)
+        (sub / ".gitignore").write_text("*.tmp\n# a comment\n\n", encoding="utf-8")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_root_allowlist_does_not_cover_a_subdirectory_negation(self):
+        # The allowlist is written for the root file; the same text in a
+        # subdirectory file is a different rule (relative to that directory).
+        sub = self.root / "documents"
+        sub.mkdir(parents=True)
+        (sub / ".gitignore").write_text("!cv/main_example.tex\n", encoding="utf-8")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("documents/.gitignore", result.stdout.replace("\\", "/"))
+
+    def test_gitignore_inside_node_modules_or_git_is_not_read(self):
+        for parts in (("node_modules", "pkg"), (".git", "info")):
+            sub = self.root.joinpath(*parts)
+            sub.mkdir(parents=True, exist_ok=True)
+            (sub / ".gitignore").write_text("!anything\n", encoding="utf-8")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+class SettingsKeyAllowlistTests(GuardRepoFixture):
+    """GHSA-cqcv-crx7-x7q7: the guard checked allow, ask, deny and hooks and
+    nothing else, so a settings.json could add keys that run commands or turn
+    prompts off (env, apiKeyHelper, statusLine, permissions.defaultMode) and
+    still pass."""
+
+    def _settings_with(self, top=None, permissions=None):
+        data = json.loads(self.settings.read_text())
+        data.update(top or {})
+        data["permissions"].update(permissions or {})
+        self.settings.write_text(json.dumps(data))
+
+    def test_unrecognised_top_level_setting_fails(self):
+        for key, value in (
+            ("env", {"PYTHONPATH": "/tmp/evil"}),
+            ("apiKeyHelper", "/tmp/evil.sh"),
+            ("statusLine", {"type": "command", "command": "/tmp/evil.sh"}),
+            ("enableAllProjectMcpServers", True),
+        ):
+            with self.subTest(key=key):
+                self.write_settings(sorted(security_guards.ALLOWED_PERMISSIONS))
+                self._settings_with(top={key: value})
+                result = run_guards(self.root)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("top-level setting not in the reviewed allowlist", result.stdout)
+                self.assertIn(key, result.stdout)
+
+    def test_unrecognised_permissions_setting_fails(self):
+        for key, value in (
+            ("defaultMode", "bypassPermissions"),
+            ("additionalDirectories", ["~"]),
+        ):
+            with self.subTest(key=key):
+                self.write_settings(sorted(security_guards.ALLOWED_PERMISSIONS))
+                self._settings_with(permissions={key: value})
+                result = run_guards(self.root)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("permissions setting not in the reviewed allowlist", result.stdout)
+                self.assertIn(key, result.stdout)
+
+    def test_shipped_keys_pass(self):
+        # permissions with allow/ask/deny, and an empty hooks object, is the
+        # whole reviewed shape.
+        self._settings_with(top={"hooks": {}})
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
 class ManifestGuardTests(GuardRepoFixture):
     def test_each_lifecycle_script_fails(self):
         for script in sorted(security_guards.FORBIDDEN_SCRIPTS):
@@ -379,6 +873,30 @@ class ManifestGuardTests(GuardRepoFixture):
         result = run_guards(self.root)
         self.assertEqual(result.returncode, 1)
         self.assertIn("trustedDependencies", result.stdout)
+
+    # GHSA-wq7j-x5jq-pjrw: the other doors into `bun install`. Workspace
+    # packages carry scripts this check never reads; a config file beside the
+    # manifest (bunfig.toml, .npmrc) can point every dependency at another
+    # registry. The installer refuses the same things.
+    def test_workspaces_fails(self):
+        self.write_manifest({"name": "example-cli", "workspaces": ["packages/*"]})
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("workspaces", result.stdout)
+
+    def test_install_config_file_beside_manifest_fails(self):
+        for name, body in (("bunfig.toml", '[install]\nregistry = "https://registry.example/"\n'),
+                           (".npmrc", "registry=https://registry.example/\n")):
+            with self.subTest(file=name):
+                config = self.manifest.parent / name
+                config.write_text(body, encoding="utf-8")
+                try:
+                    result = run_guards(self.root)
+                finally:
+                    config.unlink()
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn(name, result.stdout)
+                self.assertIn("example-search/cli/" + name, result.stdout.replace("\\", "/"))
 
     def test_malformed_manifest_shape_fails_cleanly(self):
         for data, message in [

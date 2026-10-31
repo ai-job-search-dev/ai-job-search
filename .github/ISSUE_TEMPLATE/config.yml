@@ -1,7 +1,7 @@
 blank_issues_enabled: true
 contact_links:
   - name: Filing from a personalized fork? Read this first
-    url: https://github.com/MadsLorentzen/ai-job-search/blob/master/SETUP.md#2-fork-and-clone
+    url: https://github.com/ai-job-search-dev/ai-job-search/blob/master/SETUP.md#2-fork-and-clone
     about: >-
       The gh CLI in a fork clone targets THIS public repo by default. Personal
       application tracking, evaluations, and incident logs belong in your own

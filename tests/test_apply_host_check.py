@@ -140,6 +140,40 @@ def classify_posting_host(url_str: str, installed_portals: set[str] | None = Non
     return "unverified", host
 
 
+class ApplyPostingGateWiringTests(unittest.TestCase):
+    """The posting passes tools/posting_guard.py before Step 1 evaluates it, the
+    component that fetches it has no Edit/Write, and the reviewer returns its
+    research as text for the orchestrator to write."""
+
+    def setUp(self):
+        self.text = APPLY_COMMAND_FILE.read_text(encoding="utf-8")
+        self.step0 = re.search(r"## Step 0: Parse Input(.*?)(?=## Step 1:)", self.text, re.DOTALL).group(1)
+        self.step1 = re.search(r"## Step 1: DRAFTER - Evaluate Fit(.*?)(?=## Step 2:)", self.text, re.DOTALL).group(1)
+        self.step3 = re.search(r"## Step 3: REVIEWER - Research & Critique(.*?)(?=## Step 4:)", self.text, re.DOTALL).group(1)
+        self.step4 = re.search(r"## Step 4: DRAFTER - Revise Based on Feedback(.*?)(?=## Step 5:)", self.text, re.DOTALL).group(1)
+
+    def test_step0_dispatches_posting_fetcher_and_runs_guard(self):
+        self.assertIn("posting-fetcher", self.step0, "a URL posting is fetched by the least-privilege agent")
+        self.assertIn("posting_guard", self.step0, "Step 0 must name the integrity gate")
+        self.assertIn("--text", self.step0, "pasted text is gated too, in text mode")
+        self.assertIn("Portal CLI first", self.step0)  # the escalation order is unchanged
+
+    def test_step1_prints_posting_integrity_line(self):
+        self.assertIn("Posting integrity", self.step1)
+        self.assertIn("Continue with this posting?", self.step1)
+        self.assertLess(
+            self.step1.index("Posting integrity"), self.step1.index("Source host verification"),
+            "the integrity verdict is the first line of the evaluation",
+        )
+
+    def test_step3_dispatches_application_reviewer_and_orchestrator_writes_cache(self):
+        self.assertIn("application-reviewer", self.step3)
+        self.assertNotIn("general-purpose", self.step3)
+        self.assertIn("### Company research (for the cache)", self.step3,
+                      "the reviewer returns the cache as text - it has no Write tool")
+        self.assertIn("company_research/", self.step4, "the orchestrator writes the cache after the reviewer returns")
+
+
 class ApplyHostVerificationSpecTests(unittest.TestCase):
     def setUp(self):
         self.text = APPLY_COMMAND_FILE.read_text(encoding="utf-8")
@@ -258,6 +292,11 @@ class InstalledPortalsAreVerifiedTests(unittest.TestCase):
             "https://myworkdayjobs.com.phishing.net/login",
             "https://lever.co.attacker.org/apply",
             "https://unknown-board.example.com/posting/123",
+            # Anyone can publish a "job posting" in a GitHub repo or gist. A
+            # contact URL in a portal CLI's User-Agent string once made
+            # github.com an installed-portal host (#633), so pin it here.
+            "https://github.com/acme-careers/jobs/blob/main/README.md",
+            "https://gist.github.com/someone/0123456789abcdef",
         ]
         for url in suspicious:
             tier, host = classify_posting_host(url)

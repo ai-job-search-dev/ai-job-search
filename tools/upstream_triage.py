@@ -18,13 +18,17 @@ Two signals drive the sort:
 
 1. Already applied? A cherry-pick lands with a NEW sha but the same patch, so a
    raw sha comparison misreports it as missing. We compute git patch-ids for the
-   fork-only commits and treat any upstream commit whose patch-id (or exact
-   subject) matches as already applied.
+   fork-only commits and treat any upstream commit whose patch-id
+   matches as already applied. A matching subject with a different patch may be a
+   conflict-resolved port or an unrelated change: keep it as a distinct verify
+   reason in the advisory skip list, never as proof of a cherry-pick.
 
 2. Relevant to this fork? A commit that only touches files this fork deleted
    (e.g. removed demo portals) is almost certainly N/A. We check each commit's
    touched paths against HEAD and the shared base: a genuinely new upstream
-   path is worth reviewing, rather than a file the fork chose to remove.
+   path is worth reviewing, rather than a file the fork chose to remove. A new
+   file inside a directory the fork removed (a test added to a dropped portal)
+   counts as removed too.
 
 Usage: python tools/upstream_triage.py [--remote upstream] [--branch master]
 Exits 0 always (a report, not a gate). Prints a note to stderr and exits 0 if
@@ -91,6 +95,24 @@ def path_exists(path: str, ref: str = "HEAD") -> bool:
     return r.returncode == 0
 
 
+def in_removed_dir(path: str, base: str) -> bool:
+    """Whether a path absent from HEAD and base sits in a directory the fork removed.
+
+    The nearest ancestor directory decides: one HEAD still has means the path is
+    new in a directory the fork kept; one only the base has means the fork
+    deleted the tree the path would land in. Directories in neither are new
+    upstream too, so the walk goes on up to the root.
+    """
+    parts = path.split("/")[:-1]
+    for depth in range(len(parts), 0, -1):
+        parent = "/".join(parts[:depth])
+        if path_exists(parent):
+            return False
+        if path_exists(parent, base):
+            return True
+    return False
+
+
 def remote_slug(remote: str) -> str | None:
     """owner/repo for a GitHub remote, or None if it can't be parsed."""
     try:
@@ -155,7 +177,9 @@ def main() -> int:
 
     fork_only = rev_list(f"{ref}..HEAD")
     fork_patch_ids = {p for p in (patch_id(s) for s in fork_only) if p}
-    fork_subjects = {subject(s) for s in fork_only}
+    fork_subjects = {}
+    for fork_sha in fork_only:
+        fork_subjects.setdefault(subject(fork_sha), fork_sha)
     try:
         common_base = git("merge-base", "HEAD", ref).strip()
     except subprocess.CalledProcessError:
@@ -168,8 +192,13 @@ def main() -> int:
     for sha in behind:
         subj = subject(sha)
         short = sha[:9]
-        if patch_id(sha) in fork_patch_ids or subj in fork_subjects:
+        if patch_id(sha) in fork_patch_ids:
             skip.append((short, sha, subj, "already applied (cherry-picked)"))
+            continue
+        if subj in fork_subjects:
+            match = fork_subjects[subj][:9]
+            skip.append((short, sha, subj,
+                         f"subject matches fork commit {match}, patch differs: verify"))
             continue
         if any(sha.startswith(e) for e in wontport):
             skip.append((short, sha, subj, "on the fork's won't-port list"))
@@ -177,7 +206,9 @@ def main() -> int:
         touched = files_touched(sha)
         relevant = [
             f for f in touched
-            if path_exists(f) or common_base is None or not path_exists(f, common_base)
+            if path_exists(f)
+            or common_base is None
+            or not (path_exists(f, common_base) or in_removed_dir(f, common_base))
         ]
         # A commit whose only surviving footprint is the changelog is one whose
         # real change lives in files this fork removed - the code doesn't apply,

@@ -1,6 +1,6 @@
 import { defineCommand, option } from "@bunli/core"
 import { z } from "zod"
-import { apiFetch, normalizeJobId, writeError, stripHtml } from "../helpers.js"
+import { apiFetch, normalizeJobId, writeError, stripHtml, stripInvisible, visibleHtml } from "../helpers.js"
 import type { JobAdRaw, SearchApiResponse } from "./search.js"
 
 export interface DetailApiResponse {
@@ -17,6 +17,7 @@ export interface DetailApiResponse {
   hasLogo: boolean
   logoUrl: string | null
   isExternal?: boolean
+  source?: string
   employer: {
     cvrNumber: string | null
     pNumber: string | null
@@ -81,6 +82,7 @@ export function mapSearchAdToDetail(raw: JobAdRaw & { jobAdUrl?: string | null; 
     hasLogo: Boolean(raw.hasLogo),
     logoUrl: raw.logoUrl ?? null,
     isExternal: true,
+    source: "search-fallback",
     employer: {
       cvrNumber: raw.cvr ?? null,
       pNumber: null,
@@ -130,13 +132,18 @@ export function mapSearchAdToDetail(raw: JobAdRaw & { jobAdUrl?: string | null; 
  * The search command already maps that sentinel to null; detail must agree,
  * or an undisclosed deadline reads as 126 years expired and /rank's expiry
  * sweep retires the job the moment it is stored.
+ *
+ * The body is the employer's HTML: markup a browser never renders is dropped,
+ * and invisible characters are stripped from every field (see visibleHtml and
+ * stripInvisible).
  */
 export function prepareDetail(data: DetailApiResponse): DetailApiResponse {
   const deadline = data.application.deadlineDate
   if (deadline && deadline.startsWith("1900-01-01")) {
     data.application.deadlineDate = null
   }
-  return data
+  if (typeof data.body === "string") data.body = visibleHtml(data.body)
+  return stripInvisible(data)
 }
 
 export const detail = defineCommand({
@@ -184,7 +191,6 @@ export const detail = defineCommand({
           })
           const match = searchResult.jobAds?.find((ad) => ad.jobAdId === id)
           if (match) {
-            process.stderr.write("note: detail endpoint returned 404; retrieved external posting summary from search endpoint\n")
             data = prepareDetail(mapSearchAdToDetail(match))
           }
         } catch {
@@ -217,6 +223,9 @@ function outputTable(data: DetailApiResponse): void {
   console.log(`ID:          ${data.id}`)
   console.log(`Title:       ${data.title}`)
   console.log(`Employer:    ${data.employer.name}`)
+  if (data.source) {
+    console.log(`Source:      ${data.source} (detail unavailable, synthesised from search)`)
+  }
   console.log(`Type:        ${data.job.type ?? "-"}`)
   console.log(`City:        ${data.job.address.city ?? "-"}`)
   console.log(`Postal:      ${data.job.address.postalCode ?? "-"}`)
@@ -240,6 +249,10 @@ export function formatDetailPlain(data: DetailApiResponse): string {
     `Deadline: ${data.application.deadlineDate ?? "-"}`,
     `Positions: ${data.application.availablePositions ?? "-"}`,
   ]
+
+  if (data.source) {
+    lines.push(`Source: ${data.source} (detail unavailable, synthesised from search)`)
+  }
 
   if (data.application.url) {
     lines.push(`Apply: ${data.application.url}`)

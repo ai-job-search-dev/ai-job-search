@@ -59,6 +59,7 @@ Key flags:
 - `--job-type <type>` — `Ordinaert`, `Efterloenner`, `Foertidspension`
 - `--occupation-area <id>` — occupation area identifier, e.g. `10000`
 - `--occupation-group <id>` — occupation group identifier, e.g. `10060`
+- `--occupation <uuid>` — one ESCO occupation: the `conceptUriDa` printed by `occupations`, or its trailing UUID
 - `--order <type>` — `PublicationDate` (default), `BestMatch`, `ApplicationDate`
 - `--page / --per-page / --limit`
 - `--format json|table|plain`
@@ -79,7 +80,8 @@ bun run .agents/skills/jobnet-search/cli/src/cli.ts occupations --search-string 
 ```
 
 Use this to discover ESCO occupation identifiers before passing them to `search` with
-`--occupation-area` or `--occupation-group`.
+`--occupation`. The numeric `--occupation-area` / `--occupation-group` codes are a different
+taxonomy: an occupation UUID passed there matches no ads.
 
 ### Typeahead suggestions
 
@@ -100,6 +102,7 @@ term or ESCO identifier before running a `search`:
 ```bash
 bun run .agents/skills/jobnet-search/cli/src/cli.ts suggestions --query "syge"
 bun run .agents/skills/jobnet-search/cli/src/cli.ts occupations --search-string "sygeplejerske"
+bun run .agents/skills/jobnet-search/cli/src/cli.ts search --occupation http://data.star.dk/esco/occupation/56f5d45c-ce48-43ac-9720-34831a1c8302
 ```
 
 **Natural workflow: `search` → `detail`.**

@@ -21,7 +21,8 @@
 # edit this workflow itself, so these guards catch accidents and casual
 # attempts, not a determined author - branch protection with required checks
 # and human review of workflow/settings diffs remain the real backstop.
-# Actions are pinned to commit SHAs; the token is read-only.
+# Actions are pinned to commit SHAs; the token is read-only, and no checkout
+# leaves it in .git/config (persist-credentials: false) for later steps to read.
 
 name: CI
 
@@ -41,6 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          persist-credentials: false
           fetch-depth: 0
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
@@ -48,7 +50,7 @@ jobs:
       - run: pip install pyyaml
       - run: python tools/lint_skills.py
       - name: Framework version guard (upstream template only)
-        if: github.repository == 'MadsLorentzen/ai-job-search'
+        if: github.repository == 'ai-job-search-dev/ai-job-search'
         run: python tools/check_framework_version.py
 
   security-guards:
@@ -56,6 +58,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
@@ -70,12 +74,35 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install Excel integration test dependency
         run: python -m pip install openpyxl==3.1.5
       - run: python -m unittest discover -s tests -t . -v
+
+  python-tests-windows:
+    # Linux-green says nothing about Windows file locking, console encodings or
+    # path handling, and many users run Windows: #480 and #486 passed every Linux
+    # leg and failed there. The suite runs under Git Bash, the shell Claude Code
+    # uses for its Bash tool on Windows, with stdout left at the Windows default
+    # encoding, so a cp1252 crash shows up here the way it does for a user.
+    name: Python tool tests (Windows, Python 3.14)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.14"
+      - name: Install Excel integration test dependency
+        run: python -m pip install openpyxl==3.1.5
+      - name: Run the suite under Git Bash
+        shell: bash
+        run: python -m unittest discover -s tests -t . -v
 
   dependency-review:
     name: Dependency review
@@ -89,6 +116,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Probe Dependency graph availability
         id: graph
         run: |
@@ -128,6 +157,8 @@ jobs:
             container: debian:bookworm
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Install apt-packaged TeX Live (bookworm leg)
         if: matrix.leg.name == 'debian-bookworm'
         # --no-install-recommends keeps the leg lean, so the two font packages
@@ -172,7 +203,7 @@ jobs:
           python3 tools/verify_pdf.py cv/main_example.pdf --min-chars 100
           python3 tools/verify_pdf.py cover_letters/cover_example.pdf --min-chars 100
       - name: Assert stock PDF structure (upstream template only)
-        if: github.repository == 'MadsLorentzen/ai-job-search'
+        if: github.repository == 'ai-job-search-dev/ai-job-search'
         run: |
           python3 tools/verify_pdf.py cv/main_example.pdf \
             --pages 2 \
@@ -196,6 +227,8 @@ jobs:
       tools: ${{ steps.list.outputs.tools }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - id: list
         run: |
           tools=$(find .agents/skills -mindepth 3 -maxdepth 3 -path '*/cli/package.json' \
@@ -214,26 +247,34 @@ jobs:
         tool: ${{ fromJSON(needs.discover-clis.outputs.tools) }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
       - run: bun install
         working-directory: .agents/skills/${{ matrix.tool }}/cli
       - run: bun run typecheck
         working-directory: .agents/skills/${{ matrix.tool }}/cli
       - name: Run fixture/mock tests when present
+        # The tool name is a directory name a pull request controls, so it
+        # reaches the shell as data through env, never as expanded script text.
+        env:
+          TOOL: ${{ matrix.tool }}
         run: |
           if find tests -type f -name '*.test.ts' | grep -q .; then
             bun test
           else
-            echo "No Bun tests found for ${{ matrix.tool }}; skipping"
+            echo "No Bun tests found for $TOOL; skipping"
           fi
         working-directory: .agents/skills/${{ matrix.tool }}/cli
 
   placeholder-integrity:
     name: Placeholder integrity (upstream template only)
-    if: github.repository == 'MadsLorentzen/ai-job-search'
+    if: github.repository == 'ai-job-search-dev/ai-job-search'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
       - name: Tracked template files must keep their placeholder tokens
         run: |
           fail=0

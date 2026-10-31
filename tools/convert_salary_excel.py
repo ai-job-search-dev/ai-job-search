@@ -68,6 +68,8 @@ def _finite_float(value):
 
 def parse_numeric_cell(value):
     """Parse numeric Excel values, including localized string cells."""
+    if isinstance(value, bool):
+        raise ValueError("not numeric")
     if isinstance(value, (int, float)):
         return _finite_float(value)
     if not isinstance(value, str):
@@ -162,6 +164,7 @@ def parse_sheet(ws, sheet_label=None):
         return [str(cell.value).strip() for cell in row if cell.value]
 
     header_row = None
+    corroborated = True
     for row_idx, row in enumerate(rows, start=1):
         cell_texts = _cell_texts(row)
         company_idxs = {i for i, t in enumerate(cell_texts) if header_matches(t, COMPANY_PATTERNS)}
@@ -177,6 +180,7 @@ def parse_sheet(ws, sheet_label=None):
             break
 
     if header_row is None:
+        corroborated = False
         for row_idx, row in enumerate(rows, start=1):
             if any(header_matches(t, COMPANY_PATTERNS) for t in _cell_texts(row)):
                 header_row = row_idx
@@ -186,25 +190,35 @@ def parse_sheet(ws, sheet_label=None):
         print(f"Warning: Could not find header row in sheet '{ws.title}'. Skipping.", file=sys.stderr)
         return []
 
-    # Read headers
+    # Read headers. Wrapped header cells carry a line break ("Median\nsalary"),
+    # which would survive into the category name and keep the column from
+    # pairing with its count, so collapse every whitespace run to one space.
     headers = []
     for cell in ws[header_row]:
-        headers.append(str(cell.value).strip() if cell.value else "")
+        headers.append(" ".join(str(cell.value).split()) if cell.value else "")
 
-    # Find company and city columns
-    company_col = None
-    city_col = None
-    for i, h in enumerate(headers):
-        if header_matches(h, COMPANY_PATTERNS):
-            company_col = i
-        elif header_matches(h, CITY_PATTERNS):
-            city_col = i
+    # Find company and city columns. Three tiers, each taking the FIRST match:
+    #   1. an exact pattern header ("Company", "Firma", "By");
+    #   2. a header that carries the pattern but is not a count/index column
+    #      ("Company Name", "Firmanavn og by");
+    #   3. any header carrying the pattern.
+    # The old loop kept the LAST pattern match, so "Company Name | ... |
+    # Company Index" made the salary index the company column: every row's
+    # company read "108.5". #571 added tier 1; tiers 2-3 cover a qualified
+    # name header that sits next to a qualified salary header. The city
+    # lookup skips the company column: a combined "Company and city" header
+    # carries both words, and must not shadow a real city column after it.
+    def metadata_column(patterns, skip=None):
+        usable = [(i, h) for i, h in enumerate(headers) if i != skip]
+        exact = next((i for i, h in usable if h.lower().strip() in patterns), None)
+        if exact is not None:
+            return exact
+        candidates = [i for i, h in usable if header_matches(h, patterns)]
+        plain = [i for i in candidates if detect_column_type(headers[i]) is None]
+        return (plain or candidates or [None])[0]
 
-    # A qualified salary header such as "Company Index" may also contain a
-    # metadata token. Prefer an unqualified metadata column when one exists,
-    # leaving the qualified column available as salary data.
-    company_col = next((i for i, h in enumerate(headers) if h.lower() in COMPANY_PATTERNS), company_col)
-    city_col = next((i for i, h in enumerate(headers) if h.lower() in CITY_PATTERNS), city_col)
+    company_col = metadata_column(COMPANY_PATTERNS)
+    city_col = metadata_column(CITY_PATTERNS, skip=company_col)
 
     if company_col is None:
         print(f"Warning: Could not find company column in sheet '{ws.title}'.", file=sys.stderr)
@@ -279,6 +293,18 @@ def parse_sheet(ws, sheet_label=None):
     # Untyped columns become standalone
     for col_idx, col_header in untyped_cols:
         categories.append({"name": col_header.lower().replace(" ", "_"), "value_col": col_idx})
+
+    if not categories and not corroborated:
+        # The fallback pass matched a lone company word and no salary column
+        # sits beside it: this is prose (a "Notes" or "About the data" tab
+        # mentioning "company"), not a table. Reading it would turn every
+        # sentence below that line into a company entry.
+        print(
+            f"Warning: Skipping sheet '{ws.title}': no table header found "
+            "(a company word appears only in text, with no salary columns).",
+            file=sys.stderr,
+        )
+        return []
 
     if not categories:
         print(
@@ -381,6 +407,9 @@ def main():
         help="Description of what the baseline means (e.g., 'Index 100 = median salary')",
     )
     args = parser.parse_args()
+
+    if not math.isfinite(args.baseline):
+        parser.error("--baseline must be a finite number")
 
     excel_path = Path(args.excel_file)
     if not excel_path.exists():

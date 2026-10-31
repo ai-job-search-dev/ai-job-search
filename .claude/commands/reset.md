@@ -255,25 +255,20 @@ Leave the rest of the file intact: the portal-CLI and WebSearch-fallback explana
 
 ### Documents reset
 
-For each non-empty document subfolder, delete all user entries, including nested folders and hidden files. Preserve the seven top-level subfolders, their `.gitkeep` placeholders, and `documents/README.md`. Run the following Bash block only after the confirmation above; its glob settings stay inside the subshell. If `documents/` or any of its seven roots is a symbolic link, stop before deleting anything and ask the user to replace that linked root with a local document folder.
+For each non-empty document subfolder, delete all user entries, including nested folders and hidden files. Preserve the seven top-level subfolders, their `.gitkeep` placeholders, and `documents/README.md`. Run the following block only after the confirmation above. It is POSIX shell on purpose: the Bash tool runs whatever shell the user has, which is zsh on macOS, and a bash-only builtin such as `shopt` fails there with `command not found` before anything is deleted. `find` lists hidden entries and nested folders without any glob setting. If `documents/` or any of its seven roots is a symbolic link, stop before deleting anything and ask the user to replace that linked root with a local document folder.
 
 ```bash
 (
   set -e
-  for directory in documents documents/{cv,linkedin,diplomas,references,projects,postings,applications}; do
+  for directory in documents documents/cv documents/linkedin documents/diplomas documents/references documents/projects documents/postings documents/applications; do
     if [ -L "$directory" ]; then
       printf 'Reset stopped: %s is a symbolic link.\n' "$directory" >&2
       exit 1
     fi
   done
-  unset GLOBIGNORE
-  shopt -s dotglob nullglob
   for directory in documents/cv documents/linkedin documents/diplomas documents/references documents/projects documents/postings documents/applications; do
-    for entry in "$directory"/*; do
-      if [ "${entry##*/}" != ".gitkeep" ]; then
-        rm -rf -- "$entry"
-      fi
-    done
+    [ -d "$directory" ] || continue
+    find "$directory" -mindepth 1 -maxdepth 1 ! -name .gitkeep -exec rm -rf -- {} +
   done
 )
 ```

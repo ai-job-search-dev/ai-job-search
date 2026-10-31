@@ -147,4 +147,44 @@ describe("normalizeSlug", () => {
     expect(normalizeSlug("not a slug!")).toBeNull();
     expect(normalizeSlug("")).toBeNull();
   });
+  test("accepts subdomains, a scheme-less host, a trailing slash and a query string", () => {
+    expect(normalizeSlug("https://www.freehire.me/jobs/golang-zensar-2bxu6dxm/")).toBe("golang-zensar-2bxu6dxm");
+    expect(normalizeSlug("freehire.me/jobs/golang-zensar-2bxu6dxm?utm_source=x")).toBe("golang-zensar-2bxu6dxm");
+  });
+  test("rejects a /jobs/ URL on another host instead of asking the API for its last segment", () => {
+    // The search fixture's own `url` is a Greenhouse apply link; pasting it
+    // back into detail used to request /api/v1/jobs/1 and report NOT_FOUND.
+    expect(normalizeSlug("https://boards.greenhouse.io/acme/jobs/1")).toBeNull();
+    expect(normalizeSlug("https://jobs.lever.co/acme/jobs/abc")).toBeNull();
+  });
+  test("rejects look-alike and userinfo hosts", () => {
+    expect(normalizeSlug("https://freehire.me.evil.io/jobs/x")).toBeNull();
+    expect(normalizeSlug("https://notfreehire.me/jobs/x")).toBeNull();
+    expect(normalizeSlug("https://freehire.me@evil.io/jobs/x")).toBeNull();
+  });
+  test("rejects a freehire.me URL that is not a job page", () => {
+    expect(normalizeSlug("https://freehire.me/companies/acme")).toBeNull();
+    expect(normalizeSlug("https://freehire.me/jobs/")).toBeNull();
+  });
+  test("requires the path to be exactly /jobs/<slug>", () => {
+    // The slug is the whole path after /jobs/: a nested path, a prefix before
+    // /jobs/, or a slug with characters outside the slug alphabet is not a
+    // freehire job page, even on the right host.
+    expect(normalizeSlug("https://freehire.me/jobs/my-slug/apply")).toBeNull();
+    expect(normalizeSlug("https://freehire.me/en/jobs/my-slug")).toBeNull();
+    expect(normalizeSlug("https://freehire.me/jobs/my_slug")).toBeNull();
+    expect(normalizeSlug("https://freehire.me/jobs/my-slug#details")).toBe("my-slug");
+  });
+
+  test("accepts the self-hosted base URL's host", () => {
+    const saved = process.env.FREEHIRE_API_URL;
+    process.env.FREEHIRE_API_URL = "http://localhost:8080";
+    try {
+      expect(normalizeSlug("http://localhost:8080/jobs/my-slug")).toBe("my-slug");
+      expect(normalizeSlug("https://boards.greenhouse.io/acme/jobs/1")).toBeNull();
+    } finally {
+      if (saved === undefined) delete process.env.FREEHIRE_API_URL;
+      else process.env.FREEHIRE_API_URL = saved;
+    }
+  });
 });

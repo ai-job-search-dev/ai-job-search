@@ -191,6 +191,10 @@ def audit(path: Path) -> int:
     if not_objects:
         print(f"{path}: entry is not an object: {not_objects[0]}", file=sys.stderr)
         return 1
+    bad_url = [k for k, v in seen.items() if v.get("url") is not None and not isinstance(v["url"], str)]
+    if bad_url:
+        print(f"{path}: entry url is not a string: {bad_url[0]}", file=sys.stderr)
+        return 1
 
     malformed = [k for k in seen if not is_canonical(k) and not is_legacy_shape(k)]
     legacy = [k for k in seen if is_legacy_shape(k)]

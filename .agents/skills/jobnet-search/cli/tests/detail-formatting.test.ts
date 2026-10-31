@@ -92,6 +92,14 @@ describe("formatDetailPlain", () => {
     expect(formatted).toContain("Deadline: -");
     expect(formatted).not.toContain("Apply:");
   });
+
+  test("renders source fallback warning line when source is present and omits it when absent", () => {
+    const directFormatted = formatDetailPlain(detail());
+    expect(directFormatted).not.toContain("Source:");
+
+    const fallbackFormatted = formatDetailPlain(detail({ source: "search-fallback" }));
+    expect(fallbackFormatted).toContain("Source: search-fallback (detail unavailable, synthesised from search)");
+  });
 });
 
 

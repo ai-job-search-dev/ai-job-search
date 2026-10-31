@@ -32,7 +32,7 @@ def section(path, heading):
 def page_count_invocations(text):
     """(document path, page count) for every runnable verify_pdf --pages line."""
     return re.findall(
-        r"^python tools/verify_pdf\.py (\S+) --pages (\d+)\s*$", text, re.MULTILINE
+        r"^python3 tools/verify_pdf\.py (\S+) --pages (\d+)\s*$", text, re.MULTILINE
     )
 
 

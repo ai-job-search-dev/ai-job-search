@@ -27,9 +27,9 @@ Geometry comes from Poppler word bounding boxes (`pdftotext -bbox`). Poppler is 
 repo-wide - since #369 `verify_pdf.py` prefers pypdf and falls back to Poppler - but word
 bounding boxes have no pypdf equivalent, so this is the one step that still wants it.
 Without it, or with a broken extractor, the check reports `skipped:` and exits 2 rather
-than inventing a layout failure. A broken extractor has two distinct causes: an xpdf-based
-`pdftotext` (Git for Windows ships one ahead of Poppler in PATH) has no `-bbox` flag at
-all, and Poppler 26.0x before 26.05 aborts `-bbox`/`-bbox-layout`/`-htmlmeta` on a PDF
+than inventing a layout failure. A broken extractor has two distinct causes: no `pdftotext`
+on PATH has the `-bbox` flag (Git for Windows ships an xpdf build without it, and the check
+skips past it to any Poppler further down PATH), and Poppler 26.0x before 26.05 aborts `-bbox`/`-bbox-layout`/`-htmlmeta` on a PDF
 whose Info dictionary carries an empty string in any field - which `hyperref` writes for
 every field it does not set, so any `lualatex`/`pdflatex` document built with `hyperref`
 and no `\\hypersetup{pdftitle=...}` triggers a real Poppler crashing on a legal PDF (#451).
@@ -59,6 +59,8 @@ suite needs neither Poppler nor a compiled PDF.
 from __future__ import annotations
 
 import argparse
+import functools
+import os
 import re
 import shutil
 import subprocess
@@ -183,12 +185,53 @@ class Page:
         return max((tops[i + 1] - tops[i], tops[i]) for i in range(len(tops) - 1))
 
 
+@functools.cache
+def find_pdftotext() -> str | None:
+    """Find a pdftotext binary that supports Poppler's -bbox flag.
+
+    Git for Windows prepends Git's mingw64\\bin to PATH under Git Bash (used by
+    Claude Code), shipping an xpdf pdftotext without -bbox. If a working Poppler
+    is installed further down PATH (e.g. MiKTeX, Chocolatey, Scoop), probe each
+    candidate with -h and pick the first that advertises -bbox (#655). Falls back
+    to the first candidate if none advertises -bbox, so the caller keeps today's
+    skip message on failure. Returns None if no pdftotext is found at all.
+
+    Cached at module level to avoid re-probing candidates with subprocesses on
+    every parse_pdf call within a process.
+    """
+    candidates: list[str] = []
+    seen: set[str] = set()
+    for entry in os.get_exec_path():
+        candidate = shutil.which("pdftotext", path=entry)
+        if candidate and candidate not in seen:
+            seen.add(candidate)
+            candidates.append(candidate)
+    if not candidates:
+        return None
+    for candidate in candidates:
+        try:
+            res = subprocess.run(
+                [candidate, "-h"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            output = (res.stdout or "") + (res.stderr or "")
+            if "-bbox" in output:
+                return candidate
+        except (subprocess.SubprocessError, OSError):
+            continue
+    return candidates[0]
+
+
 def parse_pdf(path: Path) -> list[Page]:
-    if not shutil.which("pdftotext"):
+    binary = find_pdftotext()
+    if not binary:
         raise RuntimeError("pdftotext (Poppler) not found; install poppler-utils")
     try:
         out = subprocess.run(
-            ["pdftotext", "-bbox", "-enc", "UTF-8", str(path), "-"],
+            [binary, "-bbox", "-enc", "UTF-8", str(path), "-"],
             capture_output=True,
             text=True,
             # pdftotext emits UTF-8; without this Windows decodes it as cp1252 and
@@ -210,8 +253,8 @@ def parse_pdf(path: Path) -> list[Page]:
         detail = stderr_lines[0] if stderr_lines else f"exit {exc.returncode}"
         raise RuntimeError(
             f"pdftotext could not produce bounding boxes for {path} ({detail}); "
-            "either the pdftotext first in PATH is an xpdf build with no -bbox flag "
-            "(Git for Windows ships one ahead of Poppler), or Poppler aborted on this "
+            "either no pdftotext on PATH has the -bbox flag (Git for Windows ships an "
+            "xpdf build without it), or Poppler aborted on this "
             "document - Poppler 26.0x before 26.05 aborts on a PDF whose Info "
             "dictionary carries an empty string, as hyperref writes when pdftitle is unset"
         ) from exc

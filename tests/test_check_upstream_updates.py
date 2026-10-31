@@ -1,3 +1,4 @@
+import os
 import shutil
 import subprocess
 import sys
@@ -9,7 +10,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = REPO_ROOT / "tools" / "check_upstream_updates.py"
 
-TEMPLATE_URL = "https://github.com/MadsLorentzen/ai-job-search.git"
+TEMPLATE_URL = "https://github.com/ai-job-search-dev/ai-job-search.git"
 FORK_URL = "https://github.com/octocat/ai-job-search.git"
 
 FRAMEWORK_FILES = [
@@ -63,6 +64,14 @@ class UpstreamCheckerRepoFixture(unittest.TestCase):
     def run_checker(self, *args) -> subprocess.CompletedProcess:
         return subprocess.run(
             [sys.executable, str(self.root / "tools" / "check_upstream_updates.py"), "--no-fetch", *args],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+        )
+
+    def run_checker_with_fetch(self, *args) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(self.root / "tools" / "check_upstream_updates.py"), *args],
             cwd=self.root,
             capture_output=True,
             text=True,
@@ -132,6 +141,23 @@ class UpstreamRemotePresentTests(UpstreamCheckerRepoFixture):
         self.assertIn("up to date with upstream/master", result.stdout)
 
 
+class FailedFetchTests(UpstreamCheckerRepoFixture):
+    def test_cached_ref_after_failed_fetch_is_not_reported_as_current(self):
+        # Normal CLI path: a fork has a previous upstream/master ref, but its
+        # remote is unavailable today. The cached comparison can be useful,
+        # but it cannot establish whether the fork is currently up to date.
+        self.add_remote("upstream", str(self.root / "unavailable-remote"))
+        self.materialize_remote_ref("upstream")
+
+        result = self.run_checker_with_fetch()
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Failed to fetch", result.stdout)
+        self.assertIn("cached", result.stdout.lower())
+        self.assertIn("[WARNING]", result.stdout)
+        self.assertNotIn("[OK]", result.stdout)
+
+
 class UpstreamRefMissingFileTests(UpstreamCheckerRepoFixture):
     """Simulates upstream renaming/deleting one framework file while the
     fork still has its own copy: git show then fails, and the checker used
@@ -158,6 +184,45 @@ class UpstreamRefMissingFileTests(UpstreamCheckerRepoFixture):
         self.assertIn("AGENTS.md", result.stdout)
         self.assertNotIn("[OK] All framework files are up to date", result.stdout)
         self.assertIn("[WARNING]", result.stdout)
+
+
+class LegacyEncodingTests(UpstreamCheckerRepoFixture):
+    def setUp(self):
+        super().setUp()
+        # Use the actual shipped framework files, whose UTF-8 prose git show
+        # returns, rather than a constructed string passed to run_git().
+        for rel in FRAMEWORK_FILES:
+            shutil.copy(REPO_ROOT / rel, self.root / rel)
+        subprocess.run(["git", "add", "-A"], cwd=self.root, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-qm", "copy actual framework files"], cwd=self.root, check=True, capture_output=True)
+        self.add_remote("upstream", TEMPLATE_URL)
+        self.materialize_remote_ref("upstream")
+
+    def run_legacy_checker(self, *args, ascii_git_codec=True):
+        env = dict(os.environ, LC_ALL="C", LANG="C", PYTHONUTF8="0",
+                   PYTHONCOERCECLOCALE="0", PYTHONIOENCODING="cp1252")
+        if not ascii_git_codec:
+            # Keep valid Unicode argv while independently forcing legacy stdout.
+            # Linux's ASCII filesystem decoder would instead create surrogate
+            # escapes, testing argument decoding rather than console output.
+            env["PYTHONUTF8"] = "1"
+        return subprocess.run(
+            [sys.executable, str(self.root / "tools/check_upstream_updates.py"), "--no-fetch", *args],
+            cwd=self.root, env=env, capture_output=True,
+        )
+
+    def test_actual_framework_prose_is_decoded_as_utf8(self):
+        result = self.run_legacy_checker()
+        self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", "replace"))
+        self.assertIn("[OK]", result.stdout.decode("utf-8"))
+
+    def test_non_latin_branch_is_printed_as_utf8(self):
+        branch = "release-版本"
+        subprocess.run(["git", "update-ref", f"refs/remotes/upstream/{branch}", "HEAD"],
+                       cwd=self.root, check=True, capture_output=True)
+        result = self.run_legacy_checker("--branch", branch, ascii_git_codec=False)
+        self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", "replace"))
+        self.assertIn(f"upstream/{branch}", result.stdout.decode("utf-8"))
 
 
 class IncompleteComparisonTests(UpstreamCheckerRepoFixture):

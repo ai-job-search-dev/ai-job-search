@@ -43,6 +43,9 @@ Compose (`make up` → API on `:8080`, same `/api/v1/...` paths).
 
 `search` accepts `--format json|table|plain` (default `json`); `detail` accepts `--format json|plain`.
 All errors are written to **stderr** as `{ "error": "...", "code": "..." }` with exit code `1`.
+One diagnostic is a warning instead: a `--region` value outside the documented vocabulary
+prints `{ "warning": "...", "code": "REGION_VALUE_UNKNOWN" }` to stderr after the results,
+and exits `0`, leaving stdout a valid JSON document.
 
 `search` hits the API's agent endpoint, so every JSON result already carries the
 posting's **full** description (Markdown by default, `--description-format
@@ -71,11 +74,11 @@ See `../SKILL.md` for the full flag reference and the hosted-dependency note.
 
 | Flag | Alias | Description |
 |------|-------|-------------|
-| `--query` | `-q` | Keywords (title / skill / role). Full-text; optional. |
+| `--query` | `-q` | Keywords (title / skill / role). Full-text; optional. `a OR b` matches either (uppercase `OR`, max 5 alternatives); a leading `title:` searches the job title only. |
 | `--jobage` | | Posted within N days (`posted_within_days`). |
 | `--page` | | 1-indexed page. Default 1. |
 | `--limit` | `-n` | Results per page (API limit). Default 25. |
-| `--region` | | Macro-region(s), comma = OR (e.g. `eu,us`). |
+| `--region` | | Macro-region(s), comma = OR: `global`, `eu`, `uk`, `north_america`, `latam`, `apac`, `mena`, `africa`, `cis` (e.g. `eu,uk`). A country such as `us` goes in `--country`. |
 | `--country` | | ISO-3166 alpha-2 code(s). |
 | `--city` | | City name(s). |
 | `--seniority` | | Seniority level(s). |

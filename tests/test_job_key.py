@@ -278,6 +278,14 @@ class AuditCLI(unittest.TestCase):
         self.assertIn("entry is not an object: acme_soc-analyst", proc.stderr)
         self.assertNotIn("Traceback", proc.stderr)
 
+    def test_non_string_url_is_reported_not_a_traceback(self):
+        for bad in (123, ["https://example.com/job"], {"href": "x"}):
+            with self.subTest(url=bad):
+                proc = self.run_audit_raw({"seen": {"acme_soc-analyst": {"company": "Acme", "title": "SOC Analyst", "url": bad}}})
+                self.assertEqual(proc.returncode, 1)
+                self.assertIn("entry url is not a string: acme_soc-analyst", proc.stderr)
+                self.assertNotIn("Traceback", proc.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

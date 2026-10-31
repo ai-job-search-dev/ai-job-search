@@ -44,6 +44,25 @@ def _sections(text: str) -> dict[str, str]:
 
 
 class RankCommandSpec(unittest.TestCase):
+    def test_step2_dispatches_posting_scorer_and_returns_guard(self):
+        """Scoring agents read untrusted postings, so they run as the shipped
+        least-privilege `posting-scorer` definition (no Edit/Write), gate every
+        body with tools/posting_guard.py, and return the verdict as `guard`."""
+        text = COMMAND.read_text(encoding="utf-8")
+        sections = _sections(text)
+        step2 = sections["Step 2: Batch-Fetch and Score"]
+        self.assertIn("posting-scorer", step2, "Step 2 must dispatch the posting-scorer agent")
+        self.assertNotIn("general-purpose", step2, "Step 2 must no longer dispatch general-purpose agents")
+        self.assertIn("posting_guard", step2, "Step 2 must run the integrity gate on each fetched body")
+        self.assertIn('"guard"', step2, "Step 2's JSON must carry the gate verdict")
+        step4 = sections["Step 4: Update State"]
+        self.assertIn("guard", step4, "Step 4 must persist the gate verdict")
+        # Step 5 embeds an example report whose "## Job Ranking" line would split
+        # _sections early, so anchor on the next real heading instead.
+        step5 = re.search(r"## Step 5: Present the Shortlist(.*?)\n## Important Rules", text, re.DOTALL).group(1)
+        self.assertIn("guard", step5, "Step 5 must surface a flagged posting")
+        self.assertIn("⚠", step5)
+
     def test_step1_empty_candidates_still_sweeps_and_reports(self):
         """No new jobs must not bypass expiry maintenance of ranked jobs."""
         step1 = _sections(COMMAND.read_text(encoding="utf-8"))["Step 1: Load State"]

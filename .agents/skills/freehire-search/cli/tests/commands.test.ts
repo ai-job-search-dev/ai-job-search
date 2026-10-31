@@ -235,3 +235,20 @@ describe("runDetail (mocked fetch)", () => {
     expect(JSON.parse(err).code).toBe("NOT_FOUND");
   });
 });
+
+describe("detail input on the real handler path", () => {
+  test("a search result's own apply URL is rejected with BAD_ID before any request", async () => {
+    // Every freehire search result carries the employer's apply link in `url`
+    // (the fixture's is a Greenhouse board). Pasting it back into detail used
+    // to request /api/v1/jobs/1 and report NOT_FOUND for a URL that was never
+    // a freehire posting.
+    const mock = mockFetch(404, { error: "not found" });
+    const err = captureStderr();
+
+    const code = await runDetail({ id: job().url, format: "json" });
+
+    expect(code).toBe(1);
+    expect(mock.url()).toBe("");
+    expect(JSON.parse(err.get())).toMatchObject({ code: "BAD_ID" });
+  });
+});

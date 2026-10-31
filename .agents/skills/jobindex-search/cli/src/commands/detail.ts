@@ -1,6 +1,6 @@
 import { defineCommand, option } from "@bunli/core"
 import { z } from "zod"
-import { htmlFetch, writeError } from "../helpers.js"
+import { htmlFetch, stripInvisible, visibleHtml, writeError } from "../helpers.js"
 
 const BASE_URL = "https://www.jobindex.dk"
 
@@ -135,17 +135,13 @@ function jdBlockValue(html: string, cls: string): string | null {
   return m ? decodeHtmlEntities(stripTags(m[1])).replace(/\s+/g, " ").trim() || null : null
 }
 
-/** Drop head/script/style content so text scans never read CSS or JS. */
-function visibleHtml(html: string): string {
-  return html
-    .replace(/<head[\s\S]*?<\/head>/gi, "")
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<!--[\s\S]*?-->/g, "")
+/** Drop head content and unrendered markup so text scans never read CSS, JS or hidden text. */
+function visibleBody(html: string): string {
+  return visibleHtml(html.replace(/<head[\s\S]*?<\/head>/gi, ""))
 }
 
 function bodyText(html: string): string | null {
-  const text = decodeHtmlEntities(stripTags(visibleHtml(html).replace(/<(br|\/p|\/div|\/li|\/h[1-6])[^>]*>/gi, "\n")))
+  const text = decodeHtmlEntities(stripTags(visibleBody(html).replace(/<(br|\/p|\/div|\/li|\/h[1-6])[^>]*>/gi, "\n")))
     .split("\n")
     .map((line) => line.replace(/\s+/g, " ").trim())
     .filter(Boolean)
@@ -204,13 +200,13 @@ export function parseDetailPage(html: string, url: string, id: string): DetailRe
     deadline = toIsoDate(jdBlockValue(html, "jd-deadline"))
     employmentType = jdBlockValue(html, "jd-type")
     hours = jdBlockValue(html, "jd-workhours")
-    const desc = html.match(/class="jd-description"[^>]*>([\s\S]*?)<\/div>/i)
+    const desc = visibleHtml(html).match(/class="jd-description"[^>]*>([\s\S]*?)<\/div>/i)
     description = desc
       ? decodeHtmlEntities(stripTags(desc[1])).replace(/\s+/g, " ").trim() || null
       : null
   } else {
     // hr-manager-style widget: a rowheader label followed by the value span.
-    const workplace = visibleHtml(html).match(
+    const workplace = visibleBody(html).match(
       /class="workplace[^"]*"[\s\S]*?<span class="empty">([\s\S]*?)<\/span>/i,
     )
     location = workplace
@@ -220,7 +216,7 @@ export function parseDetailPage(html: string, url: string, id: string): DetailRe
     // Deadline: label + a real date within range, scanned only over visible
     // markup - the label also appears inside a CSS comment on these pages,
     // which the previous parser captured verbatim as the deadline.
-    const due = visibleHtml(html).match(
+    const due = visibleBody(html).match(
       /(?:Ansøgningsfrist|Application\s*due|Frist)[\s\S]{0,300}?(\d{2}-\d{2}-\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}\.?\s+[a-zæøå]+\s+\d{4})/i,
     )
     deadline = due ? toIsoDate(due[1]) : null
@@ -244,7 +240,7 @@ export function parseDetailPage(html: string, url: string, id: string): DetailRe
 
   const timeMatch = html.match(/<time[^>]+datetime="([^"]+)"/)
 
-  return {
+  return stripInvisible({
     id,
     title,
     company,
@@ -257,7 +253,7 @@ export function parseDetailPage(html: string, url: string, id: string): DetailRe
     applyUrl,
     url,
     description,
-  }
+  })
 }
 
 export const detail = defineCommand({

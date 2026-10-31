@@ -79,7 +79,8 @@ bun run src/cli.ts search [flags]
 | `--jobtitle-id` | number | — | Job title ID from `autocomplete` results |
 | `--municipality` | string | — | Municipality name, e.g. `Odense`, `København` |
 | `--zip` | string | — | Zip code, e.g. `5000` |
-| `--region` | string | — | Region name |
+| `--region` | string | — | Landsdel: a `locations` item with category `region`, e.g. `Sjælland`, `Østjylland` |
+| `--administrative-region` | string | — | Administrative region: a `locations` item with category `administrativeRegion`, e.g. `Region Midtjylland` |
 | `--job-type` | string | — | Comma-separated job types: `fuldtid,deltid,fleksjob,elev,studiejob,praktik` |
 | `--page` | number | `1` | Page number (30 items per page, server-enforced) |
 | `--limit` | number | — | Cap total results returned by CLI (client-side) |
@@ -420,7 +421,7 @@ bun run src/cli.ts locations --query "Sjælland"
 ]
 ```
 
-> **Note**: Returns `[]` when no locations match. The `value` field for municipalities is the display name (string); for zip codes it is the numeric string. Use `value` directly as `--municipality` or `--zip` in `search`.
+> **Note**: Returns `[]` when no locations match. The `value` field for municipalities is the display name (string); for zip codes it is the numeric string. Pass `value` to the `search` flag matching its `category`: `--municipality`, `--zip`, `--region` (category `region`, a landsdel such as `Sjælland`) or `--administrative-region` (category `administrativeRegion`, such as `Region Midtjylland`). Under any other flag the value matches no jobs.
 
 ---
 

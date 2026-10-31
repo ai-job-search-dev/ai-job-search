@@ -274,6 +274,14 @@ class TestExtractorFailure(unittest.TestCase):
     send /apply chasing a phantom hole, so it has to land on the skip path.
     """
 
+    def setUp(self):
+        super().setUp()
+        verify_layout.find_pdftotext.cache_clear()
+
+    def tearDown(self):
+        super().tearDown()
+        verify_layout.find_pdftotext.cache_clear()
+
     def test_pdftotext_without_bbox_raises_a_skippable_error(self):
         failure = subprocess.CalledProcessError(99, "pdftotext", stderr="Error: unknown flag")
         with patch("tools.verify_layout.shutil.which", return_value="/usr/bin/pdftotext"), patch(
@@ -281,6 +289,127 @@ class TestExtractorFailure(unittest.TestCase):
         ):
             with self.assertRaisesRegex(RuntimeError, "bounding boxes"):
                 parse_pdf(Path("cv/main_example.pdf"))
+
+    def test_first_candidate_lacks_bbox_and_second_has_it(self):
+        """When the first pdftotext candidate lacks -bbox (e.g. Git for Windows's xpdf)
+        and a subsequent candidate has it (e.g. Poppler), the tool walks PATH, probes
+        with -h, and runs the working candidate with its full path (#655).
+        """
+        def fake_which(cmd, path=None):
+            if path == "/git/bin":
+                return "/git/bin/pdftotext"
+            if path == "/miktex/bin":
+                return "/miktex/bin/pdftotext"
+            return None
+
+        def fake_run(cmd, *args, **kwargs):
+            binary = cmd[0]
+            if "-h" in cmd:
+                if binary == "/git/bin/pdftotext":
+                    return subprocess.CompletedProcess(cmd, 99, stdout="", stderr="Usage: pdftotext ...")
+                if binary == "/miktex/bin/pdftotext":
+                    return subprocess.CompletedProcess(
+                        cmd, 99, stdout="", stderr="Usage: pdftotext ...\n  -bbox : output bounding box"
+                    )
+            if "-bbox" in cmd:
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout='<page width="100" height="100"></page>', stderr=""
+                )
+            raise AssertionError(f"unexpected command: {cmd}")
+
+        with patch("tools.verify_layout.os.get_exec_path", return_value=["/git/bin", "/miktex/bin"]), patch(
+            "tools.verify_layout.shutil.which", side_effect=fake_which
+        ), patch("tools.verify_layout.subprocess.run", side_effect=fake_run) as mock_run:
+            pages = parse_pdf(Path("cv/main_example.pdf"))
+            self.assertEqual(len(pages), 1)
+            bbox_calls = [call for call in mock_run.call_args_list if "-bbox" in call[0][0]]
+            self.assertEqual(len(bbox_calls), 1)
+            self.assertEqual(bbox_calls[0][0][0][0], "/miktex/bin/pdftotext")
+
+    def test_no_candidate_has_bbox_keeps_skip_path(self):
+        """When no candidate on PATH supports -bbox, the check skips with today's message (#655)."""
+        def fake_which(cmd, path=None):
+            if path == "/git/bin":
+                return "/git/bin/pdftotext"
+            if path == "/other/bin":
+                return "/other/bin/pdftotext"
+            return None
+
+        failure = subprocess.CalledProcessError(99, "/git/bin/pdftotext", stderr="Error: unknown flag")
+
+        def fake_run(cmd, *args, **kwargs):
+            if "-h" in cmd:
+                return subprocess.CompletedProcess(cmd, 99, stdout="", stderr="Usage: pdftotext (xpdf, no bbox)")
+            if "-bbox" in cmd:
+                raise failure
+            raise AssertionError(f"unexpected command: {cmd}")
+
+        with patch("tools.verify_layout.os.get_exec_path", return_value=["/git/bin", "/other/bin"]), patch(
+            "tools.verify_layout.shutil.which", side_effect=fake_which
+        ), patch("tools.verify_layout.subprocess.run", side_effect=fake_run):
+            with self.assertRaisesRegex(RuntimeError, "bounding boxes") as ctx:
+                parse_pdf(Path("cv/main_example.pdf"))
+            message = str(ctx.exception)
+            self.assertIn("xpdf", message)
+            self.assertIn("Poppler aborted", message)
+
+    def test_find_pdftotext_deduplicates_path_candidates(self):
+        """Duplicate entries or multiple PATH directories resolving to the same binary
+        are probed only once (#655).
+        """
+        def fake_which(cmd, path=None):
+            return "/same/pdftotext"
+
+        h_calls = []
+
+        def fake_run(cmd, *args, **kwargs):
+            if "-h" in cmd:
+                h_calls.append(cmd[0])
+                return subprocess.CompletedProcess(
+                    cmd, 99, stdout="", stderr="Usage: pdftotext ...\n  -bbox : output bounding box"
+                )
+            raise AssertionError(f"unexpected command: {cmd}")
+
+        with patch("tools.verify_layout.os.get_exec_path", return_value=["/bin1", "/bin2", "/bin3"]), patch(
+            "tools.verify_layout.shutil.which", side_effect=fake_which
+        ), patch("tools.verify_layout.subprocess.run", side_effect=fake_run):
+            selected = verify_layout.find_pdftotext()
+            self.assertEqual(selected, "/same/pdftotext")
+            self.assertEqual(h_calls, ["/same/pdftotext"])
+
+    def test_find_pdftotext_caches_resolution(self):
+        """Resolved binary is cached at module level so repeated parse_pdf calls
+        avoid re-probing PATH candidates with subprocesses (#655).
+        """
+        def fake_which(cmd, path=None):
+            return "/miktex/bin/pdftotext"
+
+        h_calls = []
+        bbox_calls = []
+
+        def fake_run(cmd, *args, **kwargs):
+            binary = cmd[0]
+            if "-h" in cmd:
+                h_calls.append(binary)
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout="Usage: pdftotext ...\n  -bbox : output bounding box", stderr=""
+                )
+            if "-bbox" in cmd:
+                bbox_calls.append(binary)
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout='<page width="100" height="100"></page>', stderr=""
+                )
+            raise AssertionError(f"unexpected command: {cmd}")
+
+        with patch("tools.verify_layout.os.get_exec_path", return_value=["/miktex/bin"]), patch(
+            "tools.verify_layout.shutil.which", side_effect=fake_which
+        ), patch("tools.verify_layout.subprocess.run", side_effect=fake_run):
+            pages1 = parse_pdf(Path("cv/main_example.pdf"))
+            pages2 = parse_pdf(Path("cv/main_example.pdf"))
+            self.assertEqual(len(pages1), 1)
+            self.assertEqual(len(pages2), 1)
+            self.assertEqual(h_calls, ["/miktex/bin/pdftotext"])
+            self.assertEqual(bbox_calls, ["/miktex/bin/pdftotext", "/miktex/bin/pdftotext"])
 
     def test_poppler_abort_on_empty_info_string_names_that_cause_too(self):
         """Poppler 26.0x before 26.05 aborts -bbox on an empty Info-dict string, e.g.

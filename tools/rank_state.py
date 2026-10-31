@@ -45,6 +45,7 @@ import sys
 import tempfile
 import unicodedata
 from datetime import date, datetime, timedelta, timezone
+from fractions import Fraction
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -63,6 +64,10 @@ ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # owns the set; tests/test_rank_command.py asserts rank.md's JSON contract
 # names exactly these, so the spec and the tool cannot drift apart.
 AGENT_STATUSES = ("scored", "expired", "unreachable")
+
+# The values the two veto gates may take (rank.md Step 2). Step 5's veto is an
+# exact match on "FAIL", so any other spelling would shortlist a deal-breaker.
+GATE_VERDICTS = ("PASS", "FAIL", "FLAG")
 
 # A posting that could not be fetched is `unreachable`, not `expired`, and is
 # retried on later runs (#534). It gives up to `expired` only after this many
@@ -149,11 +154,16 @@ def tracker_pairs(path: Path) -> set[tuple[str, str]]:
     import csv
 
     pairs = set()
-    with path.open(encoding="utf-8-sig", newline="") as fh:
-        for row in csv.DictReader(fh):
-            company, role = norm(row.get("company")), norm(row.get("role"))
-            if company:
-                pairs.add((company, role))
+    try:
+        with path.open(encoding="utf-8-sig", newline="") as fh:
+            for row in csv.DictReader(fh):
+                company, role = norm(row.get("company")), norm(row.get("role"))
+                if company:
+                    pairs.add((company, role))
+    except UnicodeDecodeError:
+        # A spreadsheet's plain "CSV" save writes the ANSI code page (cp1252 on
+        # most Western installs), so any accented company name stops decoding.
+        sys.exit(f"{path} is not UTF-8 text - re-save it as CSV UTF-8")
     return pairs
 
 
@@ -225,7 +235,9 @@ def cmd_candidates(args) -> int:
 def cmd_sweep(args) -> int:
     doc, seen = load_state(args.state)
     today = args.today
-    exclude = {k for k in (args.exclude or "").split(",") if k}
+    # "a_b, c_d" is as natural a comma-separated list as "a_b,c_d"; keys never
+    # carry surrounding whitespace, so a space must not un-exclude a key.
+    exclude = {k.strip() for k in (args.exclude or "").split(",") if k.strip()}
 
     expired, closing, unparseable, checked = [], [], [], 0
     for key, entry in seen.items():
@@ -273,15 +285,20 @@ def cmd_sweep(args) -> int:
 
 
 def overall_score(scores: dict) -> int:
-    total = 0.0
+    if not isinstance(scores, dict):
+        raise ValueError("scores must be an object")
+    total = Fraction(0)
     for dim, weight in WEIGHTS.items():
         value = scores.get(dim)
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ValueError(f"missing or non-numeric score '{dim}'")
         if not 0 <= value <= 100:
             raise ValueError(f"score '{dim}' must be finite and between 0 and 100")
-        total += float(value) * weight
-    return int(total + 0.5)
+        # Scores and documented percentage weights are decimal quantities.
+        # Binary float summation can turn 59.5 into 59.49999999999999 and drop
+        # an otherwise valid result into the lower verdict band.
+        total += Fraction(str(value)) * Fraction(str(weight))
+    return int(total + Fraction(1, 2))
 
 
 def band(score: int) -> str:
@@ -306,8 +323,11 @@ def cmd_apply(args) -> int:
 
     rows, expired, unreachable, gave_up, errors = [], [], [], [], []
     for result in results:
+        if not isinstance(result, dict):
+            errors.append({"key": None, "error": "result is not an object"})
+            continue
         key = result.get("key")
-        entry = seen.get(key)
+        entry = seen.get(key) if isinstance(key, str) else None
         if entry is None:
             errors.append({"key": key, "error": "no such key in seen_jobs.json"})
             continue
@@ -379,6 +399,15 @@ def cmd_apply(args) -> int:
         except ValueError as exc:
             errors.append({"key": key, "error": str(exc)})
             continue
+        bad_gate = next(
+            (f for f in ("location_verdict", "language_gate") if result.get(f) and result[f] not in GATE_VERDICTS),
+            None,
+        )
+        if bad_gate:
+            errors.append(
+                {"key": key, "error": f"unknown {bad_gate} {result[bad_gate]!r}; expected one of {', '.join(GATE_VERDICTS)}"}
+            )
+            continue
 
         # A missing deadline from the fresh fetch is not a correction to the
         # stored date. Scored keys are excluded from the later sweep, so apply
@@ -419,6 +448,24 @@ def cmd_apply(args) -> int:
             value = result.get(field)
             if isinstance(value, list):
                 entry[field] = [str(b) for b in value][:3]
+        # The scoring agent's posting_guard verdict line ("clean" or the ⚠ line).
+        # Additive and optional: an agent on an older prompt returns none, and
+        # nothing is written. Stored so a later reader can see why a row carried
+        # a marker without re-fetching the posting.
+        # Normalised so Step 5's "anything other than clean" rule holds whether
+        # the agent returned "clean" or the gate's first line verbatim: any clean
+        # verdict (with or without its context parenthetical) stores as "clean";
+        # a ⚠ verdict stores without the "posting_guard:" prefix. A rescoring
+        # result without a guard drops a stale one - absence means "not run",
+        # and last run's verdict would mislabel this run's fetch.
+        guard = result.get("guard")
+        if isinstance(guard, str) and guard.strip():
+            text = guard.strip()
+            if text.lower().startswith("posting_guard:"):
+                text = text[len("posting_guard:"):].strip()
+            entry["guard"] = "clean" if text.lower().startswith("clean") else text[:200]
+        else:
+            entry.pop("guard", None)
 
         rows.append(
             {
@@ -437,6 +484,7 @@ def cmd_apply(args) -> int:
                 "urgent": bool(parsed and today <= parsed <= today + timedelta(days=URGENT_DAYS)),
                 "strengths": entry.get("strengths", []),
                 "gaps": entry.get("gaps", []),
+                "guard": entry.get("guard"),
             }
         )
 

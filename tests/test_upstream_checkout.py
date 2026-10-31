@@ -16,7 +16,7 @@ except ImportError:  # `python -m unittest discover -s tests` imports test modul
     import _upstream
     from _upstream import is_upstream_checkout
 
-UPSTREAM = "MadsLorentzen/ai-job-search"
+UPSTREAM = "ai-job-search-dev/ai-job-search"
 
 
 def _no_github_env(testcase):
@@ -81,16 +81,16 @@ class UpstreamCheckoutTests(unittest.TestCase):
 
     def test_origin_url_forms(self):
         cases = [
-            ("https://github.com/MadsLorentzen/ai-job-search", True),
-            ("https://github.com/MadsLorentzen/ai-job-search.git", True),
-            ("git@github.com:MadsLorentzen/ai-job-search", True),
-            ("git@github.com:MadsLorentzen/ai-job-search.git", True),
-            ("ssh://git@github.com/MadsLorentzen/ai-job-search.git", True),
-            ("ssh://git@github.com/MadsLorentzen/ai-job-search", True),
+            ("https://github.com/ai-job-search-dev/ai-job-search", True),
+            ("https://github.com/ai-job-search-dev/ai-job-search.git", True),
+            ("git@github.com:ai-job-search-dev/ai-job-search", True),
+            ("git@github.com:ai-job-search-dev/ai-job-search.git", True),
+            ("ssh://git@github.com/ai-job-search-dev/ai-job-search.git", True),
+            ("ssh://git@github.com/ai-job-search-dev/ai-job-search", True),
             ("ssh://git@github.com/someone-else/ai-job-search.git", False),
             ("https://github.com/someone-else/ai-job-search.git", False),
             ("git@github.com:someone-else/ai-job-search", False),
-            ("https://gitlab.com/MadsLorentzen/ai-job-search.git", False),
+            ("https://gitlab.com/ai-job-search-dev/ai-job-search.git", False),
         ]
         for url, expected in cases:
             with self.subTest(url=url):

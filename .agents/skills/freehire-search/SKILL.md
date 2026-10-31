@@ -81,6 +81,7 @@ bun run .agents/skills/freehire-search/cli/src/cli.ts search [-q "<keywords>"] [
 
 Key flags:
 - `--query <text>` / `-q <text>` — keyword search (title, skill, role). Full-text; optional.
+  Supports `OR` and `title:` (see "Query operators" below).
 - `--jobage <days>` — posted within N days (maps to `posted_within_days`).
 - `--page <n>` — 1-indexed page. Default 1.
 - `--limit <n>` / `-n <n>` — results per page (API limit). Default 25.
@@ -88,6 +89,26 @@ Key flags:
 - `--description-format markdown|text|html` — how each result's full description is
   rendered. Default `markdown`, which keeps the posting's headings and requirement
   lists intact. `json` output only.
+
+**Query operators.** `-q` understands two operators; the CLI passes the text through
+unchanged and the API parses it:
+
+- `OR` between alternatives returns jobs matching **any** of them, e.g.
+  `-q "golang OR rust"`. Uppercase only: a lowercase `or` is an ordinary search
+  word. Plain space-separated words are **not** a union (`-q "golang rust"` returns
+  fewer jobs than `-q golang` alone), so use `OR` for synonyms and alternative stacks
+  instead of running one search per keyword. At most 5 alternatives; a 6th is
+  rejected with an error. An `OR` inside double quotes is literal text.
+- A leading `title:` restricts that alternative to the job **title**, e.g.
+  `-q "title:staff engineer"` skips postings that merely mention the words in their
+  description. It applies per alternative, so repeat it on each one:
+  `-q "title:staff engineer OR title:principal engineer"`. It only counts at the start
+  of an alternative; `title:` in the middle is searched as text. Quotes work inside it:
+  `-q 'title:"staff engineer"'` matches the phrase.
+
+Facet flags, `--jobage`, `--page` and `--limit` apply to the combined result: every
+alternative is filtered the same way, and a job matching several alternatives
+appears once.
 
 **Search results already carry the full description.** This skill queries freehire's
 agent search endpoint, which replaces the index's truncated preview with each
@@ -101,14 +122,14 @@ field and drops the bodies entirely (fetch a shortlisted job's body with
 `detail`, or re-run the search without the flag).
 
 Facet filters (values come from freehire's controlled vocabularies; comma-separate for OR within a facet):
-- `--region <codes>` — macro-region, e.g. `global`, `eu`, `us`, `apac`, `latam`, `cis`. `--region eu,us`. Use `none` to match jobs whose region could **not** be resolved (see "Partial data" below).
+- `--region <codes>` - macro-region: `global`, `eu`, `uk`, `north_america`, `latam`, `apac`, `mena`, `africa`, `cis`. `--region eu,uk`. `eu` does not include the UK; add `uk` for Europe as a whole. For a single country use `--country` instead - `us` is a country code, not a region, and `--region us` matches nothing. `--region`, `--country` and `--city` form one OR-group, so `--country us` alone scopes to the US. Use `none` to match jobs whose region could **not** be resolved (see "Partial data" below).
 - `--country <codes>` — ISO-3166 alpha-2, e.g. `--country DE,GB`
 - `--city <names>` — city name(s), e.g. `--city Berlin`
 - `--seniority <levels>` — `junior`, `middle`, `senior`, `staff`, `principal`, `lead`, …
 - `--category <cats>` — `backend`, `frontend`, `fullstack`, `devops`, `ml_ai`, `qa`, …
 - `--skill <names>` — canonical skill(s), e.g. `--skill go,kubernetes`
 - `--company <slug>` — company slug (from a result's `company_slug`)
-- `--remote <mode>` — `remote` | `hybrid` | `onsite` (`work_mode` facet)
+- `--remote <mode>` — `remote` | `hybrid` | `onsite` (`work_mode` facet). A bare `--remote` means `remote`. Comma-separate for OR (`remote,hybrid`; `on-site` normalises to `onsite`). An unknown item exits 1 with `BAD_ARG`.
 - `--facet <key=value>` — any other facet param (repeatable), e.g. `--facet salary_min=100000`
 
 > **Location is a facet, not free text.** Unlike `linkedin-search`'s `--location`,
@@ -124,7 +145,7 @@ bun run .agents/skills/freehire-search/cli/src/cli.ts detail <slug|url> [--forma
 ```
 
 `slug` is the `id` from a `search` result (e.g. `golang-zensar-2bxu6dxm`). You may
-also pass a full `https://freehire.me/jobs/<slug>` URL. Returns the full (HTML-stripped)
+also pass a full `https://freehire.me/jobs/<slug>` URL. A URL on any other host - including the employer apply link a search result's `url` field carries - is rejected with `BAD_ID` before any request. Returns the full (HTML-stripped)
 description, skills, region/country, and — when the posting is enriched — seniority,
 category, employment type, and salary. `salary` keeps its period when freehire records
 one (`INR 300000–300000/year`, `INR 12000/month`); compare pay only in one period.
@@ -138,6 +159,12 @@ just returned only re-reads a description you already have.
 ```bash
 # Senior backend roles, table view
 bun run .agents/skills/freehire-search/cli/src/cli.ts search -q "backend engineer" --seniority senior --limit 10 --format table
+
+# Go or Rust roles, one search (OR must be uppercase)
+bun run .agents/skills/freehire-search/cli/src/cli.ts search -q "golang OR rust" --remote remote --format table
+
+# Staff or principal titles only, not postings that mention them in passing
+bun run .agents/skills/freehire-search/cli/src/cli.ts search -q "title:staff engineer OR title:principal engineer" --format table
 
 # Remote React roles in the EU
 bun run .agents/skills/freehire-search/cli/src/cli.ts search -q "react" --remote remote --region eu --format table
@@ -168,6 +195,11 @@ result carries at least `id` (the freehire slug), `title`, `company`, `location`
 `date`, `url`, and `description` (missing values are `null`). `table` and `plain`
 omit the description — it would swamp a scannable list. All errors are written to
 **stderr** as `{ "error": "...", "code": "..." }` and the process exits with code `1`.
+
+One diagnostic is not an error: a `--region` (or `--facet regions=`) value outside the
+documented vocabulary - `us` is a country code, not a region - prints
+`{ "warning": "...", "code": "REGION_VALUE_UNKNOWN" }` on **stderr** after the results,
+and the process still exits `0` with stdout a valid JSON document.
 
 ## Partial data
 

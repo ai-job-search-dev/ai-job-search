@@ -8,9 +8,19 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+try:
+    from tests._bash import find_bash
+except ImportError:  # unittest discover -s tests imports modules top-level
+    from _bash import find_bash
+
 COMMAND = Path(__file__).resolve().parent.parent / ".claude/commands/reset.md"
 FOLDERS = ("cv", "linkedin", "diplomas", "references", "projects", "postings", "applications")
-BASH = shutil.which("bash")
+BASH = find_bash()
+# The block is POSIX shell by design: Claude Code's Bash tool runs the user's
+# shell, which is zsh on macOS, and the bash-only `shopt` it used to carry
+# exited 127 there before deleting anything. Replay it under every shell on
+# this machine, not only bash.
+SHELLS = [path for path in (BASH, shutil.which("zsh"), shutil.which("sh"), shutil.which("dash")) if path]
 
 
 def symlinks_available():
@@ -42,6 +52,11 @@ class ResetDocuments(unittest.TestCase):
         return re.search(r"```bash\n(.*?)```", section, re.S).group(1)
 
     def run_reset(self, populated):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                self.run_reset_with(shell, populated)
+
+    def run_reset_with(self, shell, populated):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             documents = root / "documents"
@@ -60,7 +75,7 @@ class ResetDocuments(unittest.TestCase):
                     nested = folder / "project-or-application"
                     nested.mkdir()
                     (nested / "README.md").write_text("A nested document\n")
-            result = subprocess.run([BASH, "-c", self.reset_script()], cwd=root, capture_output=True, text=True)
+            result = subprocess.run([shell, "-c", self.reset_script()], cwd=root, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stderr, "")
             self.assertEqual(readme.read_text(), "Keep these framework instructions.\n")
@@ -75,6 +90,37 @@ class ResetDocuments(unittest.TestCase):
 
     def test_empty_document_folders_remain_usable(self):
         self.run_reset(populated=False)
+
+    def test_a_missing_folder_is_skipped_and_the_rest_are_still_cleared(self):
+        # `find` on a missing folder exits 1, and under `set -e` that stopped
+        # the loop there, leaving every later folder uncleared; master under
+        # bash skipped the folder. The block must skip it too.
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                with TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    documents = root / "documents"
+                    documents.mkdir()
+                    (documents / "README.md").write_text("Keep.\n")
+                    present = [name for name in FOLDERS if name != "diplomas"]
+                    for name in present:
+                        folder = documents / name
+                        folder.mkdir()
+                        (folder / ".gitkeep").write_text("Keep.\n")
+                        (folder / "summary.md").write_text("A document\n")
+                    result = subprocess.run([shell, "-c", self.reset_script()], cwd=root, capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stderr, "")
+                    for name in present:
+                        self.assertEqual([path.name for path in (documents / name).iterdir()], [".gitkeep"], name)
+                    self.assertFalse((documents / "diplomas").exists())
+
+    def test_block_uses_no_bash_only_builtins(self):
+        # `shopt`, `declare`, `[[` and brace expansion are what break under
+        # zsh/sh; a POSIX block needs none of them.
+        script = self.reset_script()
+        for bashism in ("shopt", "declare ", "[[", "{cv,"):
+            self.assertNotIn(bashism, script, f"the documents reset block must stay POSIX: found {bashism!r}")
 
     @unittest.skipUnless(SYMLINKS, "requires filesystem symlinks and Windows symlink privilege")
     def test_symlinked_roots_stop_before_any_deletion(self):

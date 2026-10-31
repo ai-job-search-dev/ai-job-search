@@ -64,11 +64,11 @@ Query parameters used by the skill:
 
 | Param | Maps to CLI flag | Notes |
 |-------|------------------|-------|
-| `q` | `--query` / `-q` | Keyword full-text query. |
+| `q` | `--query` / `-q` | Keyword full-text query. Uppercase `OR` separates up to 5 alternatives (more is a 400); a leading `title:` restricts an alternative to the title. |
 | `limit` | `--limit` / `-n` | Page size. Default 25 in the CLI. |
 | `offset` | (derived) | `offset = (page - 1) * limit`. |
 | `posted_within_days` | `--jobage` | Restrict to postings from the last N days. |
-| `regions` | `--region` | Repeatable; OR within the facet. Values like `global`, `eu`, `us`, `apac`, `latam`, `cis`. |
+| `regions` | `--region` | Repeatable; OR within the facet. Values: `global`, `eu`, `uk`, `north_america`, `latam`, `apac`, `mena`, `africa`, `cis`. `us` is a country (`countries`), not a region. |
 | `countries` | `--country` | Repeatable; ISO-3166 alpha-2 (lowercased). |
 | `cities` | `--city` | Repeatable; display-name city. |
 | `seniority` | `--seniority` | Repeatable; `junior`, `middle`, `senior`, `staff`, … |
@@ -138,7 +138,8 @@ points users to (`?q=<role>` scopes the counts). Example:
   serves HTML, which `cleanHtml` (`cli/src/helpers.ts`) strips into readable text.
   Search descriptions arrive already rendered by the API and are passed through
   verbatim — stripping them again would undo the Markdown structure.
-- Fetch sends `User-Agent: MadsLorentzen/ai-job-search/1.0 (+https://github.com/MadsLorentzen/ai-job-search; freehire-search)`
+- Fetch sends `User-Agent: ai-job-search-dev/ai-job-search/1.0 (freehire-search)` (no contact
+  URL: a host literal in `cli/src` makes `/apply` treat that host as this portal's board)
   and `Accept: application/json`, and uses exponential backoff with jitter on 429/5xx (max 6 retries). A connection error (API
   unreachable) fails fast with a clear message — no retry, since it is not
   transient server load — which is the graceful-degradation contract: an outage

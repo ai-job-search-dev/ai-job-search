@@ -2,7 +2,7 @@
 
 `search-cards.json` stores the HTML string for the first two verbatim `<li>` cards from a real
 LinkedIn guest search response captured by **portapulito** through the CLI's
-`htmlFetch` on 2026-07-14 and published in [PR #153](https://github.com/MadsLorentzen/ai-job-search/pull/153).
+`htmlFetch` on 2026-07-14 and published in [PR #153](https://github.com/ai-job-search-dev/ai-job-search/pull/153).
 That PR was closed as an accidental personalized-fork submission, not merged.
 
 Source: `.agents/skills/linkedin-search/cli/test/__fixtures__/search-list.html`
