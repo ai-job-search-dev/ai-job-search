@@ -409,10 +409,22 @@ def cmd_apply(args) -> int:
             )
             continue
 
+        # Step 2's contract: "deadline": "YYYY-MM-DD" | null. A truthy value
+        # that is neither ("ASAP", an ISO timestamp, a number) is a contract
+        # error like a misspelt status: it must not mask the stored date in
+        # the expiry check below (parse_iso would read it as "no deadline" and
+        # rank a job whose stored date has passed), and it must never be
+        # written, or apply becomes the writer of the junk rule 6's defensive
+        # parse exists to survive and the real closing date is gone.
+        fresh_deadline = result.get("deadline")
+        if fresh_deadline not in (None, "") and parse_iso(fresh_deadline) is None:
+            errors.append({"key": key, "error": f"deadline {fresh_deadline!r} is not YYYY-MM-DD or null"})
+            continue
+
         # A missing deadline from the fresh fetch is not a correction to the
         # stored date. Scored keys are excluded from the later sweep, so apply
         # must retire a passed deadline before updating any ranking metadata.
-        parsed = parse_iso(result.get("deadline") or entry.get("deadline"))
+        parsed = parse_iso(fresh_deadline or entry.get("deadline"))
         if parsed is not None and parsed < today:
             entry["status"] = "expired"
             for field in (*RETRY_FIELDS, "expired_reason"):
