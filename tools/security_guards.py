@@ -60,6 +60,7 @@ ALLOWED_PERMISSIONS = {
     "Bash(python3 tools/verify_pdf.py:*)",
     "Bash(python tools/verify_layout.py:*)",
     "Bash(python3 tools/verify_layout.py:*)",
+    "Bash(transcribe:*)",
     "Bash(pdftotext:*)",
 }
 
