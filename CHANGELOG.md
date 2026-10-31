@@ -65,6 +65,12 @@ per-file diff commands.
   entries; `history` gives the portal health check its prior-entry count. The helper gets path-scoped allow
   entries in `.claude/settings.json` and the guard allowlist, like `rank_state.py`.
 
+- **`/notion-sync` re-keys a row matched by URL when its Key has drifted** (`.claude/commands/notion-sync.md`,
+  `tests/test_notion_sync_command.py`) - closes the gap left by `tools/job_key.py --audit --migrate` (#637):
+  Step 4 upserted on `Key` alone, so the next sync created a duplicate row for every migrated key. On a `Key`
+  miss it now looks for a keyed row with exactly the same `URL`; one match gets the new `Key` and is updated,
+  several are reported and left untouched, none creates as before. Rows without a `Key` stay invisible.
+
 ### Fixed
 
 - **The four `@bunli/core` portal CLIs typecheck on a clean install again** (#768, closes #765,

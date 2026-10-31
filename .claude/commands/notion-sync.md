@@ -89,10 +89,13 @@ Validate the cheap, local precondition before creating anything external. A run 
 For each job in the sync set:
 
 1. Query the database for a page whose `Key` equals the job's key.
-2. **No match** → if the job is an expired-only entry, skip it - do not create a page or write a body. Otherwise, create the page with all properties from the Step 3 table, then write its body (Step 5).
-3. **Match, expired-only entry** → update **Status only** to `expired`. Do not update other properties or touch the page body.
+2. **No match on `Key`** → fall back to the posting URL before creating anything. A job's key can change after its page was created (a key migration such as `tools/job_key.py --audit --migrate` renames keys in `job_scraper/seen_jobs.json`), and creating on a key miss would give that job a second row. Query the database for pages whose `URL` equals the job's URL exactly (the same string, not a similar one) **and** whose `Key` is non-empty - rows without a `Key` stay invisible here too (item 5). Skip the lookup when the job has no URL (e.g. a tracker-only row).
+   - **Exactly one URL match** → re-key it: set its `Key` to the job's key, then handle it as a match - item 3 for an expired-only entry, item 4 otherwise. If the row's current `Key` is the key of another job in this sync set, it is not drifted; treat it like a multiple match instead.
+   - **More than one URL match** → create nothing and update nothing for this job; report it with the `Key` of every matching row so the user can resolve the duplicates by hand.
+   - **No URL match** → if the job is an expired-only entry, skip it - do not create a page or write a body. Otherwise, create the page with all properties from the Step 3 table, then write its body (Step 5).
+3. **Match, expired-only entry** → update **Status only** to `expired` (plus `Key` when item 2 re-keyed the row). Do not update other properties or touch the page body.
 4. **Match, any other effective status** → update **properties only**: Status, Score, Verdict, Deadline, Ranked, Applied on, Channel, CV file, Cover letter. Properties are the always-current surface (bodies are write-once), so tracker updates recorded by `/outcome` reach the destination exclusively through them. Do not touch the page body - the user may have added their own notes there, and clobbering them breaks trust in the whole view. (`--rebuild` is the sole exception for non-expired jobs.)
-5. Never delete or archive pages, even for jobs that turned `expired` - set Status to `expired` instead. Rows the user added to the database by hand (no `Key` value) are invisible to this command.
+5. Never delete or archive pages, even for jobs that turned `expired` - set Status to `expired` instead. Rows the user added to the database by hand (no `Key` value) are invisible to this command, including to the URL fallback in item 2, which only considers rows that already carry a `Key`.
 
 **Normalise the Status value before writing.** The tracker may hold legacy space spellings (`no response`, `offer declined`) from before the canonical forms were locked. Map them to `no_response` / `offer_declined` per the **Tracker status vocabulary** in `/outcome` before setting Status on create or update - never push a space form to Notion, which would auto-create a separate select option per unique string. Pre-existing space-form options in an existing database simply go unused; Notion never auto-removes select options.
 
@@ -119,15 +122,16 @@ Keep the page under ~40 blocks; this is a briefing, not a mirror of the posting.
 ## Pipeline Sync - YYYY-MM-DD
 
 Database: <database_url>
-Synced <N> jobs (threshold: score ≥ <T>): <C> created, <U> updated, <S> unchanged, <F> failed.
+Synced <N> jobs (threshold: score ≥ <T>): <C> created, <U> updated, <R> re-keyed by URL, <S> unchanged, <A> skipped (URL matched several rows), <F> failed.
 
 | | Title | Company | Status | Score |
 |---|-------|---------|--------|-------|
 | ✚ | ... | ... | ranked | 78 |
 | ↻ | ... | ... | interview | 71 |
+| ⇄ | ... | ... | applied | 74 |
 ```
 
-List failures with their error and the suggestion to re-run - the upsert is idempotent, so a re-run only touches what failed. Update `last_sync` in the sync-state file.
+A re-keyed row (⇄, Step 4.2) counts under re-keyed, not updated. List each skipped job with its URL and the `Key` of every row that URL matched. List failures with their error and the suggestion to re-run - the upsert is idempotent, so a re-run only touches what failed. Update `last_sync` in the sync-state file.
 
 Remind the user once (first run only): the repo files remain the source of truth - edits made in the destination never flow back, and `/outcome` is still how application results get recorded.
 
@@ -136,7 +140,7 @@ Remind the user once (first run only): the repo files remain the source of truth
 ## Important Rules
 
 1. **One-way, always.** Destination content never flows back into `job_scraper/seen_jobs.json`, the tracker, or any repo file. This command reads repo state and writes the destination - both repo files are read-only to it, and the gitignored sync-state file is its **only** local write.
-2. **Idempotent upsert on `Key`.** Re-running creates nothing twice; matching is on the stored key, never on fuzzy title comparison.
+2. **Idempotent upsert on `Key`.** Re-running creates nothing twice; matching is on the stored key, never on fuzzy title comparison. The one fallback, when no row has the key, is an exact match on the `URL` property of a row that has a `Key` (Step 4.2) - still an exact string match, not a fuzzy one - and it rewrites that row's `Key`, so the next run matches on the key again.
 3. **Page bodies are write-once.** Property updates keep rows current; bodies belong to the user after creation. Only `--rebuild` may rewrite them, and it says so before doing it.
 4. **Never fabricate.** A dead posting URL gets an explicit "unavailable" note, not a reconstruction. Every page claim traces to stored state or fetched content.
 5. **Job data only.** The candidate profile, behavioral notes, and evaluation framework never sync - this is a pipeline view, not a profile export.
