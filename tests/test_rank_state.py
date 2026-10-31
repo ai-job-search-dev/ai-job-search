@@ -4,7 +4,7 @@
 select candidates, then emit it back to record scores. That cost the whole
 backlog per run no matter how few jobs were being scored, and it grew for the
 life of the workspace. These pin the behaviour the three subcommands took
-over: selection matches Step 1's existing rules, the sweep matches rule 6
+over: selection follows Step 1's status/tracker/focus rules, the sweep matches rule 6
 exactly (including its two defensive-parse edge cases), and the write-back
 matches Step 4's existing rules exactly - the location_verdict legacy
 migration, the deadline null-is-not-a-correction rule, and verbatim
@@ -99,6 +99,47 @@ class Candidates(RankStateCase):
         out = self.run_tool("candidates", "--limit", "0", "--tracker", str(self.tmp / "none.csv"))
         self.assertEqual(len(out["selected"]), 15)
         self.assertEqual(out["deferred"], 0)
+
+    def test_old_unreachable_jobs_do_not_hide_new_jobs(self):
+        # /rank retries failed fetches on later runs. Ten old failures ahead
+        # of a fresh posting used to occupy the entire default batch forever
+        # until the 48-hour give-up floor elapsed.
+        self.write_state({
+            **{f"retry{i}": entry(title=f"Retry {i}", status="unreachable", fetch_attempts=1)
+               for i in range(10)},
+            "fresh": entry(title="Fresh role", deadline="2026-09-04"),
+        })
+        out = self.run_tool("candidates", "--limit", "10", "--tracker", str(self.tmp / "none.csv"))
+        self.assertIn("fresh", [row["key"] for row in out["selected"]])
+        self.assertEqual(len(out["selected"]), 10)
+        self.assertEqual(out["deferred"], 1)
+
+    def test_retries_still_get_a_slot_during_a_continuous_new_backlog(self):
+        self.write_state({
+            **{f"new{i}": entry(title=f"New {i}") for i in range(12)},
+            "retry": entry(title="Retry", status="unreachable", fetch_attempts=1),
+        })
+        out = self.run_tool("candidates", "--limit", "10", "--tracker", str(self.tmp / "none.csv"))
+        self.assertIn("retry", [row["key"] for row in out["selected"]])
+        self.assertEqual(len(out["selected"]), 10)
+
+    def test_near_deadline_new_posting_is_selected_ahead_of_old_backlog(self):
+        self.write_state({
+            **{f"new{i}": entry(title=f"New {i}") for i in range(10)},
+            "closing": entry(title="Closes tomorrow", deadline="2026-09-04"),
+        })
+        out = self.run_tool("candidates", "--limit", "10", "--tracker", str(self.tmp / "none.csv"))
+        self.assertEqual(out["selected"][0]["key"], "closing")
+
+    def test_retry_slot_rotates_to_the_least_attempted_job(self):
+        self.write_state({
+            "tried_twice": entry(status="unreachable", fetch_attempts=2),
+            "tried_once": entry(status="unreachable", fetch_attempts=1),
+            **{f"new{i}": entry(title=f"New {i}") for i in range(10)},
+        })
+        out = self.run_tool("candidates", "--limit", "10", "--tracker", str(self.tmp / "none.csv"))
+        self.assertIn("tried_once", [row["key"] for row in out["selected"]])
+        self.assertNotIn("tried_twice", [row["key"] for row in out["selected"]])
 
     def test_tracker_pairs_are_excluded(self):
         self.write_state({"a": entry(company="Acme", title="SOC Analyst"), "b": entry(company="Other")})

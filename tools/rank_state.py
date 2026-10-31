@@ -17,9 +17,10 @@ This moves the state-file traffic into code. Three subcommands:
                ranked/vetoed/expired/unreachable/gave_up rows Step 5's
                report is built from
 
-Selection and projection follow Step 1's existing rules exactly (status
-filter, tracker exclusion, focus filter, `--limit`/`--all`); the write-back
-follows Step 4's existing rules exactly (the `location` -> `location_verdict`
+Selection and projection follow Step 1's status, tracker and focus rules;
+bounded default batches prioritize near-deadline new jobs and reserve a retry
+slot when the limit permits. The write-back follows Step 4's existing rules
+exactly (the `location` -> `location_verdict`
 legacy migration, the deadline null-is-not-a-correction rule, verbatim
 strengths/gaps persistence, idempotent skip of already-ranked entries); the
 sweep follows rule 6 exactly (defensive date parsing, an absent deadline left
@@ -178,11 +179,23 @@ def entry_location_verdict(entry: dict) -> str | None:
     return legacy if legacy in ("PASS", "FAIL", "FLAG") else None
 
 
+def urgent_deadline(entry: dict, today: date) -> date:
+    """A deadline in the seven-day window, or a sentinel after all real dates."""
+    deadline = parse_iso(entry.get("deadline"))
+    return deadline if deadline is not None and today <= deadline <= today + timedelta(days=URGENT_DAYS) else date.max
+
+
+def retry_attempts(entry: dict) -> int:
+    """Lower counts get the next retry slot, so one failed URL cannot monopolize it."""
+    attempts = entry.get("fetch_attempts")
+    return attempts if isinstance(attempts, int) and not isinstance(attempts, bool) and attempts >= 0 else 0
+
+
 def cmd_candidates(args) -> int:
     _, seen = load_state(args.state)
     excluded = tracker_pairs(args.tracker)
 
-    selected, skipped_tracker = [], 0
+    eligible_rows, skipped_tracker = [], 0
     for key, entry in seen.items():
         status = entry.get("status")
         if args.all:
@@ -201,8 +214,8 @@ def cmd_candidates(args) -> int:
             ).lower()
             if args.focus.lower() not in haystack:
                 continue
-        selected.append(
-            {
+        eligible_rows.append(
+            (entry, {
                 "key": key,
                 "title": entry.get("title"),
                 "company": entry.get("company"),
@@ -210,12 +223,29 @@ def cmd_candidates(args) -> int:
                 "portal": entry.get("portal"),
                 "deadline": entry.get("deadline"),
                 "posted_date": entry.get("posted_date"),
-            }
+            })
         )
 
-    eligible = len(selected)
+    eligible = len(eligible_rows)
     if args.limit > 0:
-        selected = selected[: args.limit]
+        if args.all:
+            chosen = eligible_rows[: args.limit]
+        else:
+            new = [pair for pair in eligible_rows if pair[0].get("status") == "new"]
+            retries = [pair for pair in eligible_rows if pair[0].get("status") == "unreachable"]
+            new.sort(key=lambda pair: urgent_deadline(pair[0], args.today))
+            retries.sort(key=lambda pair: (urgent_deadline(pair[0], args.today), retry_attempts(pair[0])))
+            if new and retries and args.limit > 1:
+                # Give fresh postings most slots, but always retry at least one
+                # failed fetch even when /scrape keeps replenishing the backlog.
+                new_count = min(len(new), args.limit - 1)
+                chosen = new[:new_count] + retries[:1]
+                chosen += (new[new_count:] + retries[1:])[: args.limit - len(chosen)]
+            else:
+                chosen = (new + retries)[: args.limit]
+    else:
+        chosen = eligible_rows
+    selected = [row for _, row in chosen]
     print(
         json.dumps(
             {
