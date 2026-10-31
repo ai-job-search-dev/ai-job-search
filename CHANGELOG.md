@@ -67,6 +67,14 @@ per-file diff commands.
 
 ### Fixed
 
+- **`/expand` sends domain knowledge to the heading `01-candidate-profile.md` actually has**
+  (`.claude/commands/expand.md`, `tests/test_expand_command.py`) - Step 5 said to append domain knowledge to
+  "the Domain Knowledge or Technical Skills section", but the shipped profile has `### Domain Expertise`
+  under `## Technical Skills` and no Domain Knowledge heading, so the addition landed in a near-duplicate
+  section or on the wrong subsection - the same class as #520, which fixed only the `02-behavioral-profile.md`
+  step. Every "append to the X section" target in the 01 step is now a backticked heading, and the test
+  checks each against the shipped file's `##`/`###` headings. Fails on master.
+
 - **The four `@bunli/core` portal CLIs typecheck on a clean install again** (#768, closes #765,
   `.agents/skills/{jobbank,jobdanmark,jobindex,jobnet}-search/cli/package.json`,
   `tests/test_portal_cli_types.py`) - `bun-types` accepts any `@types/node`, while `@bunli/core`
