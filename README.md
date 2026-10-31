@@ -318,6 +318,8 @@ Market-specific *data sources* (a national salary database, local award-rate tab
 
 The salary tool works with any salary data you provide (union statistics, Glassdoor exports, personal research, etc.). See `tools/README_SALARY_TOOL.md` for the expected format and setup. If you don't have salary data, the salary step is simply skipped.
 
+`tools/convert_salary_excel.py` turns an Excel export into that format. When the company column also holds the city, as in the IDA workbook's "Firmanavn og by" column (`Ørsted A/S,Fredericia`), the converter splits each cell on its last comma and strips both parts, so `salary_lookup.py --city` can filter. A company name that itself contains ", " stays intact.
+
 ### Starting over
 
 To wipe your profile data and start fresh:

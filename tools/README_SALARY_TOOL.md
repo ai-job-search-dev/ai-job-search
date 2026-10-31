@@ -79,6 +79,7 @@ On Windows, use `py` if that is how Python is exposed on your PATH. If your syst
 
 The converter auto-detects the Excel layout:
 - Looks for a "Company"/"Firma" column and an optional "City"/"By" column
+- A combined header such as "Firmanavn og by" or "Company and City" (no separate city column) is split on the last comma, with both parts stripped, so `salary_lookup.py --city` can filter. Cells look like "Ørsted A/S,Fredericia"; a company name may itself contain ", " ("Rambøll Danmark A/S, Odense,Odense C")
 - Treats remaining columns as salary data (auto-pairs count/index columns)
 
 ### Option C: Build from research
