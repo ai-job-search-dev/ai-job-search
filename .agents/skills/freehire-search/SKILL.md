@@ -79,6 +79,8 @@ at the hosted API.
 bun run .agents/skills/freehire-search/cli/src/cli.ts search [-q "<keywords>"] [facet flags]
 ```
 
+Query syntax: quotes require every quoted word (any order, not a contiguous phrase); `-word` excludes; uppercase `OR` between terms matches any alternative (max 5, merged and deduplicated server-side); `title:` at the start of an alternative matches it in the title only, e.g. `title:"product owner" -junior OR title:produktchef`.
+
 Key flags:
 - `--query <text>` / `-q <text>` — keyword search (title, skill, role). Full-text; optional.
   Supports `OR` and `title:` (see "Query operators" below).

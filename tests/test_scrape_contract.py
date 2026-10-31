@@ -152,5 +152,32 @@ class SeenJobsDedupContinuityTests(unittest.TestCase):
         self.assertRegex(text, r"matched by URL or\s+company\+title")
 
 
+# Step 1b sends one plain term per CLI call and takes quoting from the portal's
+# own SKILL.md. The rule is data each portal carries, so the test derives the
+# portal list from the skills tree and names no portal.
+_QUERY_SYNTAX_LINE = re.compile(r"^Query syntax:\s*\S", re.MULTILINE)
+
+
+class PortalQuerySyntaxTests(unittest.TestCase):
+    """Every installed portal SKILL.md must state its query syntax."""
+
+    def test_step1b_points_at_the_query_syntax_line(self):
+        text = SCRAPER_SKILL.read_text(encoding="utf-8")
+        self.assertIn("`Query syntax:`", text, "Step 1b no longer defers quoting to the portal's Query syntax line")
+
+    def test_every_installed_portal_skill_has_a_query_syntax_line(self):
+        self.assertTrue(PORTAL_CLIS, "no installed portal skills found")
+        missing = [
+            portal.name
+            for portal in PORTAL_CLIS
+            if not _QUERY_SYNTAX_LINE.search((portal / "SKILL.md").read_text(encoding="utf-8"))
+        ]
+        self.assertEqual(
+            [],
+            missing,
+            "portal SKILL.md files without a `Query syntax:` line: " + ", ".join(missing),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

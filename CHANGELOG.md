@@ -644,6 +644,18 @@ per-file diff commands.
 
 ### Changed
 
+- **`/scrape` sends one plain term per CLI call, and every portal skill states its query syntax**
+  (#536, `.claude/skills/job-scraper/SKILL.md` Step 1b, `search-queries.md`, `.claude/commands/add-portal.md`,
+  each `.agents/skills/*/SKILL.md`, `tests/test_scrape_contract.py`) - `search-queries.md` is written in
+  Google syntax, and Step 1b said to translate its terms into the portal's flags without saying that `OR`
+  and quotes do not survive the translation. Step 1b now runs one plain term per call, never `OR` or a
+  combined string, and merges results across calls (Step 2's URL dedup absorbs repeats). Each portal's
+  `SKILL.md` carries a one-line `Query syntax:` note that `/add-portal` asks the generator to write, so
+  the quoting rule is data the portal carries. `search-queries.md` labels its `site:` blocks
+  WebSearch-only and adds a plain-terms block per priority. A test requires the line on every installed
+  portal, with the portal list derived from the skills tree. Forks that personalised `search-queries.md`
+  before this change should fill the new Plain terms blocks from their own `site:` lines.
+
 - **`/apply` and `/rank` route matching portal URLs to installed CLI `detail` before `WebFetch`**
   (#535, `.claude/commands/apply.md` Step 0, `.claude/commands/rank.md` Step 2,
   `.claude/skills/job-application-assistant/09-web-research.md`) - job portal URLs pasted

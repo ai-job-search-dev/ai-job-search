@@ -44,6 +44,8 @@ Invoke this skill when the user wants to:
 bun run .agents/skills/jobindex-search/cli/src/cli.ts search --query "<text>" [flags]
 ```
 
+Query syntax: phrase quoting honoured; no OR.
+
 Key flags:
 - `--query <text>` / `-q <text>` — keyword search (job title, skill, company, city). **Required.** Searches without a query exit with `MISSING_REQUIRED`.
 - `--jobage <days>` — filter by posting age: `1` (today), `7`, `14`, `30`, or `9999` (all, default)

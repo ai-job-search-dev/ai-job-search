@@ -46,6 +46,8 @@ Invoke this skill when the user wants to:
 bun run .agents/skills/jobdanmark-search/cli/src/cli.ts search [flags]
 ```
 
+Query syntax: phrase quoting honoured; no OR.
+
 Key flags:
 - `--text <keyword>` — free-text search, e.g. `elektriker`, `sygeplejerske`, `softwareudvikler`
 - `--category <id>` — category ID (see Categories table below)

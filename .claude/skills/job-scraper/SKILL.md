@@ -67,12 +67,12 @@ Discover all installed portal CLI skills by reading every `SKILL.md` found under
 For each **enabled** portal skill:
 
 1. Read its `SKILL.md` to find the correct `bun run …` invocation and supported flags.
-2. Translate the query terms from `search-queries.md` into that portal's flag format (e.g. `--key`, `--search-string`, `--query`, filter codes — whatever the portal's SKILL.md specifies).
+2. Take the plain terms from `search-queries.md`'s **Plain terms** blocks and translate each into that portal's flag format (e.g. `--key`, `--search-string`, `--query`, filter codes — whatever the portal's SKILL.md specifies). When a priority has no Plain terms block, or its terms still carry a `[YOUR_...]` placeholder, take the terms from that priority's `site:` lines instead (drop `site:`, `OR` and the location words; each quoted phrase is one term). **One plain term per CLI call — never `OR`, never a combined string.** Portal search boxes do not share Google's syntax, so a combined query returns a different result set than its terms would (on some portals it is silently reduced to one of them). Quoting follows the portal's own SKILL.md `Query syntax:` line: quote a multi-word term when that line says quotes narrow the match (as a phrase or as a requirement that every word appear), otherwise pass the words bare. The `site:` blocks in `search-queries.md` are WebSearch-only and are never passed to a CLI.
 3. Scope to the last 14 days using the portal's supported recency **filter** flag (`--jobage`, `--since <YYYY-MM-DD>`, etc. — as documented per portal). A portal with **no recency flag** (jobdanmark offers none) still gets scoped: every portal's search output carries a `date` field, so filter client-side — drop results whose `date` is older than 14 days after the call returns, and never invent a flag the portal's SKILL.md does not document (the CLIs reject unknown flags). `--order PublicationDate` is a sort, and a sort is not a filter — pairing it with a `--limit` is a defensible approximation on a portal that offers nothing better (jobnet), but apply the client-side date filter on top all the same.
 4. Cap results to ~20 per call using the portal's limit flag.
 5. Use `--format json` for machine-readable output.
 
-Run all portal CLI calls in parallel where possible using the Agent tool. Collect all `results` arrays into a single pool for Step 2, keeping each result tagged with its source portal skill (for Step 2 `detail` lookups).
+Run all portal CLI calls in parallel where possible using the Agent tool. Collect all `results` arrays — across terms as well as portals — into a single pool for Step 2, keeping each result tagged with its source portal skill (for Step 2 `detail` lookups). A posting that several terms return appears more than once in the pool; Step 2's dedup keys on URL, so the merge needs no extra handling.
 
 If a CLI tool exits with a non-zero code, log the error message and continue — do not abort the whole search.
 
