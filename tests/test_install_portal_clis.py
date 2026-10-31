@@ -7,6 +7,7 @@ a temporary skills tree, the runner is injected, and the end-to-end case uses
 
 import io
 import json
+import os
 import subprocess
 import sys
 import unittest
@@ -119,6 +120,96 @@ class InstallPortalClis(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         for cli in discover():
             self.assertIn(f"would install  {cli.parent.name}", proc.stdout)
+
+
+class FindBun(unittest.TestCase):
+    """A bun the official installer placed outside a non-interactive PATH (#707)."""
+
+    def setUp(self):
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+
+    def test_prefers_bun_on_path(self):
+        import shutil
+        original = shutil.which
+        shutil.which = lambda name: "/usr/bin/bun" if name == "bun" else None
+        self.addCleanup(setattr, shutil, "which", original)
+
+        self.assertEqual(install_portal_clis.find_bun(), "/usr/bin/bun")
+
+    def test_falls_back_to_a_well_known_location(self):
+        import shutil
+        fake = self.root / "bun"
+        fake.write_text("#!/bin/sh\n", encoding="utf-8")
+        original_which = shutil.which
+        original_globs = install_portal_clis._BUN_FALLBACK_GLOBS
+        shutil.which = lambda name: None
+        install_portal_clis._BUN_FALLBACK_GLOBS = (str(fake),)
+        self.addCleanup(setattr, shutil, "which", original_which)
+        self.addCleanup(setattr, install_portal_clis, "_BUN_FALLBACK_GLOBS", original_globs)
+
+        self.assertEqual(install_portal_clis.find_bun(), str(fake))
+
+    def test_returns_none_when_bun_is_absent(self):
+        import shutil
+        original_which = shutil.which
+        original_globs = install_portal_clis._BUN_FALLBACK_GLOBS
+        shutil.which = lambda name: None
+        install_portal_clis._BUN_FALLBACK_GLOBS = (str(self.root / "missing" / "bun"),)
+        self.addCleanup(setattr, shutil, "which", original_which)
+        self.addCleanup(setattr, install_portal_clis, "_BUN_FALLBACK_GLOBS", original_globs)
+
+        self.assertIsNone(install_portal_clis.find_bun())
+
+    @unittest.skipIf(sys.platform == "win32", "the reported case is a POSIX shell; a shell-script bun is not executable here")
+    def test_real_cli_installs_with_bun_outside_path(self):
+        """#707's real path: bun at ~/.bun/bin, a shell that never sourced it.
+
+        Runs the shipped CLI with `bun` absent from PATH and a working bun file
+        where the official installer puts it, so the failure is shown through the
+        documented invocation rather than a value fed straight to `find_bun`.
+        """
+        home = self.root / "home"
+        (home / ".bun" / "bin").mkdir(parents=True)
+        bun = home / ".bun" / "bin" / "bun"
+        bun.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        bun.chmod(0o755)
+
+        env = dict(os.environ)
+        env["HOME"] = str(home)
+        env["USERPROFILE"] = str(home)
+        # Drop any real bun directory from PATH so the fallback is what resolves.
+        env["PATH"] = os.pathsep.join(
+            p for p in env.get("PATH", "").split(os.pathsep)
+            if p and not Path(p, "bun").exists()
+        )
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "tools" / "install_portal_clis.py")],
+            capture_output=True, text=True, encoding="utf-8", env=env,
+            cwd=str(REPO_ROOT),
+        )
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("portal CLI(s) installed.", proc.stdout)
+
+    def test_real_cli_reports_where_to_find_bun(self):
+        """With no bun anywhere, the real CLI exit-1 message names the export."""
+        home = self.root / "empty-home"
+        home.mkdir()
+        env = dict(os.environ)
+        env["HOME"] = str(home)
+        env["USERPROFILE"] = str(home)
+        env["PATH"] = os.pathsep.join(
+            p for p in env.get("PATH", "").split(os.pathsep)
+            if p and not Path(p, "bun").exists()
+        )
+        proc = subprocess.run(
+            [sys.executable, str(REPO_ROOT / "tools" / "install_portal_clis.py")],
+            capture_output=True, text=True, encoding="utf-8", env=env,
+            cwd=str(REPO_ROOT),
+        )
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("export PATH=", proc.stdout)
 
 
 if __name__ == "__main__":

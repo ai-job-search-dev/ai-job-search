@@ -29,6 +29,7 @@ install failed.
 """
 
 import argparse
+import glob
 import json
 import shutil
 import subprocess
@@ -96,6 +97,36 @@ def install(cli_dirs: list[Path], bun: str, dry_run: bool, root: Path = ROOT, ru
     return 0
 
 
+_BUN_FALLBACK_GLOBS = (
+    "~/.bun/bin/bun",  # the bun.sh installer's default, not on a non-interactive PATH
+    "/home/*/.linuxbrew/bin/bun",
+    "/home/linuxbrew/.linuxbrew/bin/bun",
+    "/opt/homebrew/bin/bun",
+    "/usr/local/bin/bun",
+    "/usr/bin/bun",
+    "~/.local/bin/bun",
+)
+
+
+def find_bun() -> str | None:
+    """`bun` on PATH, or at a well-known install location.
+
+    The bun.sh installer writes `~/.bun/bin` into `~/.bashrc`/`~/.zshrc` only, so
+    an interactive shell finds bun while this script - run from a non-interactive
+    shell, CI, or a subprocess - does not. Fall back to the usual locations so the
+    one-command promise holds.
+    """
+    found = shutil.which("bun")
+    if found:
+        return found
+    for location in _BUN_FALLBACK_GLOBS:
+        # `~` and absolute globs need `glob.glob`; `Path.glob` rejects both.
+        for candidate in sorted(glob.glob(str(Path(location).expanduser()))):
+            if Path(candidate).is_file():
+                return candidate
+    return None
+
+
 def _force_utf8_output() -> None:
     """Write UTF-8 whatever the host's default encoding is (a fork's portal name may not be ASCII)."""
     for stream in (sys.stdout, sys.stderr):
@@ -114,9 +145,14 @@ def main() -> int:
     if not cli_dirs:
         print("No portal CLIs found under .agents/skills/*/cli/ - nothing to install.")
         return 0
-    bun = shutil.which("bun")
+    bun = find_bun()
     if not bun and not args.dry_run:
-        print("bun is not on PATH. Install it from https://bun.sh, open a new shell, and re-run.")
+        print(
+            "bun was not found on PATH and was not found at any of the usual install locations.\n"
+            '  - installed via bun.sh? export PATH="$HOME/.bun/bin:$PATH"\n'
+            "  - installed via Homebrew/Linuxbrew? brew install bun\n"
+            "  - installed elsewhere? reinstall to a directory on PATH"
+        )
         return 1
     return install(cli_dirs, bun or "bun", args.dry_run)
 
