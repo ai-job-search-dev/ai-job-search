@@ -29,14 +29,14 @@ per-file diff commands.
 ### Changed
 
 - **Releases are weekly and automatic, and this changelog is frozen** (`.github/workflows/release.yml`,
-  `tools/next_version.py`, `tests/test_next_version.py`, `tests/test_changelog_structure.py`) - every
+  `.cz.toml`, `tests/test_release_workflow.py`, `tests/test_changelog_structure.py`) - every
   PR edited `[Unreleased]` by hand, so every PR after the first conflicted on this file, and only one
   maintainer could cut a release. From now on a workflow tags `master` every Monday at 06:00 UTC and
-  publishes a GitHub Release whose notes list the merged PR titles. The version is SemVer, bumped from
-  the merged commit types: `type!:` or a `BREAKING CHANGE:` footer is major, `feat` is minor, anything
-  else is patch. A week without merges is skipped, and a `master` commit whose CI failed is never
-  released. Forks keep updating to tags as before; release notes now live in GitHub Releases, and a
-  test fails any PR that still edits this file.
+  publishes a GitHub Release whose notes list the merged PR titles. The version is SemVer, bumped by
+  commitizen from the merged commit types: `type!:` or a `BREAKING CHANGE:` footer is major, `feat` is
+  minor, `fix`, `refactor` and `perf` are patch. A week with nothing to bump is skipped, and a
+  `master` commit whose CI failed is never released. Forks keep updating to tags as before; release
+  notes now live in GitHub Releases, and a test fails any PR that still edits this file.
 
 - **The repository moved to the `ai-job-search-dev` organization** - the canonical URL is now
   `https://github.com/ai-job-search-dev/ai-job-search`. GitHub redirects the old

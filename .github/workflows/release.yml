@@ -2,10 +2,10 @@
 # with GitHub-generated notes (one line per merged PR title), replacing the
 # hand-edited CHANGELOG.md, which is frozen at 1.7.4.
 #
-# The SemVer version comes from tools/next_version.py; a manual run can
-# override it.
+# commitizen (`cz bump --get-next`, configured in .cz.toml) picks the SemVer
+# version from the merged commit types; a manual run can override it.
 #
-# It skips a week with no new commits and refuses to release a master commit
+# It skips a week with nothing to bump and refuses to release a master commit
 # whose CI run did not pass. The release is created through the API, so it
 # never commits to master. Upstream only: forks inherit this file and must not
 # cut releases of their own.
@@ -42,6 +42,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -55,15 +57,21 @@ jobs:
             echo "No commits since $last, nothing to release"
             exit 0
           fi
+          if [ -n "$VERSION" ]; then
+            next="v$VERSION"
+          else
+            rc=0
+            next=$(uvx --from commitizen==4.19.3 cz bump --get-next) || rc=$?
+            case $rc in
+              0) next="v$next" ;;
+              21) echo "No feat, fix, refactor, perf or breaking commits since $last, nothing to release"; exit 0 ;;
+              *) echo "::error::cz bump --get-next exited $rc: $next"; exit 1 ;;
+            esac
+          fi
           ci=$(gh run list -w ci.yml -b master -c "$head" -L 1 --json conclusion -q '.[0].conclusion')
           if [ "$ci" != success ]; then
             echo "::error::CI on $head is '${ci:-missing or not finished}', not releasing"
             exit 1
-          fi
-          if [ -n "$VERSION" ]; then
-            next="v$VERSION"
-          else
-            next=$(python3 tools/next_version.py "$last")
           fi
           if ! [[ "$next" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::'$next' is not a vMAJOR.MINOR.PATCH tag"

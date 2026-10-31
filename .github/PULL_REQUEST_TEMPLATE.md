@@ -5,7 +5,8 @@
      discovered via the pinned "Community forks & adaptations" discussion (#78).
      Check the "base repository" dropdown above before you continue. -->
 <!-- The PR title becomes this change's line in the weekly release notes and
-     its type sets the version: feat = minor, type!: = major, else patch.
+     its type sets the version: feat = minor, type!: = major,
+     fix/refactor/perf = patch, docs/chore/ci alone = no release.
      Don't edit CHANGELOG.md; it is frozen. -->
 
 ## What changed and why
