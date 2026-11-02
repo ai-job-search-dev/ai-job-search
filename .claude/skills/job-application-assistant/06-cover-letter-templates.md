@@ -1,5 +1,5 @@
 ---
-framework_version: 1.0.2
+framework_version: 1.0.3
 ---
 
 # Cover Letter Templates and Tailoring Guide
@@ -44,7 +44,7 @@ The `\lettercontent{}` macro appends `\\` to its argument. This breaks when the 
 ```latex
 \lettercontent{Here is how my experience maps:}
 
-{\raggedright\fontspec[Path = OpenFonts/fonts/raleway/]{Raleway-Medium}\fontsize{11pt}{13pt}\selectfont
+{\raggedright\fontspec[Path = OpenFonts/fonts/raleway/, BoldFont = Raleway-Bold]{Raleway-Medium}\fontsize{11pt}{13pt}\selectfont
 \begin{itemize}
     \item ...
 \end{itemize}\par}
@@ -90,7 +90,7 @@ The font wrapper is mandatory — if you just move `\begin{itemize}` outside `\l
 
 \lettercontent{[Body paragraph - most relevant experience, introducing the bullet list]}
 
-{\raggedright\fontspec[Path = OpenFonts/fonts/raleway/]{Raleway-Medium}\fontsize{11pt}{13pt}\selectfont
+{\raggedright\fontspec[Path = OpenFonts/fonts/raleway/, BoldFont = Raleway-Bold]{Raleway-Medium}\fontsize{11pt}{13pt}\selectfont
 \begin{itemize}
     \item {[Concrete achievement/skill 1]}
     \item {[Concrete achievement/skill 2]}
