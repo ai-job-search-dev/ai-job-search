@@ -27,6 +27,8 @@ class EchoCheck(unittest.TestCase):
         directory = TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.tmp = Path(directory.name)
+        root, echo_check.ROOT = echo_check.ROOT, self.tmp
+        self.addCleanup(setattr, echo_check, "ROOT", root)
         self.posting = self.write("job_posting.md", POSTING)
 
     def write(self, name, text):
@@ -54,23 +56,30 @@ class EchoCheck(unittest.TestCase):
         self.assertEqual(code, 0, out)
 
     def test_quoted_reference_to_the_posting_is_allowed(self):
-        draft = self.write("cover.tex", "Against your “you enjoy working close to users” point:")
+        draft = self.write("cover_letters/cover.tex", "Against your “you enjoy working close to users” point:")
         code, out = self.run_check("--draft", draft)
         self.assertEqual(code, 0, out)
 
     def test_latex_quotes_are_allowed_too(self):
-        draft = self.write("cover.tex", "Against your ``you enjoy working close to users'' point:")
+        draft = self.write("cover_letters/cover.tex", "Against your ``you enjoy working close to users'' point:")
         code, out = self.run_check("--draft", draft)
         self.assertEqual(code, 0, out)
 
+    def test_straight_quotes_may_wrap_a_line_but_not_a_paragraph(self):
+        wrapped = self.write("cover_letters/a.tex", 'Against your "you enjoy working\nclose to users" point:')
+        self.assertEqual(self.run_check("--draft", wrapped)[0], 0)
+        # An unclosed quote must not hide a lift in the next paragraph.
+        unclosed = self.write("cover_letters/b.tex", 'A stray " quote.\n\nYou enjoy working close to users.\n\nEnd "here".')
+        self.assertEqual(self.run_check("--draft", unclosed)[0], 1)
+
     def test_ignored_phrase_breaks_the_run(self):
-        draft = self.write("cover.tex", "someone who understands messy operational")
+        draft = self.write("cover_letters/cover.tex", "someone who understands messy operational")
         self.assertEqual(self.run_check("--draft", draft)[0], 1)
         self.assertEqual(self.run_check("--draft", draft, "--ignore", "understands messy")[0], 0)
 
     def test_function_word_runs_are_not_lifts(self):
         posting = self.write("p.md", "it is in the interest of all of us to be on time")
-        draft = self.write("cover.tex", "it is in the interest of the team")
+        draft = self.write("cover_letters/cover.tex", "it is in the interest of the team")
         code, out = self.run_check("--draft", draft, posting=posting)
         self.assertEqual(code, 0, out)
 
@@ -81,16 +90,16 @@ class EchoCheck(unittest.TestCase):
             "\\urlstyle{same}\\href{https://example.com}{LinkedIn}}\n"
             "{\\fontspec[Path = OpenFonts/fonts/raleway/, BoldFont = Raleway-Bold]{Raleway-Medium}\\fontsize{11pt}{13pt}\\selectfont}\n"
         )
-        draft = self.write("letters/cover_a.tex", header + "Body about rail scheduling for a freight operator.\n")
-        self.write("letters/cover_b.tex", header + "Warehouse slotting for a grocery chain is the topic here.\n")
-        code, out = self.run_check("--draft", draft, "--others", str(self.tmp / "letters" / "cover_*.tex"))
+        draft = self.write("cover_letters/cover_a.tex", header + "Body about rail scheduling for a freight operator.\n")
+        self.write("cover_letters/cover_b.tex", header + "Warehouse slotting for a grocery chain is the topic here.\n")
+        code, out = self.run_check("--draft", draft, "--others", str(self.tmp / "cover_letters" / "cover_*.tex"))
         self.assertEqual(code, 0, out)
 
     def test_reuse_between_letters_is_reported(self):
         shared = "My last project modelled the packing and testing lines of a medical device plant."
-        draft = self.write("letters/cover_a.tex", shared + " Then something new.")
-        other = self.write("letters/cover_b.tex", "Opening. " + shared)
-        code, out = self.run_check("--draft", draft, "--others", str(self.tmp / "letters" / "cover_*.tex"))
+        draft = self.write("cover_letters/cover_a.tex", shared + " Then something new.")
+        other = self.write("cover_letters/cover_b.tex", "Opening. " + shared)
+        code, out = self.run_check("--draft", draft, "--others", str(self.tmp / "cover_letters" / "cover_*.tex"))
         self.assertEqual(code, 1)
         self.assertIn("REUSE", out)
         self.assertIn(Path(other).name, out)
@@ -98,13 +107,13 @@ class EchoCheck(unittest.TestCase):
     def test_cv_is_not_compared_with_letters(self):
         shared = "modelled the packing and testing lines of a medical device plant"
         draft = self.write("cv/main_a.tex", shared)
-        self.write("letters/cover_b.tex", shared)
-        code, out = self.run_check("--draft", draft, "--others", str(self.tmp / "letters" / "cover_*.tex"))
+        self.write("cover_letters/cover_b.tex", shared)
+        code, out = self.run_check("--draft", draft, "--others", str(self.tmp / "cover_letters" / "cover_*.tex"))
         self.assertEqual(code, 0, out)
 
     def test_draft_is_not_compared_with_itself(self):
-        draft = self.write("letters/cover_a.tex", "A long sentence about scheduling freight trains across Europe.")
-        code, out = self.run_check("--draft", draft, "--others", str(self.tmp / "letters" / "cover_*.tex"))
+        draft = self.write("cover_letters/cover_a.tex", "A long sentence about scheduling freight trains across Europe.")
+        code, out = self.run_check("--draft", draft, "--others", str(self.tmp / "cover_letters" / "cover_*.tex"))
         self.assertEqual(code, 0, out)
 
     def test_apostrophes_do_not_open_a_quote(self):
@@ -115,7 +124,7 @@ class EchoCheck(unittest.TestCase):
             "The team's goal: translate the client's business needs into data solutions",
             "L’équipe: translate the client’s business needs into data solutions",
         ):
-            draft = self.write("cover.tex", text)
+            draft = self.write("cover_letters/cover.tex", text)
             code, out = self.run_check("--draft", draft, posting=posting)
             self.assertEqual(code, 1, text)
             self.assertIn("business needs into data solutions", out)
@@ -138,9 +147,12 @@ class InputConfinement(unittest.TestCase):
         directory = TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.tmp = Path(directory.name)
+        root, echo_check.ROOT = echo_check.ROOT, self.tmp
+        self.addCleanup(setattr, echo_check, "ROOT", root)
         self.posting = self.tmp / "posting.txt"
         self.posting.write_text("API_KEY=secret value that must never be printed", encoding="utf-8")
-        self.draft = self.tmp / "cover.tex"
+        self.draft = self.tmp / "cover_letters" / "cover.tex"
+        self.draft.parent.mkdir()
         self.draft.write_text("API_KEY=secret value that must never be printed", encoding="utf-8")
 
     def refused(self, *argv):
@@ -179,8 +191,7 @@ class InputConfinement(unittest.TestCase):
         self.refused("--posting", link, "--draft", self.draft)
 
     def test_refused_glob_hit_in_others_is_skipped(self):
-        letters = self.tmp / "letters"
-        letters.mkdir()
+        letters = self.tmp / "cover_letters"
         draft = letters / "cover_a.tex"
         draft.write_text("A long sentence about scheduling freight trains across Europe.", encoding="utf-8")
         (letters / "cover_b.py").write_text("A long sentence about scheduling freight trains across Europe.", encoding="utf-8")
@@ -189,6 +200,23 @@ class InputConfinement(unittest.TestCase):
             code = echo_check.main(["--posting", str(self.posting), "--draft", str(draft),
                                     "--others", str(letters / "cover_*")])
         self.assertEqual(code, 0, out.getvalue())
+
+    def test_draft_outside_the_application_folders_is_refused(self):
+        # The same private file as posting and draft would otherwise print in full.
+        notes = self.tmp / "private" / "notes.md"
+        notes.parent.mkdir()
+        notes.write_text("API_KEY=secret value that must never be printed", encoding="utf-8")
+        self.assertIsNone(echo_check.check_input_path(notes), "a plain .md file passes the suffix rules")
+        self.refused("--posting", notes, "--draft", notes)
+
+    def test_others_outside_the_application_folders_are_skipped(self):
+        outside = self.tmp / "private" / "cover_x.tex"
+        outside.parent.mkdir()
+        outside.write_text("API_KEY=secret value that must never be printed", encoding="utf-8")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            echo_check.main(["--posting", str(self.posting), "--draft", str(self.draft), "--others", str(outside)])
+        self.assertNotIn("REUSE", out.getvalue())
 
     def test_allowed_inputs_pass(self):
         for name in ("p.md", "p.txt", "c.tex", "c.typ"):

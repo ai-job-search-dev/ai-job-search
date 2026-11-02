@@ -14,7 +14,8 @@ Not counted as a hit:
   - text inside quotation marks in the draft ("your 'what you bring' list" is an open
     reference to the posting, which `10-echo-traps.md` allows);
   - phrases passed with --ignore (company name, job title, team name);
-  - runs made only of function words ("in the context of the");
+  - runs with fewer than two content words ("in the context of the", "this is how we
+    work"): a shared stock phrase is not a lift worth a reviewer's attention;
   - URLs, LaTeX commands and the LaTeX preamble.
 
 Usage:
@@ -27,8 +28,10 @@ Output: one line per hit, `LIFT` (shared with the posting) or `REUSE <file>` (sh
 with another application), with the draft's file:line and the shared words.
 
 Every input path must be a .tex, .md, .txt or .typ file, not a symlink, with no
-dot-named component in its resolved path; anything else is refused (exit 2), and an
---others glob hit that fails the rule is skipped.
+dot-named component in its resolved path. --draft and --others files must also sit
+inside this repo's cv/, cover_letters/ or documents/, because the output prints their
+text. Anything else is refused (exit 2), and an --others glob hit that fails the
+rules is skipped.
 
 Exit codes: 0 no hits, 1 hits found, 2 bad invocation or refused path.
 
@@ -72,7 +75,9 @@ LATEX_CMD = re.compile(r"\\[A-Za-z@]+\*?(?:\[[^\]]*\])?|\\.")
 LATEX_COMMENT = re.compile(r"(?<!\\)%.*")
 # Quoted spans: “…”, ``…'', «…», "…" and ‘…’ (single curly quotes only, so the
 # apostrophe in "the team's" or "l'équipe" never opens a quote).
-QUOTED = re.compile(r"“[^”]*”|``.*?''|«[^»]*»|\"[^\"\n]*\"|‘[^’]*’", re.S)
+# A straight-quoted span may wrap onto the next line but not cross a blank line, so an
+# unclosed quote cannot swallow the following paragraph.
+QUOTED = re.compile(r"“[^”]*”|``.*?''|«[^»]*»|\"(?:[^\"\n]|\n(?![ \t]*\n))*\"|‘[^’]*’", re.S)
 
 
 def preprocess(text: str, latex: bool) -> str:
@@ -151,6 +156,12 @@ def shared_spans(draft_text: str, draft_tokens, blocked, source_tokens, n: int):
 # path. Same reasoning as verify_pdf.py's check_dump_target.
 ALLOWED_SUFFIXES = {".tex", ".md", ".txt", ".typ"}
 
+# The output prints draft text only (posting text appears only where a draft already
+# contains it), so the drafts are what must stay inside the application folders. The
+# posting may live in the session scratchpad, outside the repo.
+ROOT = Path(__file__).resolve().parent.parent
+DRAFT_DIRS = ("cv", "cover_letters", "documents")
+
 
 def check_input_path(path) -> str | None:
     """Return why `path` may not be read, or None if it may."""
@@ -161,6 +172,17 @@ def check_input_path(path) -> str | None:
         return "must not be a symlink"
     if any(part.startswith(".") for part in path.resolve().parts):
         return "must not be, or sit under, a dot-named file or directory"
+    return None
+
+
+def check_draft_path(path) -> str | None:
+    """Return why `path` may not be read as a draft or --others file, or None."""
+    reason = check_input_path(path)
+    if reason:
+        return reason
+    resolved = Path(path).resolve()
+    if not any(resolved.is_relative_to((ROOT / d).resolve()) for d in DRAFT_DIRS):
+        return "must be inside this repo's " + ", ".join(f"{d}/" for d in DRAFT_DIRS)
     return None
 
 
@@ -189,8 +211,9 @@ def main(argv=None) -> int:
     if args.min < 2:
         parser.error("--min must be at least 2")
 
-    for path in [args.posting, *args.draft]:
-        reason = check_input_path(path)
+    checks = [(args.posting, check_input_path)] + [(d, check_draft_path) for d in args.draft]
+    for path, check in checks:
+        reason = check(path)
         if reason:
             print(f"echo_check: {path}: {reason}", file=sys.stderr)
             return 2
@@ -206,7 +229,7 @@ def main(argv=None) -> int:
     others = []
     for pattern in args.others:
         for path in sorted(glob.glob(pattern)) or [pattern]:
-            if check_input_path(path):
+            if check_draft_path(path):
                 continue  # a glob may sweep up anything; refused files are skipped, not fatal
             if Path(path).resolve() not in draft_paths and Path(path).is_file():
                 others.append(path)
@@ -221,7 +244,11 @@ def main(argv=None) -> int:
             # is the same fact, not a reused sentence.
             if Path(other).resolve().parent != Path(path).resolve().parent:
                 continue
-            _, other_tokens = load(other)
+            try:
+                _, other_tokens = load(other)
+            except OSError as exc:
+                print(f"echo_check: {exc}", file=sys.stderr)
+                return 2
             for line, words in shared_spans(text, tokens, blocked, other_tokens, args.min):
                 lines.append(f"REUSE {other}  {path}:{line}  {words}")
 

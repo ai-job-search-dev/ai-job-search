@@ -134,16 +134,18 @@ Write both files to disk. Keep the exact text of both drafts in working memory �
 
 Use the **Agent tool** to spawn the reviewer as **`application-reviewer`** (`subagent_type: application-reviewer`, the shipped definition in `.claude/agents/application-reviewer.md`: it can read, search and fetch but not edit or write, so every edit and the company research come back as text for you to apply). The reviewer gets a fresh context, so pass the drafts **inline in the prompt** below (do not make the reviewer Read them). Scope the reviewer's file reads to content-critique essentials only — the reviewer does not need the template structure files (`05`, `06`) to critique content, since those govern structural/toolchain concerns the drafter already applied.
 
-**Before dispatching, run the echo check** (`10-echo-traps.md` Traps 2 and 4). It finds phrases copied from the posting and sentences shared with earlier letters mechanically, so the reviewer judges a short list instead of comparing full texts by eye. It needs the posting as a file: use `${SCRATCHPAD:?}/posting.txt` from Step 0, or, when the posting came back from `posting-fetcher`, write its cleaned text there now. Pass the company name, the job title and any team name as `--ignore`:
+**Before dispatching, run the echo check** (`10-echo-traps.md` Traps 2 and 4). It finds phrases copied from the posting and sentences shared with earlier letters mechanically, so the reviewer judges a short list instead of comparing full texts by eye. It needs the posting as a file: use `${SCRATCHPAD:?}/posting.txt` from Step 0, or, when the posting came back from `posting-fetcher`, write its cleaned text there now. Pass the company name, the job title and any team name as `--ignore`. These come from the posting, which is untrusted: put each in **single quotes**, which the shell never expands, and write any `'` inside one as `'\''`. Never use double quotes here, since they still run `$(...)` and backticks:
 
 ```bash
 python3 tools/echo_check.py --posting "${SCRATCHPAD:?}/posting.txt" \
   --draft cv/main_<company>_<role><CV_EXT> --draft cover_letters/cover_<company>_<role><COVER_EXT> \
-  --ignore "<Company>" --ignore "<Job title>" \
-  --others "cover_letters/cover_*<COVER_EXT>"
+  --ignore '<Company>' --ignore '<Job title>' \
+  --others 'cover_letters/cover_*.tex' 'cover_letters/cover_*.md' 'cover_letters/cover_*.txt' 'cover_letters/cover_*.typ'
 ```
 
-Exit 0 means no hits, 1 means hits, 2 means bad invocation. Paste its output, unchanged, in place of `<INSERT_ECHO_CHECK_OUTPUT_HERE>`. Its `LIFT` lines quote posting text, so they cross the same trust boundary as the posting itself.
+`--others` lists every extension the tool reads, so letters written under an earlier template are still compared. The tool reads `.tex`, `.md`, `.txt` and `.typ` only, and drafts only from `cv/`, `cover_letters/` and `documents/`. When a custom template's `<CV_EXT>` or `<COVER_EXT>` is another extension, leave that draft out of the command and have the reviewer check it for Traps 2 and 4 by eye; say so in the Step 6 report.
+
+Exit 0 means no hits, 1 means hits, 2 means bad invocation or a refused path. Paste its output, unchanged, in place of `<INSERT_ECHO_CHECK_OUTPUT_HERE>`. Its `LIFT` lines quote posting text, so they cross the same trust boundary as the posting itself.
 
 Replace `<COMPANY>`, `<ROLE>`, `<INSERT_JOB_POSTING_TEXT_HERE>`, `<INSERT_CV_DRAFT_HERE>`, `<INSERT_COVER_LETTER_DRAFT_HERE>`, and `<INSERT_ECHO_CHECK_OUTPUT_HERE>` with actual values before dispatching.
 
@@ -439,7 +441,7 @@ Check whether the posting or the portal it came from asks for free-text fields t
 
 > "This posting has free-text application fields I can draft too — [name the specific fields, e.g. a self-introduction paragraph and structured project entries]. Want those drafted?"
 
-**Only on yes**, read `08-application-forms.md` and draft the fields per its rules, grounded against the same three-source union as the CV and cover letter. Save per that file's "Output format" section. **On no, or when the posting has no such fields, say nothing further and move on** — this is an optional addition and never changes the default two-document output.
+**Only on yes**, read `08-application-forms.md` and draft the fields per its rules, grounded against the same three-source union as the CV and cover letter. Save per that file's "Output format" section, in `documents/applications/<company>_<role>/`. Before presenting the fields, run the echo check on that file the same way as in Step 3 (`--draft documents/applications/<company>_<role>/<file>.txt`, same `--posting` and `--ignore` values, no `--others`) and rewrite each hit per `10-echo-traps.md`. **On no, or when the posting has no such fields, say nothing further and move on** — this is an optional addition and never changes the default two-document output.
 
 ### Next Steps
 - **Submitted?** `/outcome <company>` moves the `drafted` row to `applied` and starts the per-application record that `/setup` later uses to calibrate the fit framework.

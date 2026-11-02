@@ -5,7 +5,7 @@ description: >
   and preparing for interviews. Triggers on keywords like: job posting, job application, CV,
   cover letter, resume, interview prep, job fit, career, application, apply, ansøgning, stilling
 allowed-tools: Read, Glob, Grep, WebFetch, WebSearch, Edit, Write, AskUserQuestion
-framework_version: 1.3.8
+framework_version: 1.3.9
 ---
 
 # Job Application Assistant
@@ -41,7 +41,7 @@ When the user provides a job posting (URL or text), follow this workflow:
 - Follow the template structure in `06-cover-letter-templates.md`
 - Create `cover_letters/cover_<company>_<role>.tex`
 - Ensure the letter connects specific experience to the role requirements
-- Run `10-echo-traps.md` over both documents (and any form free text): rewrite voice words and phrases copied from the posting, and show the flag table
+- Run `10-echo-traps.md` over both documents (and any form free text): first run `tools/echo_check.py` exactly as `/apply` Step 3 does (posting saved to a file, untrusted `--ignore` values in single quotes), then rewrite voice words and the phrases it reports, and show the flag table
 
 ### Step 3b: Record the Application
 - Run this once both documents exist. A CV or cover letter drafted alone is not yet an application.

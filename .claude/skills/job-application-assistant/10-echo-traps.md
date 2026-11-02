@@ -1,5 +1,5 @@
 ---
-framework_version: 1.0.0
+framework_version: 1.0.1
 ---
 
 # Echo Traps
@@ -39,7 +39,9 @@ interviewer later said it read as copied from the posting. In the field's regist
 Any run of **5 or more words** copied from the posting, outside quotation marks, is a
 lift. Names, job titles and tool lists ("Python, SQL, dbt") do not count.
 `tools/echo_check.py` finds the candidates (`LIFT` lines); judgment is only needed to drop
-the ones that are just a keyword list. A lift reads as the posting pasted back, even when
+the ones that are just a keyword list. Its stock-phrase filter knows English function
+words only, so in a draft in another language also drop hits that are a common phrase of
+that language rather than wording distinctive to this posting. A lift reads as the posting pasted back, even when
 every word is a hard keyword. Rewrite the sentence from the candidate's facts, keeping
 the keywords.
 
