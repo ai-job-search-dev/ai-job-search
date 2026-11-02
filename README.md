@@ -417,6 +417,7 @@ ai-job-search/
 │   ├── check_framework_version.py     # CI check: framework_version bumped when skill files change
 │   ├── check_upstream_updates.py      # Preview which personalized files an upstream update touches
 │   ├── convert_salary_excel.py        # Convert salary Excel to JSON
+│   ├── echo_check.py                  # Find phrases a draft copied from the posting or earlier letters
 │   ├── fetch_page.py                  # GET-only browser-header retry for 403s (robots.txt enforced)
 │   ├── install_portal_clis.py         # Install every discovered portal CLI (bun install)
 │   ├── lint_skills.py                 # CI lint for skills, commands, settings.json
