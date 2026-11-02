@@ -67,19 +67,32 @@ class UpskillSkillSpec(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             state, results = Path(tmp) / "seen_jobs.json", Path(tmp) / "results.json"
             state.write_text(
-                json.dumps({"seen": {"acme_data-engineer": {
-                    "title": "Data Engineer", "company": "Acme", "url": "https://example.com/job/1",
-                    "first_seen": "2026-09-01", "deadline": None, "status": "new",
-                }}}),
+                json.dumps({"seen": {
+                    "acme_data-engineer": {
+                        "title": "Data Engineer", "company": "Acme", "url": "https://example.com/job/1",
+                        "first_seen": "2026-09-01", "deadline": None, "status": "new",
+                    },
+                    "beta_analyst": {
+                        "title": "Analyst", "company": "Beta", "url": "https://example.com/job/2",
+                        "first_seen": "2026-09-01", "deadline": None, "status": "new",
+                    },
+                }}),
                 encoding="utf-8",
             )
+            scores = {"technical": 85, "experience": 80, "behavioral": 75, "career": 80}
             results.write_text(
-                json.dumps([{
-                    "key": "acme_data-engineer", "status": "scored",
-                    "scores": {"technical": 85, "experience": 80, "behavioral": 75, "career": 80},
-                    "location_verdict": "FAIL", "language_gate": "PASS", "deadline": None,
-                    "strengths": ["Python"], "gaps": ["Kubernetes in production"],
-                }]),
+                json.dumps([
+                    {
+                        "key": "acme_data-engineer", "status": "scored", "scores": scores,
+                        "location_verdict": "FAIL", "language_gate": "PASS", "deadline": None,
+                        "strengths": ["Python"], "gaps": ["Kubernetes in production"],
+                    },
+                    {
+                        "key": "beta_analyst", "status": "scored", "scores": scores,
+                        "location_verdict": "PASS", "language_gate": "FAIL", "deadline": None,
+                        "strengths": ["SQL"], "gaps": ["Fluent German"],
+                    },
+                ]),
                 encoding="utf-8",
             )
             proc = subprocess.run(
@@ -88,10 +101,13 @@ class UpskillSkillSpec(unittest.TestCase):
                 capture_output=True, text=True, encoding="utf-8",
             )
             self.assertEqual(proc.returncode, 0, proc.stderr)
-            stored = json.loads(state.read_text(encoding="utf-8"))["seen"]["acme_data-engineer"]
-        self.assertEqual(stored["status"], "ranked")
-        self.assertGreaterEqual(stored["rank_score"], 45, "the vetoed job clears Step 2's score floor")
-        self.assertEqual(stored["location_verdict"], "FAIL")
+            seen = json.loads(state.read_text(encoding="utf-8"))["seen"]
+        # Both vetoes, location-only and language-only, are stored as ranked jobs.
+        for key, field in (("acme_data-engineer", "location_verdict"), ("beta_analyst", "language_gate")):
+            with self.subTest(key=key):
+                self.assertEqual(seen[key]["status"], "ranked")
+                self.assertGreaterEqual(seen[key]["rank_score"], 45, "the vetoed job clears Step 2's score floor")
+                self.assertEqual(seen[key][field], "FAIL")
 
         step2 = _sections(SKILL.read_text(encoding="utf-8")).get("Step 2: Load Data", "")
         item3 = step2[step2.index("3. Read `job_scraper/seen_jobs.json`"): step2.index("4. Read")]
@@ -99,6 +115,8 @@ class UpskillSkillSpec(unittest.TestCase):
             self.assertIn(field, item3, f"Step 2.3 must drop entries whose {field} is FAIL")
         self.assertIn("`FAIL`", item3)
         self.assertIn("legacy", item3, "entries ranked before the rename keep their verdict in `location`")
+        # Only FAIL vetoes: a FLAG is a judgment call for the user and stays in.
+        self.assertIn("A `FLAG` stays in", item3)
 
     def test_step2_column_list_keeps_in_phase_with_tracker_header(self):
         """/upskill reads the tracker, so its enumeration of the columns must
