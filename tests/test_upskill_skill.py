@@ -6,10 +6,12 @@ lint_skills.py enforces, and aggregate mode's merge of tracker rows with
 /rank's recorded gaps from seen_jobs.json (previously aggregate mode only
 read the tracker and inferred skills from free-text columns).
 """
+import json
 import subprocess
 import sys
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 try:
     import yaml  # noqa: F401 - only probing availability for the lint integration test
@@ -20,6 +22,7 @@ except ImportError:
 REPO = Path(__file__).resolve().parent.parent
 SKILL = REPO / ".claude" / "skills" / "upskill" / "SKILL.md"
 SCRAPER = REPO / ".claude" / "skills" / "job-scraper" / "SKILL.md"
+RANK_STATE = REPO / "tools" / "rank_state.py"
 
 
 def _sections(text: str) -> dict[str, str]:
@@ -53,6 +56,49 @@ class UpskillSkillSpec(unittest.TestCase):
             step2,
             "Step 2 must document the graceful-degradation clause for entries scored before gaps existed",
         )
+
+    def test_step2_drops_jobs_rank_vetoed(self):
+        """/rank vetoes a location or language FAIL only on its shortlist:
+        tools/rank_state.py apply still stores the job as status "ranked" with
+        its full score and gaps. Step 2's filter (ranked, rank_score >= 45)
+        kept such a job, so a deal-breaker's gaps fed the heatmap and the
+        learning plan. Drive the real write path to show the entry exists,
+        then require Step 2 to drop it."""
+        with TemporaryDirectory() as tmp:
+            state, results = Path(tmp) / "seen_jobs.json", Path(tmp) / "results.json"
+            state.write_text(
+                json.dumps({"seen": {"acme_data-engineer": {
+                    "title": "Data Engineer", "company": "Acme", "url": "https://example.com/job/1",
+                    "first_seen": "2026-09-01", "deadline": None, "status": "new",
+                }}}),
+                encoding="utf-8",
+            )
+            results.write_text(
+                json.dumps([{
+                    "key": "acme_data-engineer", "status": "scored",
+                    "scores": {"technical": 85, "experience": 80, "behavioral": 75, "career": 80},
+                    "location_verdict": "FAIL", "language_gate": "PASS", "deadline": None,
+                    "strengths": ["Python"], "gaps": ["Kubernetes in production"],
+                }]),
+                encoding="utf-8",
+            )
+            proc = subprocess.run(
+                [sys.executable, str(RANK_STATE), "apply", "--state", str(state),
+                 "--results", str(results), "--today", "2026-09-03"],
+                capture_output=True, text=True, encoding="utf-8",
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            stored = json.loads(state.read_text(encoding="utf-8"))["seen"]["acme_data-engineer"]
+        self.assertEqual(stored["status"], "ranked")
+        self.assertGreaterEqual(stored["rank_score"], 45, "the vetoed job clears Step 2's score floor")
+        self.assertEqual(stored["location_verdict"], "FAIL")
+
+        step2 = _sections(SKILL.read_text(encoding="utf-8")).get("Step 2: Load Data", "")
+        item3 = step2[step2.index("3. Read `job_scraper/seen_jobs.json`"): step2.index("4. Read")]
+        for field in ("`location_verdict`", "`language_gate`"):
+            self.assertIn(field, item3, f"Step 2.3 must drop entries whose {field} is FAIL")
+        self.assertIn("`FAIL`", item3)
+        self.assertIn("legacy", item3, "entries ranked before the rename keep their verdict in `location`")
 
     def test_step2_column_list_keeps_in_phase_with_tracker_header(self):
         """/upskill reads the tracker, so its enumeration of the columns must
