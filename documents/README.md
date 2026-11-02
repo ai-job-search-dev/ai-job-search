@@ -136,11 +136,54 @@ A record of past job applications. Each subfolder is one application.
 You can maintain these folders by hand, or let the **`/outcome`** command do it: it records progress updates and final results conversationally, archives the submitted drafts and, if `/apply` has not already written it, the posting text, keeps `outcome.md` in the format below, and updates `job_search_tracker.csv` in the same step.
 
 **Subfolder naming:** `<company>_<role>` — lowercase, underscores for spaces.
-Every character that is not a letter, digit or underscore is dropped (so `Novo Nordisk A/S`
-becomes `novo_nordisk_as`), runs of underscores collapse to one, and leading and trailing
-underscores are trimmed. If the derived name is empty, stop and ask the user for a company or
-role containing at least one letter or digit; do not create a file or directory. Every non-empty
-result is therefore a single path component whatever the posting contains.
+Every character that is not a letter, digit or underscore is dropped, runs of
+underscores collapse to one, and leading and trailing underscores are trimmed.
+This is the **legacy** naming rule. If the derived name is empty, stop before
+creating files. Every valid result is a single path component.
+
+### Application attempt identity
+
+New tracker rows carry an additive `application_id` column. This is also their
+archive folder and draft filename stem: a readable company/role prefix followed
+by `__` and a random identifier. Two applications to the same role therefore have
+separate postings, submitted documents and outcomes. A redraft retains its ID.
+**In workflow path examples, `<company>_<role>` means this returned attempt stem
+for new records**, not a fresh derivation from the display names.
+
+Use `tools/application_state.py` for tracker writes and archive selection:
+
+- `list`: returns each `record`, its resolved `archive` and any legacy `warning`.
+  An existing attempt's stem is the resolved archive directory's name.
+- `plan --company "Acme" --role "Engineer"`: read-only; returns `expected`,
+  `record`, `archive` and `stem`. Reuses one open attempt or plans a new one after
+  a final outcome. Multiple open attempts require selection with `--application-id`.
+- `draft --input FILE`: pass the plan JSON with its `record` enriched with the
+  posting fields, numeric-string `fit_rating` and generated document paths.
+  This records the verified draft; planning alone creates no tracker row.
+- `update --input FILE`: pass `{"expected": <record from list>, "changes":
+  {"status": "interview"}, "note": "2026-10-27 interview scheduled"}`.
+  Only `status` and `date` may change; `note` is appended. Moving off `drafted`
+  requires an explicit actual submission `date`. For note-only updates omit
+  `changes`. Copy the exact expected snapshot; stale edits fail without writing.
+
+The tool quotes CSV fields, preserves extra columns and legacy short rows, and
+serializes cooperating writers with `job_search_tracker.csv.lock`. An interrupted
+process may leave that lock: verify no writer is running before removing it.
+Tracker replacement is atomic; tracker and archive edits are **not** one transaction.
+Finish archive writes before acknowledging an update; on failure report what
+succeeded and retry only the missing writes, never claim the whole update succeeded.
+
+Legacy rows without an ID retain their old folder only when exactly one row maps
+to it. A shared legacy folder returns `archive: null` and a warning. **Never guess
+its owner, merge its feedback into several rows, or use it for interview prep.**
+Ask the user to identify the submitted materials. Once ownership is established,
+use `update` with the exact selected `expected` record and
+`"separate_archive": true`. This assigns a distinct `application_id` and returns
+a new empty archive path without copying any evidence. Copy only verified materials
+to it and leave the shared historical folder untouched. An existing ID cannot be
+reassigned. Repeat for each legacy attempt whose materials the user can identify.
+A row with a valid ID always uses its own folder; a missing file never falls back to another attempt's archive or draft.
+`/setup` must also skip unresolved shared legacy archives during calibration.
 
 Examples:
 ```

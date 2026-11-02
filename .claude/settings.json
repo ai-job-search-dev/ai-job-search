@@ -16,6 +16,8 @@
       "Bash(python3 tools/job_key.py:*)",
       "Bash(python tools/scrape_state.py:*)",
       "Bash(python3 tools/scrape_state.py:*)",
+      "Bash(python tools/application_state.py:*)",
+      "Bash(python3 tools/application_state.py:*)",
       "Bash(python tools/verify_pdf.py:*)",
       "Bash(python3 tools/verify_pdf.py:*)",
       "Bash(python tools/verify_layout.py:*)",

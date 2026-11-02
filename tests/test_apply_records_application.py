@@ -112,31 +112,6 @@ class ApplyRecordsApplication(unittest.TestCase):
             "existing row's values by one position",
         )
 
-    def test_migration_appends_the_headers_own_last_column(self):
-        """The migration sentence and the create path must name the same column.
-
-        Derived, never copied - the same discipline `HtmlReportTrackerFieldTests`
-        already applies to its `CANONICAL_HEADER`. A hardcoded `,deadline` here
-        keeps passing after the column is renamed or a fifteenth is appended,
-        because the assertion no longer has any connection to the header it is
-        supposed to police. A tracker migrated by these commands and one they
-        create from scratch would then hold different schemas, which is the exact
-        divergence the shared-header rule exists to prevent.
-        """
-        last_column = TRACKER_HEADER.rsplit(",", 1)[1]
-        outcome_step_1 = section(OUTCOME, "## Step 1: Load State and Identify the Application")
-        for name, text in (
-            ("apply.md Step 6b", section(APPLY, "### Step 6b: Record the Application")),
-            ("outcome.md Step 1", outcome_step_1),
-        ):
-            self.assertIn(
-                f"append `,{last_column}` to the header line",
-                text,
-                f"{name}'s migration does not append the header's own last column "
-                f"({last_column!r}) - a tracker migrated by this command would not "
-                "match one this command creates from scratch",
-            )
-
     def test_step_runs_before_the_optional_offer_that_ends_the_turn(self):
         """The optional application-form offer asks the user a question.
 
@@ -214,7 +189,7 @@ class DraftedMeansDraftedToEveryReader(unittest.TestCase):
         (GMAIL_SYNC, "## Step 5", "`drafted` -> `applied`, otherwise",
          "the acknowledgement is the one email that proves a hand-submitted "
          "application was sent; classified as noise, the recovery never fires"),
-        (GMAIL_SYNC, "### Step 7a", "also set `date` to the email's date",
+        (GMAIL_SYNC, "### Step 7a", "supply `changes.date` with the submission date",
          "the row would keep the drafting date after being proved submitted"),
         (GMAIL_SYNC, "## Step 9: Staleness Check", "Skip `drafted` rows here",
          "an unsent draft reported as a forgotten application"),
@@ -260,7 +235,7 @@ class ApplyArchivesThePosting(unittest.TestCase):
          "by Step 6b the model may hold only a summary, so the archive gets a "
          "paraphrase - what /outcome Step 3.2 forbids"),
         (APPLY, "### Step 6b: Record the Application",
-         "`documents/applications/<company>_<role>/job_posting.md`",
+         "`<archive>/job_posting.md`",
          "the one moment /apply provably holds the posting is spent again, and "
          "a pasted posting has no recovery path at all"),
         (APPLY, "### Step 6b: Record the Application",
@@ -280,9 +255,9 @@ class ApplyArchivesThePosting(unittest.TestCase):
          "re-running /apply to refresh a CV would overwrite the posting that "
          "was actually applied against"),
         (APPLY, "### Step 6b: Record the Application",
-         "keeps the older posting",
+         "Reapplications get a different archive",
          "the leave-it rule would read as if the folder is always fresh, hiding "
-         "that a re-application to the same role collides with the old archive"),
+         "that a re-application needs a distinct archive"),
         (APPLY, "### Step 6b: Record the Application",
          "left in place rather than written",
          "the skip discards the current posting silently, and /interview preps "
@@ -314,18 +289,12 @@ class ApplyArchivesThePosting(unittest.TestCase):
 class DeadlineSurvivesEveryWrite(unittest.TestCase):
     """#319: the deadline is carried through the whole pipeline and never dropped.
 
-    The header migration must be header-line-only (inserting it mid-column
-    shifts every value of every existing row), and every path that rewrites
+    CSV migration is covered by test_application_state.py. Every path that rewrites
     a tracker row (/outcome Step 4, /gmail-sync Step 7a) must preserve
     fields it does not parse - the deadline is the first such field.
     """
 
     CASES = [
-        (APPLY, "### Step 6b: Record the Application", "append `,deadline` to the header line only",
-         "a mid-header insert shifts every existing row's values by one position"),
-        (OUTCOME, "## Step 1: Load State and Identify the Application",
-         "append `,deadline` to the header line only",
-         "the two commands must migrate identically, or whichever runs first sets the schema"),
         (APPLY, "## Step 0: Parse Input", "application deadline",
          "Step 6b's value is supposed to come from Step 0's extraction, so the extraction "
          "must be stated where the posting text is still held in full"),
@@ -340,9 +309,9 @@ class DeadlineSurvivesEveryWrite(unittest.TestCase):
          "deadline is the only clock that applies, and it must not be omitted"),
         (OUTCOME, "## Step 1: Load State and Identify the Application", "never chased",
          "surfacing the deadline must not drag drafted rows into the follow-up offer"),
-        (OUTCOME, "## Step 4: Update the Tracker", "preserve every other field of the row",
+        (OUTCOME, "## Step 4: Update the Tracker", "preserves every other field",
          "a status update that rewrites the row would blank the deadline column"),
-        (GMAIL_SYNC, "### Step 7a: Write Approved Updates", "preserve every other field",
+        (GMAIL_SYNC, "### Step 7a: Write Approved Updates", "preserves `deadline` and every other field",
          "the sync path rewrites the row too - it must carry the same preservation rule"),
         (NOTION_SYNC, None, "**Deadline precedence: the tracker wins too**",
          "the tracker's deadline (written from the posting the application was actually "
@@ -352,27 +321,6 @@ class DeadlineSurvivesEveryWrite(unittest.TestCase):
         (SKILL, "### Step 3b: Record the Application", "`deadline` is the application deadline",
          "the /scrape path reaches Step 3b without running /apply Step 0, so it must "
          "still be told what the field is and where it comes from"),
-        # The two properties the migration has to hold. Both are stated in the
-        # prose of either file and neither was pinned, so either could be edited
-        # away with a green suite - turning an agreed header-line append into a
-        # row rewrite, which is a different and far riskier change.
-        (APPLY, "### Step 6b: Record the Application", "no data row is touched",
-         "a migration that rewrites rows is a different and far riskier change than "
-         "one that appends to the header line, and only the second was agreed"),
-        (OUTCOME, "## Step 1: Load State and Identify the Application", "no data row is touched",
-         "same rule, stated in both files, because either command may be the one that "
-         "meets a legacy tracker first"),
-        (APPLY, "### Step 6b: Record the Application", "read as an empty deadline",
-         "rows written before the migration have no fourteenth field; if that is not "
-         "stated, a reader may treat the short row as malformed and drop it"),
-        (OUTCOME, "## Step 1: Load State and Identify the Application",
-         "read as an empty deadline",
-         "same rule, stated in both files"),
-        (OUTCOME, "## Step 1: Load State and Identify the Application",
-         "one edit to an existing tracker",
-         "Step 4 forbids restructuring the CSV, so without this the header append reads "
-         "as a violation of the same command's own rule and an implementer has a "
-         "documented reason to skip the migration"),
         (NOTION_SYNC, None, "never reconcile the two by picking the earlier or later date",
          "the tracker-wins rule says which source to prefer but does not forbid the "
          "plausible-looking min() of the two, which syncs a date the user never "
@@ -407,7 +355,7 @@ class FallbackGlobFindsOneRolesDocuments(unittest.TestCase):
 
     CASES = [
         (OUTCOME, "## Step 3: Archive the Application Materials",
-         "by the **Subfolder naming** rule in `documents/README.md`",
+         "**Application attempt identity** in `documents/README.md`",
          "the archive locator must derive the stem by the one documented rule, "
          "not invent a second derivation that drifts from it"),
         (OUTCOME, "## Step 3: Archive the Application Materials",
@@ -415,7 +363,7 @@ class FallbackGlobFindsOneRolesDocuments(unittest.TestCase):
          "without the prohibition the next edit relaxes the glob when it finds "
          "no match, which is exactly the wrong-file-recorded-as-submitted case"),
         (INTERVIEW, "## Step 1: Load the Application Context",
-         "by the **Subfolder naming** rule in `documents/README.md`",
+         "**Application attempt identity** in `documents/README.md`",
          "interview's fallback must resolve the same stem /apply wrote"),
         (INTERVIEW, "## Step 1: Load the Application Context",
          "Never widen those globs to the company alone",
@@ -500,30 +448,30 @@ class ArchiveNameIsOnePathComponent(unittest.TestCase):
          "the sentence that says why the rule exists; without it the next "
          "edit simplifies the rule back to spaces-only"),
         (OUTCOME, "## Step 1: Load State and Identify the Application",
-         "by the **Subfolder naming** rule in `documents/README.md`",
+         "**Application attempt identity** in `documents/README.md`",
          "Step 1.4 is the derivation every other writer cites; paraphrasing "
          "the rule here is how the two copies drifted apart originally"),
-        (APPLY, "### Requirement coverage (both documents)",
-         "the same rule `/outcome` Step 1.4 uses",
+        (APPLY, "## Step 2: DRAFTER - Draft CV + Cover Letter",
+         "Use its `stem` for **every**",
          "CV and cover-letter filenames use the same unsanitised values; a "
          "`/` there sends the draft to a path lualatex never writes a PDF "
          "back to, and the Step 4 compile check fails on a phantom path"),
         (SKILL, "### Step 2: Tailor CV",
-         "by the **Subfolder naming** rule in `documents/README.md`",
+         "**Application attempt identity** in `documents/README.md`",
          "the /scrape path writes its documents before Step 3b consults /apply, "
          "so /apply's filename rule cannot protect it"),
         (GMAIL_SYNC, "## Step 2: Load State",
-         "by the **Subfolder naming** rule in `documents/README.md`",
+         "**Application attempt identity** in `documents/README.md`",
          "gmail-sync both locates and creates archives; its old spaces-only "
          "paraphrase would split state across two folders"),
         (INTERVIEW, "## Step 1: Load the Application Context",
-         "by the **Subfolder naming** rule in `documents/README.md`",
+         "**Application attempt identity** in `documents/README.md`",
          "interview must read the same archive /apply and /outcome wrote"),
         (INTERVIEW, "### 6. Logistics",
          "archive folder derived in Step 1",
          "interview must reuse its canonical read path when writing the prep pack"),
         (NOTION_SYNC, "## Step 5: Write the Detail Page",
-         "by the **Subfolder naming** rule in `documents/README.md`",
+         "**Application attempt identity** in `documents/README.md`",
          "notion-sync otherwise reports that the sanitized local archive is absent"),
         (DOCS_README, "## applications/",
          "If the derived name is empty",

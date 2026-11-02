@@ -12,6 +12,20 @@ Both present the same tracker data; they own different moments. `/html-report` i
 
 Follow these steps **in order**.
 
+### Application records (mandatory)
+
+> **Windows:** run these tools as `python`, not `python3`.
+
+```bash
+python3 tools/application_state.py list
+```
+
+Use the returned records and per-attempt `archive` paths throughout this command,
+following **Application attempt identity** in `documents/README.md`. Keep
+`application_id` when joining records. A null archive means ambiguous legacy
+ownership: skip that archive and report missing history. Never attach one shared
+archive to multiple attempts. This command never writes the tracker.
+
 ---
 
 ## Step 0: Parse Input
@@ -42,7 +56,7 @@ Validate the cheap, local precondition before creating anything external. A run 
 
 1. Read `job_scraper/seen_jobs.json` and `job_search_tracker.csv` (either may be missing).
 2. Select `job_scraper/seen_jobs.json` entries with status `ranked` whose `rank_score` meets the threshold from Step 0. `--all` lifts the threshold entirely.
-3. Every tracker row joins the sync set (an applied-to job always syncs, ranked or not), matched to `job_scraper/seen_jobs.json` entries case-insensitively on company + title where possible (the tracker's `role` column against the entry's `title` field — entries carry `title`, not `role`). Tracker rows with no `job_scraper/seen_jobs.json` entry sync too - build their Key as `<company>_<role>` lowercased with underscores.
+3. Every tracker row joins the sync set (an applied-to job always syncs, ranked or not), matched to `job_scraper/seen_jobs.json` entries case-insensitively on company + title where possible (the tracker's `role` column against the entry's `title` field — entries carry `title`, not `role`). Tracker rows with no `job_scraper/seen_jobs.json` entry sync too. For every ID-bearing tracker row use `application:<application_id>` as its distinct Notion Key; ranking identity never merges separate application attempts. Legacy-only rows retain their old Key. Before creating an ID-bearing row, check for an existing legacy company/role Key: adopt it only if exactly one local attempt can own it. With multiple attempts leave that page untouched and report the ambiguous legacy page; create distinct attempt pages without copying its history.
 4. `job_scraper/seen_jobs.json` entries with status `expired` join the sync set regardless of score as update-only candidates. An entry selected only because it is `expired` and has no matching tracker row can update an existing page, but never creates a page or writes a body. If a matching tracker row exists, it remains an ordinary sync item and tracker status precedence applies.
 5. **Status precedence:** the tracker wins. A job that is `ranked` in `job_scraper/seen_jobs.json` but `interview` in the tracker syncs as `interview`. Jobs only in `job_scraper/seen_jobs.json` keep their stored status. **Deadline precedence: the tracker wins too** - the tracker's `deadline` (written by `/apply` from the posting the application was actually built on) overrides the `job_scraper/seen_jobs.json` value; jobs only in `job_scraper/seen_jobs.json` keep the scraper's stored deadline. Omit the property when neither states one, and **never reconcile the two by picking the earlier or later date** - both were read from the posting at different times, and the safe-looking `min()` substitutes a date the user never applied against.
 6. **If the sync set is empty** (no ranked entries meet the threshold and there are no tracker rows), say "Nothing to sync - run `/scrape` and `/rank` first" (or, when jobs exist but all score below the threshold, say so and suggest `--min-score`/`--all`) and **stop**.
@@ -75,7 +89,7 @@ Validate the cheap, local precondition before creating anything external. A run 
    | CV file | rich text | tracker `cv_file` column - the filename only, never document content |
    | Cover letter | rich text | tracker `cover_letter_file` column - the filename only, never document content |
    | URL | url | posting URL |
-   | Key | rich text | the job's key in `job_scraper/seen_jobs.json` - dedup anchor, never edited by hand |
+   | Key | rich text | `application:<application_id>` for tracked attempts; otherwise the job's key in `job_scraper/seen_jobs.json` - dedup anchor |
 
    The tracker-sourced properties (Applied on, Channel, CV file, Cover letter) stay empty for jobs that have no tracker row. CV file and Cover letter fill in once `/apply` records the draft; Applied on stays empty until `/outcome` records the submission. Only filenames ever sync; document contents stay local.
 
@@ -88,7 +102,7 @@ Validate the cheap, local precondition before creating anything external. A run 
 
 For each job in the sync set:
 
-1. Query the database for a page whose `Key` equals the job's key.
+1. Query the database for a page whose `Key` equals the sync item's key (`application:<application_id>` for an ID-bearing tracker row). If absent, check its prior ranked-job or legacy company/role Key. Adopt that page only when exactly one local application attempt can own it: update its Key to the attempt Key, then follow the existing-page rules without overwriting the body. With several possible owners leave the legacy page untouched, report the ambiguity and use separate attempt pages. Never collapse distinct attempt Keys back into a ranked-job Key.
 2. **No match** → if the job is an expired-only entry, skip it - do not create a page or write a body. Otherwise, create the page with all properties from the Step 3 table, then write its body (Step 5).
 3. **Match, expired-only entry** → update **Status only** to `expired`. Do not update other properties or touch the page body.
 4. **Match, any other effective status** → update **properties only**: Status, Score, Verdict, Deadline, Ranked, Applied on, Channel, CV file, Cover letter. Properties are the always-current surface (bodies are write-once), so tracker updates recorded by `/outcome` reach the destination exclusively through them. Do not touch the page body - the user may have added their own notes there, and clobbering them breaks trust in the whole view. (`--rebuild` is the sole exception for non-expired jobs.)
@@ -107,7 +121,7 @@ The page body is what makes a row worth clicking. Build it **only from stored da
 1. Never write or rebuild a body for an expired-only entry, including when `--rebuild` is set. Step 4 skips an expired-only entry when no matching page exists.
 2. **Fit summary** - a short section from `job_scraper/seen_jobs.json` fields: score, verdict, quick-fit level, first-seen and ranked dates. If the job is in the tracker, add the application timeline (date applied, channel, current status, dated notes from the `notes` column) and name the submitted documents from `cv_file`/`cover_letter_file` (filenames only - the documents themselves never sync). **When the status is `drafted`, write "drafted YYYY-MM-DD, not yet submitted" instead of a date applied, and call the files drafts rather than submitted documents** (page bodies are write-once - Step 4.4).
 3. **The posting** - WebFetch the job URL and write a readable digest: what the role is, key requirements, practical details (location, deadline, salary if stated). Retry a 403 with browser headers per `.claude/skills/job-application-assistant/09-web-research.md` first. If the fetch still fails or redirects to a listing page, write "Posting no longer available (checked YYYY-MM-DD)" - **never reconstruct a posting from memory**.
-4. **Links** - the posting URL; derive `<company>_<role>` by the **Subfolder naming** rule in `documents/README.md`, and if that archive exists locally, name its path (plain text - the destination cannot link into the filesystem).
+4. **Links** - the posting URL; use the selected record's resolved `archive` per **Application attempt identity** in `documents/README.md` (the **Subfolder naming** rule is legacy only), and if that archive exists locally, name its path (plain text - the destination cannot link into the filesystem).
 
 Keep the page under ~40 blocks; this is a briefing, not a mirror of the posting.
 
