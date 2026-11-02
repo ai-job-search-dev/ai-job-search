@@ -7,7 +7,7 @@ import io
 import subprocess
 import sys
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -127,6 +127,72 @@ class EchoCheck(unittest.TestCase):
             capture_output=True,
         ).returncode
         self.assertEqual(code, 2)
+
+
+
+class InputConfinement(unittest.TestCase):
+    """settings.json pre-approves echo_check.py with any arguments, so it must not
+    read files the Read deny rules protect (.env, ~/.ssh, ~/.aws, ~/.gnupg)."""
+
+    def setUp(self):
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.tmp = Path(directory.name)
+        self.posting = self.tmp / "posting.txt"
+        self.posting.write_text("API_KEY=secret value that must never be printed", encoding="utf-8")
+        self.draft = self.tmp / "cover.tex"
+        self.draft.write_text("API_KEY=secret value that must never be printed", encoding="utf-8")
+
+    def refused(self, *argv):
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = echo_check.main(list(map(str, argv)))
+        self.assertEqual(code, 2, out.getvalue())
+        self.assertNotIn("secret", out.getvalue())
+        self.assertIn("echo_check:", err.getvalue())
+
+    def test_dotenv_is_refused(self):
+        env = self.tmp / ".env"
+        env.write_text("API_KEY=secret value that must never be printed", encoding="utf-8")
+        self.assertIsNotNone(echo_check.check_input_path(env))
+        self.refused("--posting", env, "--draft", self.draft)
+
+    def test_file_under_a_dot_directory_is_refused(self):
+        hidden = self.tmp / ".ssh" / "notes.txt"
+        hidden.parent.mkdir()
+        hidden.write_text("API_KEY=secret value that must never be printed", encoding="utf-8")
+        self.assertIsNotNone(echo_check.check_input_path(hidden))
+        self.refused("--posting", self.posting, "--draft", hidden)
+
+    def test_other_suffix_is_refused(self):
+        script = self.tmp / "settings.py"
+        script.write_text("API_KEY=secret value that must never be printed", encoding="utf-8")
+        self.refused("--posting", script, "--draft", self.draft)
+
+    def test_symlink_is_refused(self):
+        link = self.tmp / "posting_link.txt"
+        try:
+            link.symlink_to(self.posting)
+        except (OSError, NotImplementedError):
+            self.skipTest("creating symlinks needs privilege on this platform")
+        self.assertEqual(echo_check.check_input_path(link), "must not be a symlink")
+        self.refused("--posting", link, "--draft", self.draft)
+
+    def test_refused_glob_hit_in_others_is_skipped(self):
+        letters = self.tmp / "letters"
+        letters.mkdir()
+        draft = letters / "cover_a.tex"
+        draft.write_text("A long sentence about scheduling freight trains across Europe.", encoding="utf-8")
+        (letters / "cover_b.py").write_text("A long sentence about scheduling freight trains across Europe.", encoding="utf-8")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = echo_check.main(["--posting", str(self.posting), "--draft", str(draft),
+                                    "--others", str(letters / "cover_*")])
+        self.assertEqual(code, 0, out.getvalue())
+
+    def test_allowed_inputs_pass(self):
+        for name in ("p.md", "p.txt", "c.tex", "c.typ"):
+            self.assertIsNone(echo_check.check_input_path(self.tmp / name))
 
 
 if __name__ == "__main__":

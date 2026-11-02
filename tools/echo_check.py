@@ -26,7 +26,11 @@ Usage:
 Output: one line per hit, `LIFT` (shared with the posting) or `REUSE <file>` (shared
 with another application), with the draft's file:line and the shared words.
 
-Exit codes: 0 no hits, 1 hits found, 2 bad invocation.
+Every input path must be a .tex, .md, .txt or .typ file, not a symlink, with no
+dot-named component in its resolved path; anything else is refused (exit 2), and an
+--others glob hit that fails the rule is skipped.
+
+Exit codes: 0 no hits, 1 hits found, 2 bad invocation or refused path.
 
 Tests live in tests/test_echo_check.py.
 """
@@ -139,6 +143,27 @@ def shared_spans(draft_text: str, draft_tokens, blocked, source_tokens, n: int):
     return spans
 
 
+# `.claude/settings.json` pre-approves this tool with any arguments, so what it may
+# read is part of that permission: without a limit it would print matches from any
+# file on disk and bypass the Read deny rules (.env, ~/.ssh, ~/.aws, ~/.gnupg).
+# The workflow only passes postings and drafts, so only their suffixes are allowed,
+# and no dot-named file or directory (.env, .ssh, .aws, .git, ...) on the resolved
+# path. Same reasoning as verify_pdf.py's check_dump_target.
+ALLOWED_SUFFIXES = {".tex", ".md", ".txt", ".typ"}
+
+
+def check_input_path(path) -> str | None:
+    """Return why `path` may not be read, or None if it may."""
+    path = Path(path)
+    if path.suffix.lower() not in ALLOWED_SUFFIXES:
+        return "must be a " + ", ".join(sorted(ALLOWED_SUFFIXES)) + " file"
+    if path.is_symlink():
+        return "must not be a symlink"
+    if any(part.startswith(".") for part in path.resolve().parts):
+        return "must not be, or sit under, a dot-named file or directory"
+    return None
+
+
 def load(path: str) -> tuple[str, list]:
     raw = Path(path).read_text(encoding="utf-8", errors="replace")
     text = preprocess(raw, latex=path.lower().endswith(".tex"))
@@ -164,6 +189,12 @@ def main(argv=None) -> int:
     if args.min < 2:
         parser.error("--min must be at least 2")
 
+    for path in [args.posting, *args.draft]:
+        reason = check_input_path(path)
+        if reason:
+            print(f"echo_check: {path}: {reason}", file=sys.stderr)
+            return 2
+
     try:
         _, posting_tokens = load(args.posting)
         drafts = {d: load(d) for d in args.draft}
@@ -175,6 +206,8 @@ def main(argv=None) -> int:
     others = []
     for pattern in args.others:
         for path in sorted(glob.glob(pattern)) or [pattern]:
+            if check_input_path(path):
+                continue  # a glob may sweep up anything; refused files are skipped, not fatal
             if Path(path).resolve() not in draft_paths and Path(path).is_file():
                 others.append(path)
 
