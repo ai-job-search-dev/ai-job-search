@@ -157,7 +157,7 @@ For each new job, do a rapid fit check (NOT the full evaluation from `04-job-eva
 python3 tools/job_key.py --company "<company>" --title "<title>" --url "<url>"
 ```
 
-It prints one line: the canonical key for that posting. The key must be a pure function of the posting, because two runs that slugify differently store the same job twice and defeat the dedup this step exists to provide. The helper also length-caps long titles and disambiguates the cap with a hash of the full slug, so a truncated title is stable across runs and two different long titles never collide. `python3 tools/job_key.py --audit` reports entries in an existing state file that predate this rule; it only reports, and never rewrites keys, since a rewritten key breaks the tracker's own company+role matching.
+It prints one line: the canonical key for that posting. The key must be a pure function of the posting, because two runs that slugify differently store the same job twice and defeat the dedup this step exists to provide. The helper also length-caps long titles and disambiguates the cap with a hash of the full slug, so a truncated title is stable across runs and two different long titles never collide. `python3 tools/job_key.py --audit` reports entries in an existing state file that predate this rule; it only reports. `python3 tools/job_key.py --audit --migrate` rewrites the keys that no longer match the rule (backup first, old->new reported, an existing key is never overwritten, a second run changes nothing).
 
 2. Add ALL fetched jobs (new and skipped) to `job_scraper/seen_jobs.json` through the tool below. Each stored entry has this structure:
 ```json
