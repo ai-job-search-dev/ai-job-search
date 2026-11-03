@@ -120,7 +120,7 @@ Keep the page under ~40 blocks; this is a briefing, not a mirror of the posting.
 ## Pipeline Sync - YYYY-MM-DD
 
 Database: <database_url>
-Synced <N> jobs (threshold: score ≥ <T>): <C> created, <U> updated, <R> re-keyed by URL, <S> unchanged, <A> skipped (URL matched several rows), <F> failed.
+Synced <N> jobs (threshold: score ≥ <T>): <C> created, <U> updated, <R> re-keyed by URL, <S> unchanged, <A> skipped (ambiguous URL match), <F> failed.
 
 | | Title | Company | Status | Score |
 |---|-------|---------|--------|-------|

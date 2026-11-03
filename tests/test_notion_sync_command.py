@@ -93,12 +93,14 @@ class NotionSyncCommandSpec(unittest.TestCase):
         self.assertIn("**No match on `Key`** → fall back to the posting URL before creating anything", step4)
         self.assertIn("whose `URL` equals the job's URL exactly", step4)
         self.assertIn("**Exactly one URL match** → re-key it: set its `Key` to the job's key", step4)
+        self.assertIn("If the row's current `Key` is the key of another job in this sync set, it is not drifted; treat it like a multiple match instead.", step4)
         self.assertIn("**More than one URL match** → create nothing and update nothing for this job", step4)
         self.assertIn("**No URL match** → if the job is an expired-only entry, skip it", step4)
         # Hand-added rows (no Key) stay invisible, fallback included.
         self.assertIn("**and** whose `Key` is non-empty", step4)
         self.assertIn("invisible to this command, including to the URL fallback", step4)
         self.assertIn("<R> re-keyed by URL", step6)
+        self.assertIn("<A> skipped (ambiguous URL match)", step6)
         self.assertIn("never on fuzzy title comparison", rules)
         self.assertIn("exact match on the `URL` property", rules)
 
