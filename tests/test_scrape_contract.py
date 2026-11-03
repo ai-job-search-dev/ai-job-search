@@ -163,7 +163,11 @@ class PortalQuerySyntaxTests(unittest.TestCase):
 
     def test_step1b_points_at_the_query_syntax_line(self):
         text = SCRAPER_SKILL.read_text(encoding="utf-8")
-        self.assertIn("`Query syntax:`", text, "Step 1b no longer defers quoting to the portal's Query syntax line")
+        step1b = re.search(r"#### 1b\..*?(?=#### 1c\.)", text, re.DOTALL)
+        self.assertIsNotNone(step1b, "Step 1b section not found")
+        self.assertIn("`Query syntax:`", step1b.group(0), "Step 1b no longer defers quoting to the portal's Query syntax line")
+        self.assertIn("inside the argument the CLI receives", step1b.group(0))
+        self.assertIn("deduplicate the pool by URL before Step 2", step1b.group(0))
 
     def test_every_installed_portal_skill_has_a_query_syntax_line(self):
         self.assertTrue(PORTAL_CLIS, "no installed portal skills found")

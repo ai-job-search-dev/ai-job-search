@@ -47,7 +47,7 @@ Invoke this skill when the user wants to:
 bun run .agents/skills/jobbank-search/cli/src/cli.ts search [flags]
 ```
 
-Query syntax: phrase quoting honoured; no OR.
+Query syntax: double quotes inside the argument make an exact phrase, word order included (e.g. `--key '"product owner"'`); single quotes are ignored; no OR.
 
 Key flags:
 - `--key <text>` — keyword search (title, company, keyword)

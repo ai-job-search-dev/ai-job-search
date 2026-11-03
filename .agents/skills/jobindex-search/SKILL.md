@@ -44,7 +44,7 @@ Invoke this skill when the user wants to:
 bun run .agents/skills/jobindex-search/cli/src/cli.ts search --query "<text>" [flags]
 ```
 
-Query syntax: phrase quoting honoured; no OR.
+Query syntax: double quotes inside the argument make an exact phrase, word order included (e.g. `--query '"product owner"'`); single quotes are ignored; no OR.
 
 Key flags:
 - `--query <text>` / `-q <text>` — keyword search (job title, skill, company, city). **Required.** Searches without a query exit with `MISSING_REQUIRED`.
