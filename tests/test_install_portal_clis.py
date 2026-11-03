@@ -121,5 +121,58 @@ class InstallPortalClis(unittest.TestCase):
             self.assertIn(f"would install  {cli.parent.name}", proc.stdout)
 
 
+class FindBun(unittest.TestCase):
+    def setUp(self):
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+
+    def test_find_bun_prefers_path(self):
+        import shutil
+        orig_which = shutil.which
+        shutil.which = lambda name: "/custom/bin/bun" if name == "bun" else None
+        self.addCleanup(setattr, shutil, "which", orig_which)
+
+        self.assertEqual(install_portal_clis.find_bun(), "/custom/bin/bun")
+
+    def test_find_bun_falls_back_to_candidate_directory(self):
+        import shutil
+        orig_which = shutil.which
+        shutil.which = lambda name: None
+        self.addCleanup(setattr, shutil, "which", orig_which)
+
+        binary = "bun.exe" if sys.platform == "win32" else "bun"
+        fake_bin = self.root / ".bun" / "bin"
+        fake_bin.mkdir(parents=True)
+        fake_bun = fake_bin / binary
+        fake_bun.write_text("#!/bin/sh\n", encoding="utf-8")
+        if sys.platform != "win32":
+            fake_bun.chmod(0o755)
+
+        found = install_portal_clis.find_bun(candidate_dirs=(str(fake_bin),))
+        self.assertEqual(found, str(fake_bun))
+
+    def test_find_bun_returns_none_when_missing(self):
+        import shutil
+        orig_which = shutil.which
+        shutil.which = lambda name: None
+        self.addCleanup(setattr, shutil, "which", orig_which)
+
+        self.assertIsNone(install_portal_clis.find_bun(candidate_dirs=(str(self.root / "empty"),)))
+
+    def test_missing_bun_message_suggests_export(self):
+        output = io.StringIO()
+        orig_find = install_portal_clis.find_bun
+        install_portal_clis.find_bun = lambda *args, **kwargs: None
+        self.addCleanup(setattr, install_portal_clis, "find_bun", orig_find)
+
+        with redirect_stdout(output):
+            rc = install_portal_clis.main([])
+        self.assertEqual(rc, 1)
+        text = output.getvalue()
+        self.assertIn("bun was not found on PATH", text)
+        self.assertIn("export PATH=", text)
+
+
 if __name__ == "__main__":
     unittest.main()
