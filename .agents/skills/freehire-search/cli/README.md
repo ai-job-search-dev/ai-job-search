@@ -1,7 +1,7 @@
 # freehire-cli
 
 CLI for searching the [freehire.me](https://freehire.me) job aggregator across
-**many markets** (tech-focused), via its public JSON API.
+**many markets**, tech and non-tech roles alike, via its public JSON API.
 
 **Data source**: freehire.me REST API (`/api/v1/agent/jobs/search`, `/api/v1/jobs/search` for `--no-description`, `/api/v1/jobs/facets`, `/api/v1/jobs/{slug}`).
 **Authentication**: None required — reads are public (only tracking mutations need a key, and those are out of scope here).
@@ -82,7 +82,7 @@ See `../SKILL.md` for the full flag reference and the hosted-dependency note.
 | `--country` | | ISO-3166 alpha-2 code(s). |
 | `--city` | | City name(s). |
 | `--seniority` | | Seniority level(s). |
-| `--category` | | Role category(ies). |
+| `--category` | | Role category(ies), tech or not: `backend`, `devops`, `healthcare`, `sales`, `skilled_trades`, ... (live list: `/api/v1/jobs/facets`). |
 | `--skill` | | Canonical skill(s). |
 | `--company` | | Company slug. |
 | `--remote` | | `remote` \| `hybrid` \| `onsite` (`work_mode`). |
