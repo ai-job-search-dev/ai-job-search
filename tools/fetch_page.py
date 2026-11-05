@@ -39,6 +39,7 @@ Exit codes: 0 fetched; 1 refused by robots policy (go to escalation step 4);
 """
 
 import argparse
+from functools import lru_cache
 import gzip
 import hashlib
 import html
@@ -68,14 +69,31 @@ MAX_REDIRECTS = 5
 MAX_BYTES = 10 * 1024 * 1024
 
 
+@lru_cache(maxsize=1)
+def _curl_supports_compressed() -> bool:
+    """Return whether the bare curl used for fetching can decode content."""
+    try:
+        proc = subprocess.run(
+            ["curl", "--version"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return proc.returncode == 0 and bool(
+        re.search(r"^Features:.*\b(?:libz|brotli|zstd)\b", proc.stdout, re.IGNORECASE | re.MULTILINE)
+    )
+
+
 def build_curl_argv(url: str, out: Path, headers: Path, timeout: float) -> list:
     """One GET without automatic redirects, so the next hop can be gated."""
+    compressed = ["--compressed"] if _curl_supports_compressed() else []
     return [
         "curl", "-sS",
         "--max-redirs", "0",
         "--max-time", str(timeout),
         "--max-filesize", str(MAX_BYTES),
-        "--compressed",
+        *compressed,
         "-A", BROWSER,
         "-H", f"Accept: {ACCEPT}",
         "-H", f"Accept-Language: {ACCEPT_LANGUAGE}",
