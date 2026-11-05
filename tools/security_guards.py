@@ -101,6 +101,14 @@ ALLOWED_PERMISSIONS = {
     # Reads a file or stdin, writes only to an explicit --out, never fetches.
     "Bash(python tools/posting_guard.py:*)",
     "Bash(python3 tools/posting_guard.py:*)",
+    # The echo check (/apply Step 3). Reads the posting and draft files it is
+    # given and prints hits; never writes a file and never fetches. It reads only
+    # .tex/.md/.txt/.typ files outside dot-named paths and refuses symlinks, so
+    # the grant cannot read what the deny list protects (.env, ~/.ssh, ...). It
+    # prints draft text only, and drafts must sit in cv/, cover_letters/ or
+    # documents/, so it cannot print an arbitrary file either.
+    "Bash(python tools/echo_check.py:*)",
+    "Bash(python3 tools/echo_check.py:*)",
 }
 
 # Rules that must stay in .claude/settings.json permissions.ask. An ask rule
