@@ -496,6 +496,55 @@ class InputHandling(GuardFixture):
         self.assertIn("Ignore previous instructions now", block)
 
 
+class EmptyInput(GuardFixture):
+    """posting_guard must not claim 'clean' when it received nothing to check.
+
+    Issue #798: an empty or whitespace-only input silently produced a 'clean'
+    verdict (exit 0), which is indistinguishable from a real clean posting.
+    The correct behaviour is a distinct verdict string and exit code 1.
+    """
+
+    def test_empty_stdin_exits_1_with_no_text_verdict(self):
+        code, out, err = self.run_main("--text", stdin_text="")
+        self.assertEqual(code, 1)
+        self.assertTrue(out.startswith("posting_guard: no text"), out.splitlines()[0])
+
+    def test_whitespace_only_stdin_exits_1(self):
+        # Matches the exact shell reproduction in the issue: printf '   \n\n' | …
+        code, out, err = self.run_main("--text", stdin_text="   \n\n")
+        self.assertEqual(code, 1)
+        self.assertTrue(out.startswith("posting_guard: no text"), out.splitlines()[0])
+
+    def test_empty_file_exits_1(self):
+        p = self.write("empty.txt", "")
+        code, out, err = self.run_main("--in", str(p), "--text")
+        self.assertEqual(code, 1)
+        self.assertTrue(out.startswith("posting_guard: no text"), out.splitlines()[0])
+
+    def test_empty_input_verdict_is_not_clean(self):
+        # The verdict string must not begin with "posting_guard: clean" so callers
+        # that check the first line cannot mistake it for a real clean result.
+        code, out, err = self.run_main("--text", "--json", stdin_text="")
+        self.assertEqual(code, 1)
+        self.assertFalse(out.startswith("posting_guard: clean"), out.splitlines()[0])
+        f = self.findings_of(out)
+        self.assertEqual(f["verdict"], posting_guard.NO_TEXT_VERDICT)
+
+    def test_empty_input_json_findings_are_empty(self):
+        code, out, err = self.run_main("--text", "--json", stdin_text="")
+        f = self.findings_of(out)
+        self.assertEqual(f["hidden_blocks"], [])
+        self.assertEqual(f["instruction_like"], [])
+        self.assertEqual(f["hidden_urls"], [])
+        self.assertEqual(f["invisible_chars"], {})
+        self.assertEqual(f["invisible_flagged"], 0)
+
+    def test_empty_html_input_exits_1(self):
+        code, out, err = self.run_main("--html", stdin_text="")
+        self.assertEqual(code, 1)
+        self.assertTrue(out.startswith("posting_guard: no text"), out.splitlines()[0])
+
+
 class Bypasses(GuardFixture):
     """Each row is a one-character variant of valid markup that a browser hides.
     A guard that shows the text under a "clean" line is worse than no guard."""

@@ -72,7 +72,7 @@ LINE_MAX = 200
 ZERO_WIDTH = "​‌‍⁠⁡⁢⁣⁤"
 BIDI = "‎‏‪‫‬‭‮⁦⁧⁨⁩"
 BIDI_TAMPER = "‭‮⁦⁧⁨⁩"  # overrides and isolates
-FORMAT = "­  "  # soft hyphen, line/paragraph separators
+FORMAT = "­"  # soft hyphen, line/paragraph separators
 BOM = "﻿"
 # U+E0000-U+E007F: the Unicode "tags" block, one invisible code point per ASCII
 # character. A payload written in it survives copy-paste, never renders, and
@@ -432,8 +432,25 @@ def verdict(findings: dict) -> str:
     return "posting_guard: clean"
 
 
+NO_TEXT_VERDICT = "posting_guard: no text - nothing was gated"
+
+
 def guard(raw: str, mode: str):
-    """Run the whole gate. mode: "html", "text" or "auto". Returns (cleaned, findings)."""
+    """Run the whole gate. mode: "html", "text" or "auto". Returns (cleaned, findings).
+
+    When the input is empty or contains only whitespace the verdict is
+    ``NO_TEXT_VERDICT`` and all finding lists are empty.  The caller
+    (``main``) exits with code 1 in that case so a pipe that produces no
+    output is distinguishable from a clean posting.
+    """
+    if not raw or not raw.strip():
+        empty_findings = {
+            "hidden_blocks": [], "invisible_chars": {}, "invisible_flagged": 0,
+            "invisible_text": [], "instruction_like": [], "hidden_urls": [],
+            "visible_url_count": 0, "homoglyph_runs": [],
+            "verdict": NO_TEXT_VERDICT,
+        }
+        return "", empty_findings
     if mode == "auto":
         mode = "html" if HTML_HINT.search(raw) else "text"
     if mode == "html":
@@ -518,7 +535,7 @@ def main(argv=None) -> int:
     else:
         print("--- text ---")
         print(cleaned)
-    return 0
+    return 1 if findings["verdict"] == NO_TEXT_VERDICT else 0
 
 
 if __name__ == "__main__":
