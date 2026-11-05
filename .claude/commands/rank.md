@@ -166,8 +166,10 @@ Swept <S> previously ranked entries (<E> newly expired, <C> closing soon).
 | 1 | 78 | Strong Fit | ... | ... | ... | ... | 🔥 | [Link](...) |
 
 ### Why these ranked highest
-**1. <Title> at <Company> (78)** - [2-3 strength bullets and the honest gap, from the agent's findings]
+**1. <Title> at <Company> (78)** · <employment type> - [2-3 strength bullets and the honest gap, from the agent's findings]
 [repeat for each shortlisted job]
+
+**Employment type:** show a shortlisted entry's stored `employment_type` (`full_time`, `part_time`, `contract`, `freelance`) after the score in its "Why these ranked highest" line, as above; show nothing when it is `null` or the key is missing. If the profile or `CLAUDE.md` states what kind of engagement the user wants (for example "contract only" under career goals) and the stored type differs, add a visible ⚠ marker naming both (e.g. "⚠ full_time, profile prefers contract"). Same treatment as a location or language FLAG: a signal for the user to judge, never a veto, and no score change. A `null` or absent type gets no marker and no guess; this costs no fetch because `/scrape` already stored the value.
 
 ### Closing soon
 | Deadline | Title | Company | URL |
