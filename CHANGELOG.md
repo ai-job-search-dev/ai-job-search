@@ -67,6 +67,8 @@ per-file diff commands.
 
 ### Fixed
 
+- **`convert_salary_excel.py` splits a combined name-and-city column so `salary_lookup.py --city` can filter** (`tools/convert_salary_excel.py`, `tools/README_SALARY_TOOL.md`, `README.md`, `tests/test_convert_salary_excel.py`, `tests/test_salary_combined_city_cli.py`) - the IDA demonstration workbook heads its company column "Firmanavn og by" and stores "Ørsted A/S,Fredericia" in that one cell (no space after the comma). After #615 the sheet converts, but the whole cell went into `company` with `city: ""`, so the documented `python3 salary_lookup.py "Ørsted" --city "Fredericia"` missed. A combined header (no separate city column) now splits on the last comma and strips both parts, so a company name that itself contains ", " (such as "Rambøll Danmark A/S, Odense,Odense C") stays intact; a "Company" header still keeps commas in the name.
+
 - **The four `@bunli/core` portal CLIs typecheck on a clean install again** (#768, closes #765,
   `.agents/skills/{jobbank,jobdanmark,jobindex,jobnet}-search/cli/package.json`,
   `tests/test_portal_cli_types.py`) - `bun-types` accepts any `@types/node`, while `@bunli/core`
