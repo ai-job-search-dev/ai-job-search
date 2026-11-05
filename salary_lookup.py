@@ -164,6 +164,8 @@ def read_raw_data():
             data = json.load(f)
     except json.JSONDecodeError as exc:
         fail_data_error(f"invalid JSON at line {exc.lineno}, column {exc.colno}: {exc.msg}")
+    except UnicodeDecodeError:
+        fail_data_error("expected UTF-8 text; save salary_data.json as UTF-8 and try again")
     return data
 
 

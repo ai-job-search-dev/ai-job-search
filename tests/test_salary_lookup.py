@@ -648,6 +648,17 @@ class TestSalaryFileEncoding(unittest.TestCase):
         self.assertIn("invalid JSON at line 1, column 16", result.stderr)
         self.assertNotIn("Unexpected UTF-8 BOM", result.stderr)
 
+    def test_non_utf8_file_has_actionable_cli_error(self):
+        payload = {"companies": [self.entry]}
+        self.data_file.write_bytes(json.dumps(payload, ensure_ascii=False).encode("cp1252"))
+        for args in (("--validate",), ("Novo Nordisk", "--json")):
+            with self.subTest(args=args):
+                result = self.run_cli(*args)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("Error: invalid salary_data.json: expected UTF-8", result.stderr)
+                self.assertIn("README_SALARY_TOOL.md", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
