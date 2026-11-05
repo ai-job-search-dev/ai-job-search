@@ -195,12 +195,47 @@ export function stripHtml(html: string): string {
   return visibleHtml(html).replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim()
 }
 
+const JOBDANMARK_HOST = /(^|\.)jobdanmark\.dk$/i
+
+/**
+ * Extract a jobdanmark slug from a bare slug, a relative `/job/<slug>` path,
+ * or a jobdanmark.dk `/job/<slug>` URL.
+ *
+ * A URL on any other host is rejected. The previous pattern took the segment
+ * after `/job/` from ANY string, so an off-host posting URL (e.g. from
+ * Greenhouse or another ATS) was accepted and `detail` fetched the portal's
+ * fallback search page, exiting 0 with a bogus posting. URLs are parsed for real:
+ * scheme-less portal links and subdomains are accepted, while look-alike hosts
+ * (jobdanmark.dk.evil.io), userinfo tricks (jobdanmark.dk@evil.io), and non-web
+ * schemes fall on the reject side.
+ */
 export function normalizeSlug(input: string): string | null {
   const trimmed = input.trim()
   if (!trimmed) return null
-  const match = trimmed.match(/\/job\/([^/?#]+)/)
-  if (match) return match[1]
+
+  // A bare slug: alphanumerics, hyphens and underscores (no slashes or schemes).
   if (/^[a-zA-Z0-9_-]+$/.test(trimmed)) return trimmed
-  return null
+
+  let url: URL
+  try {
+    if (trimmed.startsWith("/")) {
+      url = new URL(trimmed, BASE_URL)
+    } else {
+      const hasScheme = /^https?:\/\//i.test(trimmed)
+      const hostLike = /^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(trimmed)
+      if (!hasScheme && !hostLike) return null
+      url = new URL(hasScheme ? trimmed : `https://${trimmed}`)
+    }
+  } catch {
+    return null
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null
+  if (!JOBDANMARK_HOST.test(url.hostname)) return null
+
+  // A matching path on a different site or in a query string is not a Jobdanmark
+  // posting. Read only the parsed pathname.
+  const match = url.pathname.match(/^\/job\/([a-zA-Z0-9_-]+)(?:\/|$)/)
+  return match ? match[1] : null
 }
 
