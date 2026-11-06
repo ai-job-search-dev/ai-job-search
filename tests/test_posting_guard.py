@@ -770,5 +770,38 @@ class PureFunctions(unittest.TestCase):
         )
 
 
+class EmptyInputTests(GuardFixture):
+    def test_empty_stdin_exits_one_with_refused_verdict(self):
+        code, out, err = self.run_main(stdin_text="")
+        self.assertEqual(code, 1, err)
+        self.assertTrue(out.startswith(posting_guard.NO_TEXT_VERDICT), out.splitlines()[0])
+        self.assertEqual(self.text_of(out).strip(), "")
+
+    def test_whitespace_stdin_exits_one_with_refused_verdict(self):
+        code, out, err = self.run_main(stdin_text="   \n\t\r\n   ")
+        self.assertEqual(code, 1, err)
+        self.assertTrue(out.startswith(posting_guard.NO_TEXT_VERDICT), out.splitlines()[0])
+        self.assertEqual(self.text_of(out).strip(), "")
+
+    def test_empty_file_exits_one_with_refused_verdict(self):
+        empty_file = self.write("empty.html", "")
+        code, out, err = self.run_main("--in", str(empty_file), "--json")
+        self.assertEqual(code, 1, err)
+        self.assertTrue(out.startswith(posting_guard.NO_TEXT_VERDICT), out.splitlines()[0])
+        f = self.findings_of(out)
+        self.assertEqual(f["verdict"], posting_guard.NO_TEXT_VERDICT)
+
+    def test_guard_direct_call_returns_no_text_verdict(self):
+        cleaned, findings = posting_guard.guard("", "auto")
+        self.assertEqual(cleaned, "")
+        self.assertEqual(findings["verdict"], posting_guard.NO_TEXT_VERDICT)
+
+    def test_verdict_pure_function_handles_no_text_verdict(self):
+        self.assertEqual(
+            posting_guard.verdict({"verdict": posting_guard.NO_TEXT_VERDICT}),
+            posting_guard.NO_TEXT_VERDICT,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

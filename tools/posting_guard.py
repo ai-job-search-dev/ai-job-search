@@ -53,9 +53,10 @@ for a saved page and --text for portal CLI output, pasted or archived text;
 without either the mode is guessed from the content, which is a fallback, not
 a documented path. Output: the verdict line, a `--- findings ---` block (JSON
 with --json), then `--- text ---` and the cleaned text, or `saved=<path>` when
---out is given. Exit 0 whenever the input could be read; 2 when --in cannot or
---out points inside this repository (the cleaned posting is untrusted text and
-belongs in the session scratchpad, never next to the workflow's own files).
+--out is given. Exit 0 when a posting is evaluated; 1 when the input has no text
+to evaluate; 2 when --in cannot be read or --out points inside this repository
+(the cleaned posting is untrusted text and belongs in the session scratchpad,
+never next to the workflow's own files).
 """
 
 import argparse
@@ -70,6 +71,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from page_decode import decode_page  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
+
+NO_TEXT_VERDICT = "posting_guard: refused (no text to evaluate)"
 
 
 def _inside_repo(path: Path) -> bool:
@@ -442,6 +445,8 @@ def _plural(n: int, one: str, many: str) -> str:
 
 
 def verdict(findings: dict) -> str:
+    if findings.get("verdict") == NO_TEXT_VERDICT:
+        return NO_TEXT_VERDICT
     alarms = []
     n = len(findings.get("instruction_like") or [])
     if n:
@@ -478,6 +483,19 @@ def verdict(findings: dict) -> str:
 
 def guard(raw: str, mode: str):
     """Run the whole gate. mode: "html", "text" or "auto". Returns (cleaned, findings)."""
+    if not raw or raw.isspace():
+        findings = {
+            "hidden_blocks": [],
+            "invisible_chars": {},
+            "invisible_flagged": 0,
+            "invisible_text": [],
+            "instruction_like": [],
+            "hidden_urls": [],
+            "visible_url_count": 0,
+            "homoglyph_runs": [],
+            "verdict": NO_TEXT_VERDICT,
+        }
+        return "", findings
     if mode == "auto":
         mode = "html" if HTML_HINT.search(raw) else "text"
     if mode == "html":
@@ -574,7 +592,7 @@ def main(argv=None) -> int:
     else:
         print("--- text ---")
         print(cleaned)
-    return 0
+    return 1 if findings["verdict"] == NO_TEXT_VERDICT else 0
 
 
 if __name__ == "__main__":
