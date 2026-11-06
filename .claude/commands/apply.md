@@ -20,6 +20,8 @@ This rule is the input side of the Step 3 Factual Grounding Audit, not a competi
 
 ## Step 0: Parse Input
 
+> **Windows:** run these tools as `python`, not `python3`. A python.org install ships no `python3`, so that name reaches the Microsoft Store alias, which either exits 49 with no output (#669) or starts a separate Store Python without the packages `pip` installed (such as pypdf). `.claude/settings.json` allows both spellings.
+
 - If `$ARGUMENTS` looks like a URL, **dispatch the `posting-fetcher` agent** via the Agent tool (`subagent_type: posting-fetcher`, the shipped definition in `.claude/agents/posting-fetcher.md`: it can read and fetch but not edit or write, so the component that touches the raw web page has no way to act on it). Pass it the URL only - no profile data, no pasted posting text. It discovers installed portals itself, follows the escalation order below, runs `tools/posting_guard.py` on whatever it retrieved, and returns the gate's verdict, its findings, the extracted metadata and the **cleaned posting text**. The escalation order it applies, from `.claude/skills/job-application-assistant/09-web-research.md`:
   - **Portal CLI first:** If the URL's host matches an installed portal skill in `.agents/skills/` (derived from the board hosts in `.agents/skills/*/cli/src` and `url-reference.md`, e.g. `linkedin.com` -> `linkedin-search`), run that CLI's `detail` command first:
     ```bash
@@ -43,8 +45,6 @@ Read the evaluation framework:
 - `.claude/skills/job-application-assistant/01-candidate-profile.md`
 
 Using the framework from `04-job-evaluation.md`, evaluate the job posting against the candidate's profile. If the salary lookup tool is configured, run:
-
-> **Windows:** run these tools as `python`, not `python3`. A python.org install ships no `python3`, so that name reaches the Microsoft Store alias, which either exits 49 with no output (#669) or starts a separate Store Python without the packages `pip` installed (such as pypdf). `.claude/settings.json` allows both spellings.
 
 ```bash
 python3 salary_lookup.py "<Company Name>" --json
