@@ -173,6 +173,36 @@ class FindBun(unittest.TestCase):
         self.assertIn("bun was not found on PATH", text)
         self.assertIn("export PATH=", text)
 
+    def _main_with_bun_at(self, bun_path, on_path):
+        output = io.StringIO()
+        orig_find, orig_install, orig_path = install_portal_clis.find_bun, install_portal_clis.install, install_portal_clis.os.environ.get("PATH", "")
+        install_portal_clis.find_bun = lambda *args, **kwargs: bun_path
+        install_portal_clis.install = lambda *args, **kwargs: 0
+        self.addCleanup(setattr, install_portal_clis, "find_bun", orig_find)
+        self.addCleanup(setattr, install_portal_clis, "install", orig_install)
+        self.addCleanup(install_portal_clis.os.environ.__setitem__, "PATH", orig_path)
+        bun_dir = str(Path(bun_path).parent)
+        parts = [d for d in orig_path.split(install_portal_clis.os.pathsep) if d != bun_dir]
+        install_portal_clis.os.environ["PATH"] = install_portal_clis.os.pathsep.join(([bun_dir] if on_path else []) + parts)
+        with redirect_stdout(output):
+            rc = install_portal_clis.main(["--dry-run"])
+        return rc, output.getvalue(), bun_dir
+
+    def test_bun_found_off_path_says_scrape_will_not_see_it(self):
+        # find_bun's fallback (#762) put bun on PATH for this process only, so
+        # the install reported success while /scrape's `bun --version` gate in
+        # the user's shell still failed and every portal fell back to WebSearch.
+        rc, text, bun_dir = self._main_with_bun_at(str(self.root / "home" / ".bun" / "bin" / "bun"), on_path=False)
+        self.assertEqual(rc, 0)
+        self.assertIn(f"bun was found at {bun_dir}", text)
+        self.assertIn("bun --version", text)
+        self.assertIn(f'export PATH="{bun_dir}:$PATH"', text)
+
+    def test_bun_on_path_prints_no_note(self):
+        rc, text, _ = self._main_with_bun_at(str(self.root / "bin" / "bun"), on_path=True)
+        self.assertEqual(rc, 0)
+        self.assertNotIn("not on your PATH", text)
+
 
 if __name__ == "__main__":
     unittest.main()
