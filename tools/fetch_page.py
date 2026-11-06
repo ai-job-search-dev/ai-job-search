@@ -193,11 +193,27 @@ def _default_out(url: str) -> Path:
 
 
 def _inside_repo(path: Path) -> bool:
-    try:
-        path.resolve().relative_to(ROOT)
-    except ValueError:
-        return False
-    return True
+    # Compare by identity, not by spelling: on a case-insensitive filesystem
+    # (macOS and Windows defaults) `/users/x/repo/notes.md` resolves to a
+    # string that is not under ROOT yet lands in the repo. Walk up to the
+    # nearest existing ancestor - the target itself is usually not there yet -
+    # and ask the OS whether any ancestor is the repo root.
+    candidate = path.expanduser()
+    if not candidate.is_absolute():
+        candidate = Path.cwd() / candidate
+    probe = candidate
+    while not probe.exists():
+        parent = probe.parent
+        if parent == probe:
+            return False
+        probe = parent
+    for ancestor in (probe, *probe.parents):
+        try:
+            if os.path.samefile(ancestor, ROOT):
+                return True
+        except OSError:
+            return False
+    return False
 
 
 def _force_utf8_output() -> None:

@@ -10,6 +10,7 @@ repo. These tests pin each of those properties against a real local server.
 import contextlib
 import http.server
 import io
+import os
 import shutil
 import sys
 import tempfile
@@ -158,6 +159,26 @@ class SchemeAndPathGuards(FetchPageFixture):
         inside = REPO_ROOT / "cv" / "fetched.html"
         code, out, err = self.run_main(f"{self.base}/ok.html", "--out", str(inside))
         self.assertEqual(code, 2)
+        self.assertIn("inside the repo", err)
+        self.assertFalse(inside.exists())
+
+    def test_refuses_out_inside_repo_spelled_in_another_case(self):
+        # On a case-insensitive filesystem the repo has many spellings, and
+        # the guard compared resolved strings, so an upper-cased repo path
+        # passed the check and the page landed in the repo anyway. Where the
+        # filesystem is case-sensitive the variant is simply another path.
+        variant = Path(str(REPO_ROOT).upper())
+        try:
+            same = os.path.samefile(variant, REPO_ROOT)
+        except OSError:
+            same = False
+        if not same:
+            self.skipTest("filesystem is case-sensitive; the variant names a different path")
+        fetch_page.gate = lambda url: self.fail("gate must not run for a refused --out")
+        inside = variant / "cv" / "fetched.html"
+        self.addCleanup(lambda: (REPO_ROOT / "cv" / "fetched.html").unlink(missing_ok=True))
+        code, out, err = self.run_main(f"{self.base}/ok.html", "--out", str(inside))
+        self.assertEqual(code, 2, out + err)
         self.assertIn("inside the repo", err)
         self.assertFalse(inside.exists())
 
