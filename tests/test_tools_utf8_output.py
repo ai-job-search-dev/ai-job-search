@@ -72,6 +72,16 @@ class ToolsWriteUtf8(unittest.TestCase):
         out = json.loads(self.assert_clean_utf8(proc, 0, CYRILLIC, CJK))
         self.assertEqual(out["eligible"], 2)
 
+    def test_scrape_state_candidates_lists_non_latin_postings(self):
+        results = self.tmp / "results.json"
+        results.write_text(json.dumps([
+            dict(self.entry(CYRILLIC, "Инженер"), url="https://example.com/jobs/1"),
+            dict(self.entry(CJK, "工程师"), url="https://example.com/jobs/2"),
+        ]), encoding="utf-8")
+        proc = run_legacy_stdout([TOOLS / "scrape_state.py", "candidates", "--results", results])
+        out = json.loads(self.assert_clean_utf8(proc, 0, CYRILLIC, CJK))
+        self.assertEqual(len(out["selected"]), 2)
+
     def test_rank_apply_prints_the_ranking_for_non_latin_postings(self):
         state = self.write_state({"a": self.entry(CJK, "工程师")})
         results = self.tmp / "results.json"
