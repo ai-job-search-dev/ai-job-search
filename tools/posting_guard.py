@@ -53,9 +53,10 @@ for a saved page and --text for portal CLI output, pasted or archived text;
 without either the mode is guessed from the content, which is a fallback, not
 a documented path. Output: the verdict line, a `--- findings ---` block (JSON
 with --json), then `--- text ---` and the cleaned text, or `saved=<path>` when
---out is given. Exit 0 whenever the input could be read; 2 when --in cannot or
---out points inside this repository (the cleaned posting is untrusted text and
-belongs in the session scratchpad, never next to the workflow's own files).
+--out is given. Exit 0 when a posting is evaluated; 1 when the input has no text
+to evaluate; 2 when --in cannot be read or --out points inside this repository
+(the cleaned posting is untrusted text and belongs in the session scratchpad,
+never next to the workflow's own files).
 """
 
 import argparse
@@ -70,6 +71,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from page_decode import decode_page  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
+
+NO_TEXT_VERDICT = "posting_guard: refused (no text to evaluate)"
 
 
 def _inside_repo(path: Path) -> bool:
@@ -442,6 +445,8 @@ def _plural(n: int, one: str, many: str) -> str:
 
 
 def verdict(findings: dict) -> str:
+    if findings.get("verdict") == NO_TEXT_VERDICT:
+        return NO_TEXT_VERDICT
     alarms = []
     n = len(findings.get("instruction_like") or [])
     if n:
@@ -497,7 +502,11 @@ def guard(raw: str, mode: str):
     tf["invisible_text"] += hidden_tf["invisible_text"]
     hidden_text = "\n".join([hidden_text, *tf["invisible_text"]])
     findings = {"hidden_blocks": hidden_blocks, **tf, **scan(text, hidden_text)}
-    findings["verdict"] = verdict(findings)
+    verdict_line = verdict(findings)
+    if not text and verdict_line == "posting_guard: clean":
+        findings["verdict"] = NO_TEXT_VERDICT
+    else:
+        findings["verdict"] = verdict_line
     return text, findings
 
 
@@ -568,13 +577,14 @@ def main(argv=None) -> int:
                 file=sys.stderr,
             )
             return 2
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(cleaned + "\n", encoding="utf-8")
-        print(f"saved={args.out}")
+        if findings["verdict"] != NO_TEXT_VERDICT:
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(cleaned + "\n", encoding="utf-8")
+            print(f"saved={args.out}")
     else:
         print("--- text ---")
         print(cleaned)
-    return 0
+    return 1 if findings["verdict"] == NO_TEXT_VERDICT else 0
 
 
 if __name__ == "__main__":
