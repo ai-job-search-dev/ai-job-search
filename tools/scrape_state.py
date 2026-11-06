@@ -4,6 +4,14 @@
 Pass a JSON array of search hits to `candidates` before fetching details, then
 pass the enriched entries to `store`. Both commands deduplicate against the
 current history and tracker; `store` writes the history atomically.
+
+Usage:
+  python3 tools/scrape_state.py candidates --results hits.json [--state PATH] [--tracker PATH]
+  python3 tools/scrape_state.py store --results fetched.json [--state PATH] [--tracker PATH]
+  python3 tools/scrape_state.py history --portal NAME --domain HOST [--state PATH]
+
+`--state` and `--tracker` default to job_scraper/seen_jobs.json and
+job_search_tracker.csv at the repo root, like rank_state.py.
 """
 
 import argparse
@@ -132,8 +140,12 @@ def main() -> int:
     parser.add_argument("--results", type=Path)
     parser.add_argument("--portal")
     parser.add_argument("--domain")
+    # The same overrides rank_state.py takes, so a fork that keeps its state
+    # elsewhere, and a test, can run the real entry point without touching
+    # job_scraper/seen_jobs.json or the tracker.
+    parser.add_argument("--state", type=Path, default=STATE)
+    parser.add_argument("--tracker", type=Path, default=TRACKER)
     args = parser.parse_args()
-    args.state, args.tracker = STATE, TRACKER
     try:
         if args.command != "history" and args.results is None:
             parser.error("candidates and store need --results")

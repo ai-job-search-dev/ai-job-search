@@ -4,6 +4,7 @@ import argparse
 import contextlib
 import io
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -94,6 +95,53 @@ class ScrapeStateTests(unittest.TestCase):
         with contextlib.redirect_stdout(output):
             self.assertEqual(scrape_state.run(args), 0)
         self.assertEqual(json.loads(output.getvalue()), {"portal": "example-search", "prior_entries": 2})
+
+
+class EntryPoint(unittest.TestCase):
+    """The real argument parser, as the skill and a fork's shell invoke it."""
+
+    TOOL = Path(__file__).resolve().parent.parent / "tools" / "scrape_state.py"
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.state = self.root / "state" / "seen_jobs.json"
+        self.tracker = self.root / "tracker.csv"
+        self.results = self.root / "results.json"
+
+    def run_tool(self, *args):
+        proc = subprocess.run(
+            [sys.executable, str(self.TOOL), *args], capture_output=True, text=True, encoding="utf-8",
+        )
+        return proc.returncode, proc.stdout, proc.stderr
+
+    def test_state_and_tracker_overrides_keep_the_run_off_the_repo_files(self):
+        # Without the overrides main() wrote to job_scraper/seen_jobs.json at
+        # the repo root, so the entry point could only be exercised against
+        # the real history. rank_state.py takes --state/--tracker; this now
+        # takes the same.
+        self.tracker.write_text("date,company,role\n2026-10-21,Tracked,Analyst\n", encoding="utf-8")
+        job = {"title": "Builder", "company": "Fresh", "url": "https://jobs.test/fresh", "first_seen": "2026-10-21",
+               "posted_date": None, "deadline": None, "fit": "high", "status": "new", "portal": "example-search", "source": "cli"}
+        tracked = dict(job, title="Analyst", company="Tracked", url="https://jobs.test/tracked")
+        self.results.write_text(json.dumps([job, tracked]), encoding="utf-8")
+        code, out, err = self.run_tool("candidates", "--results", str(self.results), "--state", str(self.state), "--tracker", str(self.tracker))
+        self.assertEqual(code, 0, err)
+        self.assertEqual((json.loads(out)["already_applied"], len(json.loads(out)["selected"])), (1, 1))
+        code, out, err = self.run_tool("store", "--results", str(self.results), "--state", str(self.state), "--tracker", str(self.tracker))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out)["added"], ["fresh_builder"])
+        self.assertIn("fresh_builder", json.loads(self.state.read_text(encoding="utf-8"))["seen"])
+        code, out, err = self.run_tool("history", "--portal", "example-search", "--domain", "jobs.test", "--state", str(self.state))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out), {"portal": "example-search", "prior_entries": 1})
+
+    def test_help_names_the_overrides(self):
+        code, out, err = self.run_tool("--help")
+        self.assertEqual(code, 0, err)
+        self.assertIn("--state", out)
+        self.assertIn("--tracker", out)
 
 
 if __name__ == "__main__":
