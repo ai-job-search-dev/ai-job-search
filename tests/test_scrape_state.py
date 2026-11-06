@@ -50,9 +50,31 @@ class ScrapeStateTests(unittest.TestCase):
 
     def test_one_malformed_portal_hit_does_not_stop_other_candidates(self):
         valid = {"title": "Builder", "company": "Fresh", "url": "https://jobs.test/fresh"}
-        out = self.run_tool("candidates", [valid, {"title": "Unknown", "company": None, "url": "https://jobs.test/bad"}, None])
+        out = self.run_tool("candidates", [valid, {"company": "Nobody", "url": "https://jobs.test/bad"}, None])
         self.assertEqual(out["selected"], [valid])
         self.assertEqual([item["index"] for item in out["invalid"]], [1, 2])
+
+    def test_unnamed_employer_is_a_posting_not_a_malformed_hit(self):
+        # The portal contract (add-portal.md) says a missing value is null,
+        # never omitted, and freehire, linkedin and jobindex all emit
+        # `company: null` for a board posting with no employer name. Before,
+        # candidates filed every such hit under `invalid`, so an unnamed
+        # posting never reached the detail fetch or the history.
+        extra = {"first_seen": "2026-10-21", "posted_date": None, "deadline": None, "fit": "medium",
+                 "status": "new", "portal": "freehire-search", "source": "cli"}
+        unnamed = {"title": "Backend Engineer", "company": None, "url": "https://jobs.test/unnamed", **extra}
+        out = self.run_tool("candidates", [unnamed, {"title": "Builder", "company": 7, "url": "https://jobs.test/x"}])
+        self.assertEqual(out["selected"], [unnamed])
+        self.assertEqual([item["index"] for item in out["invalid"]], [1])
+        self.assertIn("non-string company", out["invalid"][0]["error"])
+
+        out = self.run_tool("store", [unnamed])
+        self.assertEqual(out["added"], ["unknown-company_backend-engineer"])
+        seen = json.loads(self.state.read_text(encoding="utf-8"))["seen"]
+        self.assertIsNone(seen["unknown-company_backend-engineer"]["company"])
+        # The second run finds it in the history, by URL and by the empty pair.
+        out = self.run_tool("candidates", [dict(unnamed, url="https://jobs.test/unnamed/")])
+        self.assertEqual((out["selected"], out["already_seen"]), ([], 1))
 
     def test_store_adds_only_new_jobs_and_preserves_ranked_history(self):
         old = {"legacy_key": {"title": "Engineer", "company": "Acme", "url": "https://jobs.test/old", "status": "ranked", "rank_score": 91}}
