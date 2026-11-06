@@ -316,10 +316,14 @@ def cmd_apply(args) -> int:
         results = json.loads(Path(args.results).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         sys.exit(f"cannot read results file {args.results}: {exc}")
-    if isinstance(results, dict):
-        results = results.get("results", [])
+    # The agent returns an array, or an envelope whose "results" holds it. A
+    # bare object with no such key is not an empty batch: defaulting it to []
+    # made a one-job scoring object apply nothing, report nothing and exit 0,
+    # with the job left `new` and the state file rewritten as if work was done.
+    if isinstance(results, dict) and "results" in results:
+        results = results["results"]
     if not isinstance(results, list):
-        sys.exit("results file must be a JSON array of scoring objects")
+        sys.exit("results file must be a JSON array of scoring objects (or an object whose \"results\" key holds one)")
 
     rows, expired, unreachable, gave_up, errors = [], [], [], [], []
     for result in results:
