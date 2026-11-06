@@ -119,7 +119,7 @@ class SkillAndCommandCheckTests(LinterRepoFixture):
 
     def write_skill(self, frontmatter: str):
         skill = self.root / ".claude" / "skills" / "example" / "SKILL.md"
-        skill.write_text(frontmatter, encoding="utf-8")
+        skill.write_text(frontmatter, encoding="utf-8", newline="")
 
     def test_allowed_tools_referencing_a_missing_file_fails(self):
         self.write_skill(
@@ -150,6 +150,21 @@ class SkillAndCommandCheckTests(LinterRepoFixture):
         result = run_linter(self.root)
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_crlf_and_bom_files_are_the_same_skill(self):
+        # Git for Windows defaults to core.autocrlf=true and the repo pins no
+        # line endings, so a Windows checkout has CRLF markdown, and Notepad
+        # adds a BOM. Both were reported as "missing YAML frontmatter".
+        for label, prefix, newline in (("crlf", "", "\r\n"), ("bom", "\ufeff", "\n"), ("bom+crlf", "\ufeff", "\r\n")):
+            with self.subTest(label=label):
+                self.write_skill(prefix + newline.join(["---", "name: example", "description: Example skill", "---", "body", ""]))
+                command = self.root / ".claude" / "commands" / "example.md"
+                command.parent.mkdir(parents=True, exist_ok=True)
+                command.write_text(prefix + "# /example - Example" + newline + "body" + newline, encoding="utf-8", newline="")
+
+                result = run_linter(self.root)
+
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_frontmatter_missing_description_fails(self):
         self.write_skill("---\nname: example\ndescription:\n---\n")
