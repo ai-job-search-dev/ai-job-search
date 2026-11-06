@@ -86,7 +86,13 @@ def load_state(path: Path) -> tuple[dict, dict]:
     if not path.is_file():
         sys.exit(f"{path} not found - run /scrape first")
     try:
-        doc = json.loads(path.read_text(encoding="utf-8"))
+        # utf-8-sig: an editor that saves with a BOM still yields the same JSON,
+        # as the tracker reader below already allows.
+        doc = json.loads(path.read_text(encoding="utf-8-sig"))
+    except UnicodeDecodeError as exc:
+        # A seen_jobs.json re-saved by an editor in a Windows code page (an Ø
+        # in a company name) used to end every subcommand with a traceback.
+        sys.exit(f"{path} is not UTF-8 text (byte {exc.start}) - re-save it as UTF-8")
     except json.JSONDecodeError as exc:
         sys.exit(f"{path} is not valid JSON: {exc}")
     seen = doc.get("seen") if isinstance(doc, dict) and "seen" in doc else doc
@@ -313,7 +319,11 @@ def cmd_apply(args) -> int:
     today = args.today
     now = args.now
     try:
-        results = json.loads(Path(args.results).read_text(encoding="utf-8"))
+        results = json.loads(Path(args.results).read_text(encoding="utf-8-sig"))
+    except UnicodeDecodeError as exc:
+        # PowerShell 5.1's `>` and Out-File write UTF-16LE; a cp1252 byte in a
+        # fetch_error does the same. Both used to escape as a traceback.
+        sys.exit(f"cannot read results file {args.results}: not UTF-8 text (byte {exc.start}) - re-save it as UTF-8")
     except (OSError, json.JSONDecodeError) as exc:
         sys.exit(f"cannot read results file {args.results}: {exc}")
     if isinstance(results, dict):

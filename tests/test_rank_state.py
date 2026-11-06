@@ -871,5 +871,52 @@ class Unreachable(RankStateCase):
                 self.assertEqual(self.read_state()["a"]["status"], "new", "a rejected result never half-writes an entry")
 
 
+class Encoding(RankStateCase):
+    """seen_jobs.json and the scorer's results file are read as UTF-8. A file in
+    another encoding (UTF-16 from PowerShell's `>`, a cp1252 byte from an
+    editor) used to escape as a UnicodeDecodeError traceback from every
+    subcommand, and a UTF-8 BOM was refused with json's raw message, though the
+    tracker reader in the same tool already accepts both cleanly."""
+
+    def run_raw(self, *args):
+        return subprocess.run(
+            [sys.executable, str(TOOL), *args, "--state", str(self.state), "--today", TODAY],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+
+    def results_bytes(self, data: bytes) -> str:
+        path = self.tmp / "results.json"
+        path.write_bytes(data)
+        return str(path)
+
+    def test_cp1252_state_is_a_message_not_a_traceback(self):
+        doc = json.dumps({"seen": {"a": entry(company="Ørsted")}}, ensure_ascii=False)
+        self.state.write_bytes(doc.encode("cp1252"))
+        for args in (["candidates"], ["sweep"]):
+            with self.subTest(command=args[0]):
+                proc = self.run_raw(*args)
+                self.assertEqual(proc.returncode, 1)
+                self.assertIn("is not UTF-8 text", proc.stderr)
+                self.assertNotIn("Traceback", proc.stderr)
+
+    def test_utf16_results_is_a_message_not_a_traceback(self):
+        self.write_state({"a": entry()})
+        before = self.state.read_bytes()
+        proc = self.run_raw("apply", "--results", self.results_bytes(json.dumps([]).encode("utf-16")))
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("not UTF-8 text", proc.stderr)
+        self.assertNotIn("Traceback", proc.stderr)
+        self.assertEqual(self.state.read_bytes(), before)
+
+    def test_bom_prefixed_files_are_read(self):
+        self.state.write_bytes(b"\xef\xbb\xbf" + json.dumps({"seen": {"a": entry()}}).encode("utf-8"))
+        scored = {"key": "a", "status": "scored", "deadline": None,
+                  "scores": {d: 80 for d in ("technical", "experience", "behavioral", "career")},
+                  "location_verdict": "PASS", "language_gate": "PASS"}
+        proc = self.run_raw("apply", "--results", self.results_bytes(b"\xef\xbb\xbf" + json.dumps([scored]).encode("utf-8")))
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual([r["key"] for r in json.loads(proc.stdout)["ranked"]], ["a"])
+
+
 if __name__ == "__main__":
     unittest.main()
