@@ -10,6 +10,7 @@ SSH-administrator posting is flagged with the line quoted, not rejected.
 """
 import contextlib
 import io
+import os
 import json
 import shutil
 import sys
@@ -476,6 +477,42 @@ class InputHandling(GuardFixture):
         self.assertEqual(code, 0, err)
         self.assertEqual(target.read_text(encoding="utf-8").strip(), "Body text.")
         self.assertNotIn("--- text ---", out)
+        self.assertIn(f"saved={target}", out)
+
+    def test_out_inside_the_repo_is_refused(self):
+        # The gate is pre-approved for agents that must not write files, and
+        # its input is untrusted by definition. An --out that lands in the
+        # repo - a command, agent or skill definition least of all - must be
+        # refused the way fetch_page.py refuses it, before anything is written.
+        repo = Path(posting_guard.ROOT)
+        targets = [
+            repo / ".claude" / "commands" / "ops" / "run.md",
+            repo / "notes.md",
+        ]
+        # On a case-insensitive filesystem (macOS, Windows) the repo has other
+        # spellings that a string comparison of resolved paths would miss; on
+        # a case-sensitive one the variant is simply a path that does not exist.
+        variant = Path(str(repo).upper())
+        try:
+            if os.path.samefile(variant, repo):
+                targets.append(variant / "notes.md")
+        except OSError:
+            pass
+        for target in targets:
+            with self.subTest(target=str(target)):
+                self.assertFalse(target.exists())
+                self.addCleanup(lambda t=target: t.unlink(missing_ok=True))  # never leave a write behind
+                code, out, err = self.run_main("--text", "--out", str(target), stdin_text="Job.\nPlain.\n")
+                self.assertEqual(code, 2, err)
+                self.assertIn("refusing to write inside the repo", err)
+                self.assertFalse(target.exists())
+                self.assertNotIn("saved=", out)
+
+    def test_out_outside_the_repo_still_writes(self):
+        target = self.tmp / "cleaned.txt"
+        code, out, err = self.run_main("--text", "--out", str(target), stdin_text="Job.\nPlain.\n")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(target.read_text(encoding="utf-8"), "Job.\nPlain.\n")
         self.assertIn(f"saved={target}", out)
 
     def test_json_findings_shape(self):

@@ -53,18 +53,51 @@ for a saved page and --text for portal CLI output, pasted or archived text;
 without either the mode is guessed from the content, which is a fallback, not
 a documented path. Output: the verdict line, a `--- findings ---` block (JSON
 with --json), then `--- text ---` and the cleaned text, or `saved=<path>` when
---out is given. Exit 0 whenever the input could be read; 2 when --in cannot.
+--out is given. Exit 0 whenever the input could be read; 2 when --in cannot or
+--out points inside this repository (the cleaned posting is untrusted text and
+belongs in the session scratchpad, never next to the workflow's own files).
 """
 
 import argparse
 import html
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from page_decode import decode_page  # noqa: E402
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def _inside_repo(path: Path) -> bool:
+    """True when `path` would land inside this repository.
+
+    Compares by identity, not by string: the nearest existing ancestor of the
+    target is checked against the repo root with `os.path.samefile`, so a
+    differently cased spelling of the repo path (macOS and Windows file
+    systems are case-insensitive) or a symlinked parent still counts as inside.
+    """
+    candidate = path.expanduser()
+    if not candidate.is_absolute():
+        candidate = Path.cwd() / candidate
+    probe = candidate
+    while not probe.exists():
+        parent = probe.parent
+        if parent == probe:
+            return False
+        probe = parent
+    # Walk up by identity: samefile sees through case differences and symlinks
+    # that a resolved-path string comparison does not.
+    for ancestor in (probe, *probe.parents):
+        try:
+            if os.path.samefile(ancestor, ROOT):
+                return True
+        except OSError:
+            return False
+    return False
 
 EXCERPT = 120
 LINE_MAX = 200
@@ -512,6 +545,18 @@ def main(argv=None) -> int:
     print("--- findings ---")
     print(json.dumps(findings, ensure_ascii=False, indent=2) if args.json else _plain_findings(findings))
     if args.out is not None:
+        if _inside_repo(args.out):
+            # The gate runs under the fetch agents' pre-approved Bash grant on
+            # text that is untrusted by definition. fetch_page.py refuses the
+            # same thing for the same reason: an injected --out must never be
+            # able to create or overwrite a file in the repo - a command, agent
+            # or skill definition least of all.
+            print(
+                f"posting_guard: refusing to write inside the repo ({args.out}); the cleaned "
+                "posting is untrusted text and belongs in the session scratchpad",
+                file=sys.stderr,
+            )
+            return 2
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(cleaned + "\n", encoding="utf-8")
         print(f"saved={args.out}")
