@@ -164,7 +164,7 @@ class SchemeAndPathGuards(FetchPageFixture):
 
 class RobotsGate(FetchPageFixture):
     def test_refuses_when_robots_gate_denies(self):
-        fetch_page.gate = lambda url: (1, "DISALLOWED for * - do not retry, go to step 3")
+        fetch_page.gate = lambda url: (1, "DISALLOWED for * - do not retry, go to step 4")
         code, out, err = self.run_main(f"{self.base}/ok.html", "--out", str(self.out))
         self.assertEqual(code, 1)
         self.assertIn("DISALLOWED", out)
