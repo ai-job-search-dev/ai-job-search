@@ -70,6 +70,34 @@ class ScrapeStateTests(unittest.TestCase):
         self.assertEqual(stored["legacy_key"], old["legacy_key"])
         self.assertEqual(stored["fresh_builder"], fresh)
 
+    def test_candidates_and_store_fold_hits_that_share_a_canonical_key(self):
+        # The pair identity keeps accents (NFC + casefold) while make_key folds
+        # them to ASCII, so an accented title and its unaccented spelling at the
+        # same company are two pairs but one key. Before, candidates selected
+        # the second spelling and store raised on it after validating the
+        # batch, so one such hit lost every other new posting in the run.
+        old = {"fresh_developpeur-python": {"title": "Développeur Python", "company": "Fresh", "url": "https://jobs.test/fr"}}
+        self.state.parent.mkdir()
+        self.state.write_text(json.dumps({"seen": old}), encoding="utf-8")
+        extra = {"first_seen": "2026-10-21", "posted_date": None, "deadline": None, "fit": "medium",
+                 "status": "new", "portal": "jobindex-search", "source": "cli"}
+        jobs = [
+            {"title": "Developpeur Python", "company": "Fresh", "url": "https://jobs.test/en", **extra},
+            {"title": "Builder", "company": "Fresh", "url": "https://jobs.test/build", **extra},
+            {"title": "Développeur Python", "company": "Fresh", "url": "https://jobs.test/fr2", **extra},
+            {"title": "DEVELOPPEUR PYTHON", "company": "Fresh", "url": "https://jobs.test/en2", **extra},
+        ]
+        out = self.run_tool("candidates", jobs)
+        self.assertEqual(out["selected"], [jobs[1]])
+        self.assertEqual((out["already_seen"], out["repeated_in_batch"]), (3, 0))
+
+        out = self.run_tool("store", jobs)
+        self.assertEqual(out["added"], ["fresh_builder"])
+        self.assertEqual(out["already_seen"], 3)
+        seen = json.loads(self.state.read_text(encoding="utf-8"))["seen"]
+        self.assertEqual(sorted(seen), ["fresh_builder", "fresh_developpeur-python"])
+        self.assertEqual(seen["fresh_developpeur-python"]["title"], "Développeur Python")
+
     def test_store_creates_missing_history_and_rejects_partial_entries_without_writing(self):
         good = {
             "title": "Builder", "company": "Fresh", "url": "https://jobs.test/fresh",
