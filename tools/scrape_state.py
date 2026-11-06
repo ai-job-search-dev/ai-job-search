@@ -8,7 +8,9 @@ current history and tracker; `store` writes the history atomically.
 
 import argparse
 import json
+import re
 import sys
+from datetime import date
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -26,6 +28,22 @@ def read_jobs(path: Path) -> list:
     if not isinstance(data, list):
         raise ValueError("results must be a JSON array of jobs")
     return data
+
+
+ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _iso_date(value) -> bool:
+    """A calendar date in the SKILL.md entry shape. rank_state's defensive
+    parse treats anything else as absent, so letting it in would store a
+    date that nothing downstream can read."""
+    if not isinstance(value, str) or not ISO_DATE.match(value):
+        return False
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
 
 
 def identity(job: dict) -> tuple[str, tuple[str, str]]:
@@ -115,6 +133,12 @@ def run(args) -> int:
             raise ValueError("job has an invalid fit or status")
         if job["source"] not in ("cli", "websearch") or not isinstance(job["portal"], str):
             raise ValueError("job has an invalid portal or source")
+        for field in ("first_seen", "posted_date", "deadline"):
+            if job[field] is None and field != "first_seen":
+                continue
+            if not _iso_date(job[field]):
+                allowed = "YYYY-MM-DD" if field == "first_seen" else "YYYY-MM-DD or null"
+                raise ValueError(f"job has an invalid {field}: {job[field]!r} (expected {allowed})")
         key = make_key(job["company"], job["title"], job["url"])
         if key in seen:
             raise ValueError(f"canonical key already exists for another posting: {key}")
