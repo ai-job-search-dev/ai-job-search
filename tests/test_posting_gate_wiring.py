@@ -62,7 +62,16 @@ class OtherFrontDoors(unittest.TestCase):
         self.assertIn("posting_guard", fallback)
 
     def test_scratchpad_is_guarded_everywhere_the_gate_writes(self):
-        for path in (APPLY, REPO / ".claude" / "agents" / "posting-fetcher.md", REPO / ".claude" / "agents" / "posting-scorer.md"):
+        # RESEARCH is the escalation order both fetch agents follow; #642
+        # re-added a bare `$SCRATCHPAD/page.html` there, which an unset
+        # variable turns into `/page.html` - outside the repo, so fetch_page's
+        # own guard lets it through, and nothing fails loudly.
+        for path in (
+            APPLY,
+            RESEARCH,
+            REPO / ".claude" / "agents" / "posting-fetcher.md",
+            REPO / ".claude" / "agents" / "posting-scorer.md",
+        ):
             text = path.read_text(encoding="utf-8")
             with self.subTest(path=path.name):
                 self.assertNotRegex(text, r"\$SCRATCHPAD/", "use ${SCRATCHPAD:?...} so an unset variable fails loudly")
@@ -81,7 +90,7 @@ class TrustBoundaryWiring(unittest.TestCase):
         text = RESEARCH.read_text(encoding="utf-8")
         boundary = re.search(r"## Trust boundary(.*?)(?=\n## )", text, re.DOTALL).group(1)
         self.assertIn("posting_guard", boundary)
-        self.assertIn("framework_version: 1.1.7", text)
+        self.assertIn("framework_version: 1.1.8", text)
 
 
 if __name__ == "__main__":
