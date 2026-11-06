@@ -18,6 +18,9 @@ interface Flags {
 
 // Short-flag aliases.
 const ALIAS: Record<string, string> = { q: "query", n: "limit" }
+// The facet flags take comma lists and the API ORs within a facet, so a
+// repeat (`--country dk --country se`) is the comma form spelled twice.
+const LIST_FLAGS = new Set(["region", "country", "city", "seniority", "category", "skill"])
 
 function parseFlags(argv: string[]): Flags {
   const flags: Flags = { _: [] }
@@ -36,18 +39,38 @@ function parseFlags(argv: string[]): Flags {
       value = next
       i++
     }
-    // --facet repeats; collect into an array. Everything else is last-wins.
+    // --facet repeats; collect into an array. A facet list flag repeats by
+    // joining, like its comma form. Everything else is last-wins, and
+    // repeatedFlags() turns that into an error before any request.
     if (key === "facet") {
       const acc = Array.isArray(flags.facet) ? flags.facet : []
       // Preserve a bare occurrence so validation can reject it instead of
       // silently dropping the requested filter, even after a valid --facet.
       acc.push(typeof value === "string" ? value : "")
       flags.facet = acc
+    } else if (LIST_FLAGS.has(key) && typeof flags[key] === "string" && typeof value === "string") {
+      flags[key] = `${flags[key]},${value}`
     } else {
       flags[key] = value
     }
   }
   return flags
+}
+
+// Single-value flags given more than once. parseFlags keeps the last value,
+// so without this `--query python --query java` searched java alone and said
+// nothing - the discarded-filter failure the UNKNOWN_FLAG guard exists for.
+function repeatedFlags(argv: string[]): string[] {
+  const counts = new Map<string, number>()
+  for (const a of argv) {
+    if (!a.startsWith("-")) continue
+    const name = a.replace(/^-+/, "")
+    const key = ALIAS[name] ?? name
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  return [...counts]
+    .filter(([key, count]) => count > 1 && key !== "facet" && !LIST_FLAGS.has(key))
+    .map(([key]) => key)
 }
 
 type FlagValue = string | boolean | string[] | undefined
@@ -90,7 +113,8 @@ SEARCH FLAGS
   --description-format    markdown (default) | text | html — how each result's
                           full description is rendered (json output only).
 
-FACET FILTERS (values from freehire.me's controlled vocabularies; comma = OR)
+FACET FILTERS (values from freehire.me's controlled vocabularies; comma = OR,
+               and repeating one of these flags ORs the same way)
   --region <codes>        Macro-region: global, eu, uk, north_america, latam, apac,
                           mena, africa, cis  e.g. --region eu,uk
                           (a country such as us goes in --country, not here)
@@ -210,6 +234,16 @@ async function main(): Promise<number> {
       )
       return 1
     }
+  }
+
+  for (const key of repeatedFlags(argv)) {
+    process.stderr.write(
+      JSON.stringify({
+        error: `--${key} is given more than once; it takes one value, and keeping only the last would silently drop the other`,
+        code: "BAD_ARG",
+      }) + "\n",
+    )
+    return 1
   }
 
   if (cmd === "search") {
