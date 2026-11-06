@@ -69,14 +69,30 @@ if (invoked) {
   for (let i = 1; i < argv.length; i++) {
     const token = argv[i]
     if (token === "--") break
-    if (!token.startsWith("-") || token.includes("=")) continue
+    if (!token.startsWith("-")) continue
+    // `--flag=` (and `--flag=   `) is a value-less option too: bunli keeps the
+    // empty string, the handler tests it for truthiness and drops the filter,
+    // and the search runs unfiltered with exit 0 - the silent-discard this
+    // guard exists to stop. Reject it the same way as a bare `--flag`.
+    if (token.includes("=")) {
+      const [flag, ...rest] = token.split("=")
+      const isKnown = flag.startsWith("--")
+        ? options[flag.slice(2)] !== undefined
+        : Object.values(options).some((o) => o?.short === flag.slice(1))
+      if (isKnown && rest.join("=").trim() === "") {
+        writeError(`option ${flag} requires a value`, "BAD_ARG")
+        process.exit(1)
+      }
+      continue
+    }
     const name = token.replace(/^-+/, "")
     const isOption = token.startsWith("--")
       ? options[name] !== undefined
       : Object.values(options).some((o) => o?.short === name)
     if (!isOption) continue
     const next = argv[i + 1]
-    if (next === undefined || next.startsWith("-")) {
+    // An empty or whitespace-only next token (`--region ''`) is no value either.
+    if (next === undefined || next.startsWith("-") || next.trim() === "") {
       writeError(`option ${token} requires a value`, "BAD_ARG")
       process.exit(1)
     }
