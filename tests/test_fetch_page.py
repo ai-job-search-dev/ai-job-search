@@ -34,7 +34,13 @@ KOREAN_PAGE = (
     '<html><head><meta http-equiv="Content-Type" content="text/html; charset=euc-kr">'
     "<title>채용공고</title></head><body><h1>백엔드 개발자 채용</h1></body></html>"
 )
-CONTENT_TYPES = {"/euc-kr.html": "text/html; charset=euc-kr"}
+KOREAN_HEADER_ONLY_PAGE = (
+    "<html><head><title>채용공고</title></head><body><h1>백엔드 개발자 채용</h1></body></html>"
+)
+CONTENT_TYPES = {
+    "/euc-kr.html": "text/html; charset=euc-kr",
+    "/euc-kr-header-only.html": "text/html; charset=euc-kr",
+}
 
 
 class _Handler(http.server.BaseHTTPRequestHandler):
@@ -94,6 +100,9 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
+        elif self.path == "/euc-kr-header-only.html":
+            body = KOREAN_HEADER_ONLY_PAGE.encode("cp949")
+            self.send_response(200)
         elif self.path == "/gzip-big":
             import gzip as _gzip
             body = _gzip.compress(b"<p>" + b"x" * 5000 + b"</p>")
@@ -292,6 +301,24 @@ class Fetching(FetchPageFixture):
         text = out.split("--- text ---", 1)[1]
         self.assertIn("백엔드 개발자 채용", text)
         self.assertNotIn("\ufffd", text)
+
+    def test_text_honours_the_http_content_type_charset_on_both_paths(self):
+        # Many legacy portals declare the charset only in the HTTP Content-Type
+        # header, with no <meta>. Browsers read that declaration before the
+        # page's own; the --text decode read only the saved bytes, so a
+        # header-only EUC-KR page came out as replacement characters.
+        for label in ("curl", "urllib"):
+            with self.subTest(path=label):
+                if label == "urllib":
+                    self._without_curl()
+                code, out, err = self.run_main(
+                    f"{self.base}/euc-kr-header-only.html", "--out", str(self.out), "--text"
+                )
+                self.assertEqual(code, 0, err)
+                self.assertEqual(self.out.read_bytes(), KOREAN_HEADER_ONLY_PAGE.encode("cp949"))
+                text = out.split("--- text ---", 1)[1]
+                self.assertIn("백엔드 개발자 채용", text)
+                self.assertNotIn("\ufffd", text)
 
     def test_max_chars_caps_text(self):
         code, out, err = self.run_main(
