@@ -29,18 +29,24 @@ class LinterRepoFixture(unittest.TestCase):
         shutil.copy(LINTER_SCRIPT, tools / "lint_skills.py")
         # The Python-test CI job does not install PyYAML; the separate lint job
         # does. These settings-focused tests only need a valid frontmatter map.
-        # The stub parses simple "key: value" lines, enough for the flat
-        # frontmatter these fixtures write, so the checks under test see the
-        # actual file content instead of a canned mapping.
+        # The stub parses simple "key: value" lines and a "key:" followed by
+        # "  - item" lines, enough for the frontmatter these fixtures write,
+        # so the checks under test see the actual file content instead of a
+        # canned mapping.
         (tools / "yaml.py").write_text(
             "class YAMLError(Exception):\n"
             "    pass\n\n"
             "def safe_load(text):\n"
-            "    result = {}\n"
+            "    result, key = {}, None\n"
             "    for line in (text or '').splitlines():\n"
-            "        if ':' in line:\n"
+            "        if line.startswith('  - ') and key is not None:\n"
+            "            if not isinstance(result.get(key), list):\n"
+            "                result[key] = []\n"
+            "            result[key].append(line[4:].strip())\n"
+            "        elif ':' in line:\n"
             "            key, _, value = line.partition(':')\n"
-            "            result[key.strip()] = value.strip()\n"
+            "            key = key.strip()\n"
+            "            result[key] = value.strip()\n"
             "    return result\n",
             encoding="utf-8",
         )
@@ -150,6 +156,57 @@ class SkillAndCommandCheckTests(LinterRepoFixture):
         result = run_linter(self.root)
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_allowed_tools_as_a_yaml_list_is_checked_too(self):
+        # The check ran only on the string form, so the same missing path in
+        # list form passed.
+        self.write_skill(
+            "---\n"
+            "name: example\n"
+            "description: Example skill\n"
+            "allowed-tools:\n"
+            "  - Read\n"
+            "  - Bash(bun run .claude/skills/example/DOES_NOT_EXIST.ts *)\n"
+            "---\n"
+        )
+
+        result = run_linter(self.root)
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("DOES_NOT_EXIST.ts", result.stdout)
+
+    def test_colon_star_grant_on_an_existing_file_passes(self):
+        # `Bash(cmd:*)` is the prefix form the shipped job-scraper skill uses;
+        # the trailing `:` was left on the target and reported as missing.
+        target = self.root / ".claude" / "skills" / "example" / "cli.ts"
+        target.write_text("// present\n", encoding="utf-8")
+        self.write_skill(
+            "---\n"
+            "name: example\n"
+            "description: Example skill\n"
+            "allowed-tools: Bash(bun run .claude/skills/example/cli.ts:*)\n"
+            "---\n"
+        )
+
+        result = run_linter(self.root)
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_python_tool_grants_are_checked_like_bun_ones(self):
+        self.write_skill(
+            "---\n"
+            "name: example\n"
+            "description: Example skill\n"
+            "allowed-tools: Bash(python tools/lint_skills.py:*), Bash(python3 tools/gone.py:*), Bash(python -m unittest:*)\n"
+            "---\n"
+        )
+
+        result = run_linter(self.root)
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("tools/gone.py", result.stdout)
+        self.assertNotIn("lint_skills.py", result.stdout.replace("tools/lint_skills.py:", ""))
+        self.assertNotIn("-m", result.stdout)
 
     def test_frontmatter_missing_description_fails(self):
         self.write_skill("---\nname: example\ndescription:\n---\n")
