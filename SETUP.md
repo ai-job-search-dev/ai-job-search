@@ -333,7 +333,7 @@ Upstream keeps improving the methodology files your fork has personalized, so pl
 This is expected if you haven't set up salary benchmarking. The `/apply` workflow skips this step automatically.
 
 ### Job search CLI tools not working
-Make sure Bun is installed and you ran `bun install` in each CLI directory. The tools require network access to fetch job listings.
+Make sure Bun is installed and you ran `python3 tools/install_portal_clis.py` (Windows: `python tools\install_portal_clis.py`), which runs `bun install` in every portal CLI it discovers under `.agents/skills/*/cli/` - see section 5. A CLI it skipped over an install-time lifecycle script is reported, not installed. The tools require network access to fetch job listings.
 
 ### LaTeX compilation errors
 - CV: uses `lualatex` (pdflatex often fails on modern MiKTeX with `fontawesome5` font-expansion errors; lualatex handles the same sources cleanly)
