@@ -235,10 +235,19 @@ def _load_seen(path: Path):
 
 
 def _drifted(seen: dict) -> list[str]:
-    """Canonical keys that differ from what make_key would produce today."""
+    """Keys that differ from what make_key would produce today.
+
+    Every shape counts: a canonical key from an older fold, and also the
+    malformed ("/", ",", "(", non-ASCII) and legacy three-part keys this module
+    exists to retire. Filtering on is_canonical left exactly those behind, so
+    --migrate reported them, renamed nothing, and the audit kept failing on the
+    keys it named. An entry with neither a title nor a URL is left alone:
+    make_key could only invent an "untitled" key for it.
+    """
     return [
         k for k, v in seen.items()
-        if is_canonical(k) and k != make_key(v.get("company", ""), v.get("title", ""), v.get("url", ""))
+        if (v.get("title") or v.get("url"))
+        and k != make_key(v.get("company", ""), v.get("title", ""), v.get("url", ""))
     ]
 
 
