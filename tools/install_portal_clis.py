@@ -148,11 +148,24 @@ def main(argv=None) -> int:
             "  - installed elsewhere? reinstall to a directory on PATH"
         )
         return 1
+    off_path = None
     if bun:
         bun_dir = str(Path(bun).parent)
         if bun_dir not in os.environ.get("PATH", "").split(os.pathsep):
             os.environ["PATH"] = bun_dir + os.pathsep + os.environ.get("PATH", "")
-    return install(cli_dirs, bun or "bun", args.dry_run)
+            off_path = bun_dir
+    rc = install(cli_dirs, bun or "bun", args.dry_run)
+    if off_path:
+        # The PATH change above lives only in this process. /scrape gates the
+        # portal CLIs on `bun --version` in the user's own shell, which still
+        # cannot find bun, so every portal fell back to WebSearch after an
+        # install that reported success. Say so while the fix is one line.
+        print(
+            f"\nNote: bun was found at {off_path}, which is not on your PATH. "
+            "/scrape checks `bun --version` and will fall back to WebSearch until bun is on PATH:\n"
+            f'  export PATH="{off_path}:$PATH"   (add it to your shell profile to keep it)'
+        )
+    return rc
 
 
 if __name__ == "__main__":
