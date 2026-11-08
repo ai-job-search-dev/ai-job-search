@@ -47,7 +47,7 @@ Read the current state of these files and report whether each has content or is 
 - `.claude/skills/job-application-assistant/07-interview-prep.md` *(STAR examples and STAR candidates sections only — framework structure is preserved)*
 - `.claude/skills/job-scraper/search-queries.md` *(role titles, domain keywords, and location terms only — query structure is preserved)*
 
-This list must stay in step with what `/setup` writes, in Step 3 and in Path A's Step A5 inference rules: every skill file either writes candidate data into is cleared here.
+This list must stay in step with what `/setup` writes in Step 3 and infers in Path A's Step A5: every skill file that receives candidate data from either path is cleared here. Known gap: the opening patterns Path A adds to `06-cover-letter-templates.md` are not labelled, so they cannot yet be told apart from the shipped templates and are kept.
 
 Present as:
 
