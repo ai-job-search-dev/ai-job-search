@@ -149,11 +149,42 @@ function bodyText(html: string): string | null {
   return text || null
 }
 
+/** Tag-stripped, entity-decoded, whitespace-collapsed text of an HTML fragment, or null. */
+function fragmentText(fragment: string | null | undefined): string | null {
+  if (!fragment) return null
+  return decodeHtmlEntities(stripTags(fragment)).replace(/\s+/g, " ").trim() || null
+}
+
+/** A `jobtext-jobad__metadata-item` value, keyed by its icon's aria-label ("Virksomhed", "Lokation"). */
+function jobtextMeta(html: string, label: string): string | null {
+  const m = html.match(
+    new RegExp(
+      `class="jobtext-jobad__metadata-item">\\s*<svg[^>]*aria-label="${label}:"[^>]*>[\\s\\S]*?</svg>([\\s\\S]*?)</div>`,
+      "i",
+    ),
+  )
+  return m ? fragmentText(m[1]) : null
+}
+
+/** The raw `<dd>` markup of a jobtext sidebar fact whose `<dt>` is one of `labels`. */
+function jobtextFact(html: string, labels: string[]): string | null {
+  for (const m of html.matchAll(
+    /class="jobtext-sidebar-card__dt">([^<]*)<\/dt>\s*<dd class="jobtext-sidebar-card__dd">([\s\S]*?)<\/dd>/gi,
+  )) {
+    if (labels.includes(m[1].trim().replace(/:$/, ""))) return m[2]
+  }
+  return null
+}
+
 /**
- * Parse a live detail page. Jobindex serves two shapes (verified live
- * 2026-08-19; the selectors the previous parser used exist in neither):
+ * Parse a live detail page. Jobindex serves three shapes:
  *
- * - the jobindex-native shape, recognisable by its `jd-*` facts blocks
+ * - the `jobtext-jobad` layout (verified live 2026-11-08, every ad fetched):
+ *   company and location as header metadata items, employment facts and dates
+ *   in sidebar `<dt>`/`<dd>` cards, and the ad itself in one
+ *   `jobtext-jobad__body` section - the only part read as the description, so
+ *   site navigation and the cookie banner never become posting text;
+ * - the older jobindex-native shape, recognisable by its `jd-*` facts blocks
  *   (jd-deadline, jd-location, ...), with the company as the `<title>`
  *   prefix ("COMPANY - Job title");
  * - an external ATS passthrough (hr-manager/Talentech and similar), where
@@ -166,7 +197,8 @@ function bodyText(html: string): string | null {
  * storing that broke /scrape's "store a URL that resolves to the posting".
  */
 export function parseDetailPage(html: string, url: string, id: string): DetailResult {
-  const isNative = html.includes('class="jd-')
+  const isJobtext = html.includes('class="jobtext-jobad')
+  const isNative = !isJobtext && html.includes('class="jd-')
 
   const ogTitle = metaContent(html, "og:title")
   const itempropName = metaContent(html, "name")
@@ -181,7 +213,13 @@ export function parseDetailPage(html: string, url: string, id: string): DetailRe
   // "VELLIV - Udvikler til Camunda/AWS". Require the suffix to be the job
   // title so an unrelated <title> never becomes a company name.
   let company: string | null = null
-  if (isNative) {
+  if (isJobtext) {
+    // The sidebar company card names the employer itself; the header item can
+    // read "Jobindex søger for <employer>" on recruitment ads, so it is the
+    // fallback for ads without a card.
+    const card = visibleHtml(html).match(/class="vp-card__name"[^>]*>([\s\S]*?)<\/a>/i)
+    company = fragmentText(card?.[1]) ?? jobtextMeta(visibleHtml(html), "Virksomhed")
+  } else if (isNative) {
     const titleTag = html.match(/<title>([\s\S]*?)<\/title>/i)
     const pageTitle = titleTag ? decodeHtmlEntities(titleTag[1]).replace(/\s+/g, " ").trim() : ""
     if (pageTitle.endsWith(` - ${title}`)) {
@@ -195,7 +233,17 @@ export function parseDetailPage(html: string, url: string, id: string): DetailRe
   let hours: string | null = null
   let description: string | null = null
 
-  if (isNative) {
+  if (isJobtext) {
+    const visible = visibleHtml(html)
+    location = jobtextMeta(visible, "Lokation")
+    employmentType = fragmentText(jobtextFact(visible, ["Ansættelsestype", "Ansættelsesform"]))
+    hours = fragmentText(jobtextFact(visible, ["Ugentlig arbejdstid"]))
+    // "Snarest muligt" (as soon as possible) carries no date and stays null.
+    const due = jobtextFact(visible, ["Ansøgningsfrist"])
+    deadline = toIsoDate(due?.match(/<time[^>]+datetime="([^"]+)"/)?.[1] ?? fragmentText(due))
+    const body = visible.match(/<section class="jobtext-jobad__body"[^>]*>([\s\S]*?)<\/section>/i)
+    description = body ? bodyText(body[1]) : null
+  } else if (isNative) {
     location = jdBlockValue(html, "jd-location")
     deadline = toIsoDate(jdBlockValue(html, "jd-deadline"))
     employmentType = jdBlockValue(html, "jd-type")
