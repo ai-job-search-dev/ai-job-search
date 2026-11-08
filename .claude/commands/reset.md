@@ -59,6 +59,10 @@ Present as:
 - 02-behavioral-profile.md — [has content / already empty]
   Full file will be replaced with a blank template.
 
+- 03-writing-style.md — [has observations from past applications / nothing to clear]
+  Any "Patterns Observed in Past Applications" section that /setup drew from your
+  own cover letters will be removed. The writing rules are preserved.
+
 - 04-job-evaluation.md — [has personalized criteria / already blank]
   Your match areas, career goals, energizing/draining tasks, and life-situation
   constraints will be restored to placeholders. The scoring framework (dimensions,
@@ -78,7 +82,8 @@ Present as:
   restored to placeholders. The query structure and filter sections are preserved.
 
 The following files are NOT touched (they contain framework rules, not candidate data):
-  - 03-writing-style.md
+  - 08-application-forms.md
+  - 09-web-research.md
 
 Outside the profile scope, still holding your personal data: CLAUDE.md and
 cv/main_example.tex. This scope covers skill files only.
@@ -196,6 +201,8 @@ Every skill file under `.claude/skills/job-application-assistant/` opens with a 
 
 ## Using This in Applications
 ```
+
+**For `03-writing-style.md`**, remove any `## Patterns Observed in Past Applications` section, which `/setup` Path A writes from the user's own cover letters. The shipped file has no such section, so leave every other section of `03-writing-style.md` intact: its rules are framework, not candidate data.
 
 **For `04-job-evaluation.md`**, restore the values `/setup` Step 3.4 personalized back to their placeholder tokens, leaving every surrounding line untouched:
 
