@@ -171,7 +171,7 @@ function jobtextFact(html: string, labels: string[]): string | null {
   for (const m of html.matchAll(
     /class="jobtext-sidebar-card__dt">([^<]*)<\/dt>\s*<dd class="jobtext-sidebar-card__dd">([\s\S]*?)<\/dd>/gi,
   )) {
-    if (labels.includes(m[1].trim().replace(/:$/, ""))) return m[2]
+    if (labels.includes(decodeHtmlEntities(m[1]).trim().replace(/:$/, ""))) return m[2]
   }
   return null
 }
@@ -218,7 +218,9 @@ export function parseDetailPage(html: string, url: string, id: string): DetailRe
     // read "Jobindex søger for <employer>" on recruitment ads, so it is the
     // fallback for ads without a card.
     const card = visibleHtml(html).match(/class="vp-card__name"[^>]*>([\s\S]*?)<\/a>/i)
-    company = fragmentText(card?.[1]) ?? jobtextMeta(visibleHtml(html), "Virksomhed")
+    company =
+      fragmentText(card?.[1]) ??
+      (jobtextMeta(visibleHtml(html), "Virksomhed")?.replace(/^Jobindex\s+søger\s+for\s+/i, "") || null)
   } else if (isNative) {
     const titleTag = html.match(/<title>([\s\S]*?)<\/title>/i)
     const pageTitle = titleTag ? decodeHtmlEntities(titleTag[1]).replace(/\s+/g, " ").trim() : ""

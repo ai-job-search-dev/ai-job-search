@@ -132,4 +132,19 @@ describe("parseDetailPage - jobtext-jobad layout (live 2026-11-08)", () => {
     expect(d.employmentType).toBe("Fastansættelse");
     expect(d.deadline).toBeNull();
   });
+
+  test("strips the recruitment prefix when the header is the only company source", () => {
+    const page = JOBTEXT_PAGE.replace(/<div class="vp-card d-print-none">[\s\S]*?<\/div>\n/, "");
+    const d = parseDetailPage(page, URL, "h1704469");
+    expect(d.company).toBe("GASA GROUP Denmark A/S");
+  });
+
+  test("matches sidebar labels written as HTML entities", () => {
+    const page = JOBTEXT_PAGE
+      .replace("Ansættelsestype:", "Ans&aelig;ttelsestype:")
+      .replace("Ansøgningsfrist:", "Ans&oslash;gningsfrist:");
+    const d = parseDetailPage(page, URL, "h1704469");
+    expect(d.employmentType).toBe("Fastansættelse");
+    expect(d.deadline).toBe("2026-11-19");
+  });
 });

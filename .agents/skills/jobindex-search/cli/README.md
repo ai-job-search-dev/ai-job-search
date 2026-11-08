@@ -174,9 +174,10 @@ bun run src/cli.ts detail h1647303 --format plain
 
 Jobindex serves detail pages in three shapes, and field availability differs:
 the current **`jobtext-jobad`** layout (every ad checked on 2026-11-08) carries
-company and location in the header, employment type, hours and the deadline in
-the sidebar cards, and the ad text in a body section (the only part read as
-`description`); the older **jobindex-native** page (recognisable by its `jd-*`
+the company in a sidebar card (the header's "Virksomhed" item is the fallback),
+location in the header, employment type, hours and the deadline in the sidebar
+cards, and the ad text in a body section (read as `description`, so site
+navigation and the cookie banner never are); the older **jobindex-native** page (recognisable by its `jd-*`
 facts blocks) carries company, location, an ISO deadline, employment type and
 hours; an **external
 ATS passthrough** (the employer's hosted ad, e.g. hr-manager/Talentech, served
