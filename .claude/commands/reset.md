@@ -40,13 +40,14 @@ Read the current state of these files and report whether each has content or is 
 
 - `.claude/skills/job-application-assistant/01-candidate-profile.md`
 - `.claude/skills/job-application-assistant/02-behavioral-profile.md`
+- `.claude/skills/job-application-assistant/03-writing-style.md` *(any "Patterns Observed in Past Applications" section only — the writing rules are preserved)*
 - `.claude/skills/job-application-assistant/04-job-evaluation.md` *(personalized match areas, career goals, and life-situation constraints only — the scoring framework is preserved)*
 - `.claude/skills/job-application-assistant/05-cv-templates.md` *(profile statements section and the contact block inside the LaTeX template only — framework structure is preserved)*
 - `.claude/skills/job-application-assistant/06-cover-letter-templates.md` *(contact line and signature inside the LaTeX template only — framework structure is preserved)*
 - `.claude/skills/job-application-assistant/07-interview-prep.md` *(STAR examples and STAR candidates sections only — framework structure is preserved)*
 - `.claude/skills/job-scraper/search-queries.md` *(role titles, domain keywords, and location terms only — query structure is preserved)*
 
-This list must stay in step with what `/setup` Step 3 populates: every skill file it writes candidate data into is cleared here.
+This list must stay in step with what `/setup` writes, in Step 3 and in Path A's Step A5 inference rules: every skill file either writes candidate data into is cleared here.
 
 Present as:
 

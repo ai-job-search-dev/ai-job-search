@@ -165,6 +165,12 @@ class TestResetCoversPathAInferredContent(unittest.TestCase):
         self.assertGreaterEqual(len(self.files), 6, self.rules)
         self.assertIn("03-writing-style.md", self.files)
 
+    def test_step1_reads_every_path_a_file(self):
+        """The preview's has-content/nothing-to-clear verdicts come from Step 1's read list."""
+        inventory = section(self.text, "Read the current state of these files", "Present as:")
+        missing = sorted(f for f in self.files if f not in inventory)
+        self.assertEqual(missing, [], f"Step 1 never reads these Path A targets, so their preview line is unchecked: {missing}")
+
     def test_preview_lists_every_path_a_file(self):
         preview = section(
             self.text, "### If scope includes `profile`:", "### If scope includes `documents`:"
@@ -179,11 +185,22 @@ class TestResetCoversPathAInferredContent(unittest.TestCase):
         self.assertEqual(mislabeled, [], f"listed as framework-only, but Path A writes candidate data into: {mislabeled}")
 
     def test_execution_removes_every_section_path_a_adds(self):
+        """Each heading must be named in the Step 3 instruction for its own file.
+
+        An instruction runs from its '**For `<file>`**' line to the next one, so
+        a heading attached to another file's instruction does not count.
+        """
         execution = section(self.text, "### Profile reset", "### Documents reset")
+        blocks = {}
+        for match in re.finditer(r"^\*\*For `(?:[^`]*/)?([^`/]+)`\*\*(.*?)(?=^\*\*For `|\Z)", execution, re.S | re.M):
+            blocks[match.group(1)] = blocks.get(match.group(1), "") + match.group(2)
         missing = sorted(
-            f"{name}: {heading}" for name, headings in self.rules for heading in headings if heading not in execution
+            f"{name}: {heading}"
+            for name, headings in self.rules
+            for heading in headings
+            if heading not in blocks.get(name, "")
         )
-        self.assertEqual(missing, [], f"Path A adds these sections, but reset's Step 3 never removes them: {missing}")
+        self.assertEqual(missing, [], f"Path A adds these sections, but no Step 3 instruction for that file removes them: {missing}")
 
 
 class TestResetCoversEveryPersonalizedSkillFile(unittest.TestCase):
