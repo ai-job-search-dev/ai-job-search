@@ -1,9 +1,9 @@
 ---
 name: scrape
 description: >
-  Finds new job postings matching your profile via installed portal-search CLIs
-  (LinkedIn, local job boards, and any skills added with /add-portal). Deduplicates
-  across runs. Triggers on: job scrape, find jobs, search jobs, new jobs, job search,
+  Finds new job postings matching your profile via the portal-search CLIs installed
+  in .agents/skills/ (copied from community-portals or built with /add-portal), with
+  WebSearch as the fallback. Deduplicates across runs. Triggers on: job scrape, find jobs, search jobs, new jobs, job search,
   scrape jobs, /scrape
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash(bun --version), Bash(python tools/job_key.py:*), Bash(python3 tools/job_key.py:*), Bash(python tools/scrape_state.py:*), Bash(python3 tools/scrape_state.py:*), WebFetch, WebSearch, Agent, AskUserQuestion
 ---
@@ -18,6 +18,9 @@ allowed-tools: Read, Write, Edit, Glob, Grep, Bash(bun --version), Bash(python t
 
 This skill searches job portals using the **installed portal-search CLIs** in
 `.agents/skills/` (plus WebSearch as a fallback), using queries from your profile.
+AI Job Search ships no portal CLIs: users copy the ones for their market from
+[community-portals](https://github.com/ai-job-search-dev/community-portals) (`/setup` prints the copy prompt) or build one with
+`/add-portal`. With none installed, the whole run uses WebSearch.
 It deduplicates against previously seen jobs and the application tracker, and
 presents new matches with a quick fit assessment.
 
@@ -32,7 +35,7 @@ The user triggers this skill by saying things like:
 Optional arguments:
 - A focus area, e.g. "/scrape data science" or "/scrape geophysics"
 - "broad" to run all search categories, e.g. "/scrape broad"
-- "health" to run the portal health check only (Step 4.75), without searching, deduplicating, or presenting jobs - e.g. "/scrape health", or "/scrape health jobnet" to probe one portal even if disabled
+- "health" to run the portal health check only (Step 4.75), without searching, deduplicating, or presenting jobs - e.g. "/scrape health", or "/scrape health <portal-name>" to probe one portal even if disabled
 
 ---
 
@@ -62,13 +65,15 @@ If this fails (bun not installed), skip to **1c (WebSearch fallback)** for all p
 
 Discover all installed portal CLI skills by reading every `SKILL.md` found under `.agents/skills/*/SKILL.md`. Each file documents that portal's exact CLI flags and usage examples. **Use each portal's own documented interface — do not guess flags.** This approach automatically includes any new portals added via `/add-portal` without requiring changes to this file.
 
+**No portal installed.** If no `.agents/skills/*/SKILL.md` exists (or the directory itself is missing), that is not an error: skip the rest of 1b, run every query through **1c** for the whole run, and print the `no portals installed:` line in Step 5.
+
 **Honor the `enabled` toggle.** A portal is enabled unless its `SKILL.md` frontmatter sets `enabled: false` (a missing key means enabled — the default). Skip each disabled portal and record it for the Step 5 summary. A fork can thus keep a portal installed but sit out a run without deleting its directory.
 
 For each **enabled** portal skill:
 
 1. Read its `SKILL.md` to find the correct `bun run …` invocation and supported flags.
 2. Take the plain terms from `search-queries.md`'s **Plain terms** blocks and translate each into that portal's flag format (e.g. `--key`, `--search-string`, `--query`, filter codes — whatever the portal's SKILL.md specifies). When a priority has no Plain terms block, or its terms still carry a `[YOUR_...]` placeholder, take the terms from that priority's `site:` lines instead (drop `site:`, `OR` and the location words; each quoted phrase is one term). **One plain term per CLI call — never `OR`, never a combined string.** Portal search boxes do not share Google's syntax, so a combined query returns a different result set than its terms would (on some portals it is silently reduced to one of them). Quoting follows the portal's own SKILL.md `Query syntax:` line: quote a multi-word term when that line says quotes narrow the match (as a phrase or as a requirement that every word appear), otherwise pass the words bare. The quote characters go inside the argument the CLI receives (`--query '"product owner"'`); shell quotes alone are stripped before the CLI sees them. The `site:` blocks in `search-queries.md` are WebSearch-only and are never passed to a CLI.
-3. Scope to the last 14 days using the portal's supported recency **filter** flag (`--jobage`, `--since <YYYY-MM-DD>`, etc. — as documented per portal). A portal with **no recency flag** (jobdanmark offers none) still gets scoped: every portal's search output carries a `date` field, so filter client-side — drop results whose `date` is older than 14 days after the call returns, and never invent a flag the portal's SKILL.md does not document (the CLIs reject unknown flags). `--order PublicationDate` is a sort, and a sort is not a filter — pairing it with a `--limit` is a defensible approximation on a portal that offers nothing better (jobnet), but apply the client-side date filter on top all the same.
+3. Scope to the last 14 days using the portal's supported recency **filter** flag (`--jobage`, `--since <YYYY-MM-DD>`, etc. — as documented per portal). A portal with **no recency flag** still gets scoped: every portal's search output carries a `date` field, so filter client-side — drop results whose `date` is older than 14 days after the call returns, and never invent a flag the portal's SKILL.md does not document (the CLIs reject unknown flags). `--order PublicationDate` is a sort, and a sort is not a filter — pairing it with a `--limit` is a defensible approximation on a portal that offers nothing better, but apply the client-side date filter on top all the same.
 4. Cap results to ~20 per call using the portal's limit flag.
 5. Use `--format json` for machine-readable output.
 
@@ -79,6 +84,7 @@ If a CLI tool exits with a non-zero code, log the error message and continue —
 #### 1c. WebSearch fallback
 
 Use `WebSearch` for:
+- Every query, when no portal is installed (Step 1b found none)
 - Portals listed in `search-queries.md` that do **not** have a corresponding directory under `.agents/skills/`
 - Any portal whose CLI fails at runtime
 - When bun is unavailable (Step 1a failed)
@@ -104,7 +110,7 @@ and URL. For jobs worth a deeper look, fetch full detail with that portal's `det
 command (see its SKILL.md — do not guess flags) to extract **key requirements**,
 **application deadline**, and a brief description snippet.
 
-**Closed-at-source detection:** `linkedin-search detail` also returns `isActive`.
+**Closed-at-source detection:** the community `linkedin-search` portal's `detail` also returns `isActive`.
 `false` means the posting page itself renders LinkedIn's "No longer accepting
 applications" banner — the job died between being indexed and being fetched (expired
 LinkedIn URLs redirect to *similar live jobs*, so a search hit can be a ghost). Mark
@@ -172,7 +178,7 @@ It prints one line: the canonical key for that posting. The key must be a pure f
       "deadline": "YYYY-MM-DD" | null,
       "fit": "high/medium/low",
       "status": "new/skipped/ranked/expired/unreachable",
-      "portal": "<source portal skill, e.g. jobindex-search>",
+      "portal": "<source portal skill, its folder name under .agents/skills/>",
       "source": "cli/websearch"
     }
   }
@@ -237,7 +243,7 @@ Scraper-based portal CLIs rot silently: when a portal changes its markup, the pa
 
 **Verdicts.** Healthy portals get silence - no table, no line. Anything else surfaces in the Step 5 summary as a health line.
 
-**Probe-only mode (`/scrape health`).** Skip Steps 1-4 and this step's free pass (there is no fresh run to scan); instead probe every installed portal directly - enabled ones by default, a disabled one only when named explicitly (e.g. `/scrape health jobnet`). Each portal gets the sentinel probe above, the degraded criteria applied to whatever it returns, and - since the user explicitly asked for diagnosis - one `detail` fetch on the first result of each healthy portal (description must be readable decoded text; a failure downgrades to degraded). Report all statuses in this mode, including healthy. Volume stays bounded: one search, at most one retry, at most one detail per portal.
+**Probe-only mode (`/scrape health`).** Skip Steps 1-4 and this step's free pass (there is no fresh run to scan); instead probe every installed portal directly - enabled ones by default, a disabled one only when named explicitly (e.g. `/scrape health <portal-name>`). With no portal installed there is nothing to probe: print the `no portals installed:` line and stop. Each portal gets the sentinel probe above, the degraded criteria applied to whatever it returns, and - since the user explicitly asked for diagnosis - one `detail` fetch on the first result of each healthy portal (description must be readable decoded text; a failure downgrades to degraded). Report all statuses in this mode, including healthy. Volume stays bounded: one search, at most one retry, at most one detail per portal.
 
 ### Step 5: Present Results
 
@@ -248,7 +254,9 @@ was skipped. When any portal's results came from the Step 1c fallback this run
 (bun unavailable, or its CLI failed at runtime), report it with the
 `fallback (websearch):` line - fallback results come from a search index that
 can be stale, so the reader should know which rows carry that caveat; omit the
-line when every portal ran its CLI. When Step 4.75 found a portal degraded, broken, or inconclusive,
+line when every portal ran its CLI. When Step 1b found no portal installed, print the
+`no portals installed:` line instead of the `fallback (websearch):` line, pointing
+the user at community-portals; never present it as an error. When Step 4.75 found a portal degraded, broken, or inconclusive,
 add one `health:` line per suspect portal (healthy portals get no line); after
 the report, offer to set that portal's `enabled: false` so `/scrape` stops
 running it (and covers it via the Step 1c fallback) until it is fixed - only
@@ -263,6 +271,8 @@ Found X new positions (Y high, Z medium, W low match).
 skipped (disabled): <portal-name>, <portal-name>
 
 fallback (websearch): <portal-name>, <portal-name>
+
+no portals installed: every result came from WebSearch. Portal CLIs for your market may exist at https://github.com/ai-job-search-dev/community-portals - run /setup --section search for the copy prompt, or build one with /add-portal.
 
 health: <portal-name> - degraded (company null on all 12 results); parsing anchors in .agents/skills/<portal-name>/url-reference.md
 health: <portal-name> - broken (0 results for the SKILL.md test query and a broader retry); parsing anchors in .agents/skills/<portal-name>/url-reference.md

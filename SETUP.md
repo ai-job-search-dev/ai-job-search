@@ -26,7 +26,7 @@ On Windows, `py --version` is often the most reliable check. If your system expo
 
 ### Bun (for job search tools)
 
-The job portal CLIs (four Danish portals plus the country-agnostic `linkedin-search` and `freehire-search` tools) are written in TypeScript and run with Bun.
+The job portal CLIs you copy in from [community-portals](https://github.com/ai-job-search-dev/community-portals) are written in TypeScript and run with Bun. Without any, `/scrape` uses WebSearch and Bun is not needed.
 
 - macOS/Linux:
 
@@ -189,18 +189,22 @@ Or manually: fork on GitHub, then clone your fork.
 > personalization there is still the right move. Everything else in this guide works
 > identically either way.
 
-## 3. Install job search CLI dependencies
-Run these from the repository root.
+## 3. Add job portals and install their CLI dependencies
+AI Job Search ships no job-board CLIs. Portal skills live in [community-portals](https://github.com/ai-job-search-dev/community-portals), one folder per board under `portals/<country>/` (LinkedIn and multi-market boards under `portals/global/`). For each board you want, ask your agent, swapping in its folder:
+
+> Copy https://github.com/ai-job-search-dev/community-portals/tree/main/portals/dk/jobindex-search into `.agents/skills/`, show me what it does, then run `python3 tools/install_portal_clis.py`.
+
+`/setup` prints this prompt for the boards you name. To reinstall later, run from the repository root:
 
 ```bash
 python3 tools/install_portal_clis.py   # Windows: python tools\install_portal_clis.py
 ```
 
-It runs `bun install` in every portal CLI under `.agents/skills/*/cli/` - discovered, not listed, so a portal you add with `/add-portal` or copy from another fork is included on a fresh clone. Every install runs with `--ignore-scripts`, and a CLI whose `package.json` declares an install-time lifecycle script, `trustedDependencies` or `workspaces`, or that has a `bunfig.toml` or `.npmrc` beside it, is skipped and reported rather than run. `--dry-run` shows what it would install.
+It runs `bun install` in every portal CLI under `.agents/skills/*/cli/` - discovered, not listed, so a portal you copy from community-portals or add with `/add-portal` is included on a fresh clone. With no portal installed it does nothing. Every install runs with `--ignore-scripts`, and a CLI whose `package.json` declares an install-time lifecycle script, `trustedDependencies` or `workspaces`, or that has a `bunfig.toml` or `.npmrc` beside it, is skipped and reported rather than run. `--dry-run` shows what it would install.
 
-For `linkedin-search` and `freehire-search` the install is optional: both have zero runtime dependencies and run with plain `bun`; `bun install` only pulls TypeScript dev types.
+For zero-dependency portals such as `linkedin-search` and `freehire-search` the install is optional: they run with plain `bun`; `bun install` only pulls TypeScript dev types.
 
-If you're outside Denmark, you can generate an equivalent search skill for your local job board with `/add-portal` — it scaffolds the same CLI structure for any public portal and test-runs a live query before registering. See the "Job search tools" section in the README.
+If your job board has no portal yet, generate one with `/add-portal` — it scaffolds the same CLI structure for any public portal and test-runs a live query before registering — then contribute it to community-portals. See the "Job search tools" section in the README.
 
 ## 4. Run the setup interview
 
@@ -267,7 +271,7 @@ This creates `salary_data.json` which the `/apply` workflow uses for salary benc
 Find a job posting you're interested in, then:
 
 ```
-/apply https://jobindex.dk/job/1234567
+/apply https://boards.greenhouse.io/acme/jobs/1234567
 ```
 
 Or paste the job description directly:
@@ -333,7 +337,7 @@ Upstream keeps improving the methodology files your fork has personalized, so pl
 This is expected if you haven't set up salary benchmarking. The `/apply` workflow skips this step automatically.
 
 ### Job search CLI tools not working
-Make sure Bun is installed and you ran `bun install` in each CLI directory. The tools require network access to fetch job listings.
+Make sure Bun is installed and you ran `python3 tools/install_portal_clis.py` after copying the portal into `.agents/skills/`. The tools require network access to fetch job listings.
 
 ### LaTeX compilation errors
 - CV: uses `lualatex` (pdflatex often fails on modern MiKTeX with `fontawesome5` font-expansion errors; lualatex handles the same sources cleanly)
@@ -344,7 +348,7 @@ Make sure Bun is installed and you ran `bun install` in each CLI directory. The 
 The cover letter template expects fonts in `cover_letters/OpenFonts/fonts/`. Make sure this directory exists and contains the Lato and Raleway font files.
 
 ### Stale `.claude/settings.local.json` from an older clone
-Shared Claude Code permissions now live in `.claude/settings.json`: an `allow` list scoped to the exact commands the workflow runs (each portal CLI by path, the `tools/` scripts and `salary_lookup.py`), an `ask` list that always prompts before the permission-defining files are edited or `git push` runs, and a `deny` list that blocks upload-shaped shell and reads of credential files in every mode. `SECURITY.md` has the full table. Earlier versions of this repo committed a broader `.claude/settings.local.json` that pre-approved `Bash(curl:*)`, `Bash(python:*)` and `Bash(bun:*)`. If you cloned before that change, git leaves the old file behind in your working copy, and its permissions still apply on top of `settings.json`. Delete it (or trim it to your own personal overrides):
+Shared Claude Code permissions now live in `.claude/settings.json`: an `allow` list scoped to the exact commands the workflow runs (the `tools/` scripts and `salary_lookup.py`; a portal CLI you copy in is added by path), an `ask` list that always prompts before the permission-defining files are edited or `git push` runs, and a `deny` list that blocks upload-shaped shell and reads of credential files in every mode. `SECURITY.md` has the full table. Earlier versions of this repo committed a broader `.claude/settings.local.json` that pre-approved `Bash(curl:*)`, `Bash(python:*)` and `Bash(bun:*)`. If you cloned before that change, git leaves the old file behind in your working copy, and its permissions still apply on top of `settings.json`. Delete it (or trim it to your own personal overrides):
 
 ```bash
 rm .claude/settings.local.json

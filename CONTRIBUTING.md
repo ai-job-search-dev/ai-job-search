@@ -15,7 +15,7 @@ Thanks for considering a contribution! This repo has a deliberate, narrow philos
 
 ## What gets declined
 
-- **Market- or country-specific skills and content.** One country's portal opens the door to every country's portal; there is no principled stopping point. Precedent: [#31] (India), [#39] (France, despite an honest and excellent PR), [#67] (China). The in-tree portal skills are either country-agnostic (`linkedin-search`) or the maintainer's own demonstration instance (the Danish portals).
+- **Market- or country-specific skills and content.** One country's portal opens the door to every country's portal; there is no principled stopping point. Precedent: [#31] (India), [#39] (France, despite an honest and excellent PR), [#67] (China). No portal skill ships in-tree, country-agnostic ones included: every portal lives in [community-portals](https://github.com/ai-job-search-dev/community-portals), owned by its users through CODEOWNERS. Contribute portals there.
 - **Personal profile data.** The template ships placeholders; your populated profile lives in your fork. CI enforces this (`placeholder-integrity`). Precedent: [#17], [#72].
 - **Alternative-harness ports and duplicate workflow sources.** The markdown specs ARE the implementation; a second copy (another agent CLI, an orchestration layer, a wrapper command) drifts from the first the moment either changes. Precedent: [#44], [#49], [#66].
 - **Speculative infrastructure.** Complexity must be argued from a problem that exists, not one that might. Precedent: [#63].
@@ -33,8 +33,8 @@ Reviews here are empirical. Bug reports are reproduced on master before the fix 
 
 - State the failing case and how to reproduce it.
 - **Reproduce on the real path, not a constructed input.** A test that fails on master and passes on the fix is necessary but not sufficient: the failing input has to be one the workflow actually produces, not one the test hand-builds. Show the failure through the path the code really runs - the documented CLI invocation, real portal output, an actual data file - not a synthetic value fed straight to the function. A fix whose only demonstration is an input the real code path never receives gets declined even though its test is green.
-- Put CLI tests in `.agents/skills/<name>/cli/tests/` (bun test, network-free where possible); Python tool tests in `tests/`.
-- Run what CI runs: `python3 tools/lint_skills.py`, `python3 tools/check_framework_version.py`, `python3 tools/security_guards.py`, `python3 -m unittest discover -s tests`, and in touched CLIs `bun run typecheck` + `bun test`.
+- Put Python tool tests in `tests/`. Portal CLI tests belong with the portal in community-portals.
+- Run what CI runs: `python3 tools/lint_skills.py`, `python3 tools/check_framework_version.py`, `python3 tools/security_guards.py`, `python3 -m unittest discover -s tests`.
 
 **Credit norm:** a change that incorporates your actual code gets a `Co-authored-by` trailer; a change written independently from your observation or report gets a named mention in the commit message and PR. Both happen unprompted.
 
@@ -52,11 +52,11 @@ One practical warning: when you open a PR from a fork, GitHub targets this upstr
 
 ## Porting to another AI runtime? Forks too
 
-Claude Code is the reference runtime: it is what the maintainer runs daily and what every methodology change is verified on. A parallel command tree for another runtime (Codex, Antigravity, Gemini CLI, ...) would ship untested on every change - CI cannot run those harnesses - and each accepted runtime makes the next one harder to refuse. It is the same arithmetic that keeps market-specific portals in forks.
+Claude Code is the reference runtime: it is what the maintainer runs daily and what every methodology change is verified on. A parallel command tree for another runtime (Codex, Antigravity, Gemini CLI, ...) would ship untested on every change - CI cannot run those harnesses - and each accepted runtime makes the next one harder to refuse. It is the same arithmetic that keeps market-specific portals out of this repo.
 
 What upstream maintains for other runtimes instead:
 
-- The portal search skills in `.agents/skills/` use the portable Agent Skills format (`SKILL.md` per portal) and are auto-discovered by Codex and Antigravity today.
+- Portal search skills copied into `.agents/skills/` use the portable Agent Skills format (`SKILL.md` per portal) and are auto-discovered by Codex and Antigravity today.
 - The root `AGENTS.md` points any agent at the canonical workflow specs and the profile entry point.
 - Framework instruction files carry `framework_version` markers, so a runtime fork can track methodology changes precisely (`python3 tools/check_upstream_updates.py`).
 
@@ -67,7 +67,7 @@ This is a decision, not a dogma: if cross-runtime standards mature to the point 
 ## Practical notes
 
 - **PR titles are the release notes, and they set the version**: don't edit `CHANGELOG.md` (it's frozen at 1.7.4). Every Monday a workflow publishes a GitHub Release listing the titles of the PRs merged that week, so write the title for a fork owner and use a [Conventional Commits](https://www.conventionalcommits.org/) type: `feat` makes the release a minor bump, `type!:` (or a `BREAKING CHANGE:` footer) a major one, and `fix`, `refactor` or `perf` a patch; a week of only `docs`, `chore`, `ci` and similar ships nothing on its own. [commitizen](https://commitizen-tools.github.io/commitizen/) computes it: `uvx --from commitizen cz bump --get-next` previews the next version.
-- **Portal-skill contract**: `search`/`detail` commands, `--format json|table|plain`, stderr JSON errors with exit 1, backoff on 429/5xx, zero runtime dependencies by default. See `/add-portal`'s spec and `linkedin-search` as the reference implementation.
+- **Portal-skill contract**: `search`/`detail` commands, `--format json|table|plain`, stderr JSON errors with exit 1, backoff on 429/5xx, zero runtime dependencies by default. See `/add-portal`'s spec and community-portals' `linkedin-search` as the reference implementation.
 - **Personal-use boundaries**: portal skills that touch ToS-restricted sources carry a prominent personal-use-only warning, and CI deliberately makes no live portal requests. Don't "fix" that.
 - **LaTeX changes**: both templates must compile (`lualatex` for the CV, `xelatex` for the cover letter) and hold their exact page counts. CI smoke-checks this.
 

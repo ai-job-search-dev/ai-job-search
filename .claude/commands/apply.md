@@ -56,7 +56,7 @@ If the posting specifies a city, add `--city "<City>"` to narrow results. Parse 
 
 Before proceeding to drafting, inspect the posting URL's hostname to verify provenance (#431). Classify the host into one of three categories:
 
-1. **Installed portal board:** the host matches any configured job portal in `.agents/skills/` (e.g. `jobindex.dk`, `linkedin.com`, `jobnet.dk`, `jobbank.dk`, `jobdanmark.dk`, `freehire.me`, or any portal added by `/add-portal`).
+1. **Installed portal board:** the host matches any configured job portal in `.agents/skills/` (e.g. `linkedin.com` once `linkedin-search` is installed, or any portal copied from community-portals or added by `/add-portal`).
 2. **Known official ATS apex:** the host matches or is a valid subdomain of one of the six standard ATS domains:
    - `greenhouse.io`
    - `lever.co`
