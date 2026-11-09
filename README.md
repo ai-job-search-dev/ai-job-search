@@ -97,6 +97,18 @@ The framework encodes career guidance best practices, including structured evalu
 
 ### 1. Fork and clone
 
+**For your own job search**, start from a private copy:
+
+```bash
+gh repo clone ai-job-search-dev/ai-job-search
+cd ai-job-search
+git remote rename origin upstream
+gh repo create ai-job-search --private --source=. --remote=origin --push
+gh repo set-default <your-github-username>/ai-job-search
+```
+
+**To contribute changes back**, fork instead:
+
 ```bash
 gh repo fork ai-job-search-dev/ai-job-search --clone
 cd ai-job-search
@@ -106,10 +118,8 @@ cd ai-job-search
 > **A fork of this repo is always public** — GitHub does not allow private forks of
 > public repositories — and `/setup` (step 3 below) writes your personal data (name,
 > contact details, employment history, salary expectations) into **tracked** files.
-> If this copy is for your own job search rather than for contributing changes back,
-> use a **private repository** with this repo as `upstream` instead — the two-minute
-> recipe is in [SETUP.md section 8](SETUP.md#8-pulling-upstream-updates-into-your-fork),
-> and every update workflow works identically. Fork only to contribute.
+> Fork only to contribute. Updates work the same way from a private copy; see
+> [SETUP.md section 8](SETUP.md#8-pulling-upstream-updates-into-your-fork).
 
 ### 2. Install job search tools
 
