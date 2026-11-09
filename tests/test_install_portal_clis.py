@@ -1,12 +1,14 @@
 """Tests for tools/install_portal_clis.py - the one-command portal CLI install.
 
 No network and no real `bun install`: discovery and the safety gate run against
-a temporary skills tree, the runner is injected, and the end-to-end case uses
---dry-run on the real repo.
+a temporary skills tree, the runner is injected, and the end-to-end cases run
+the script with --dry-run from a temporary checkout with no portals and with
+one copied in.
 """
 
 import io
 import json
+import shutil
 import subprocess
 import sys
 import unittest
@@ -51,15 +53,13 @@ class InstallPortalClis(unittest.TestCase):
 
     def test_discovers_every_cli_on_the_ci_glob(self):
         """A fork-added portal is found without editing any list."""
-        self.add_cli("linkedin-search")
+        self.add_cli("board-search")
         self.add_cli("my-market-search")
         (self.root / ".agents" / "skills" / "no-cli-skill").mkdir(parents=True)
-        self.assertEqual([p.parent.name for p in discover(self.root)], ["linkedin-search", "my-market-search"])
+        self.assertEqual([p.parent.name for p in discover(self.root)], ["board-search", "my-market-search"])
 
-    def test_discovery_matches_the_shipped_tree(self):
-        shipped = sorted(p.parent.parent.name for p in REPO_ROOT.glob(".agents/skills/*/cli/package.json"))
-        self.assertTrue(shipped)
-        self.assertEqual([p.parent.name for p in discover()], shipped)
+    def test_no_skills_tree_discovers_nothing(self):
+        self.assertEqual(discover(self.root), [])
 
     def test_lifecycle_script_is_skipped_not_run(self):
         self.add_cli("safe-search")
@@ -111,14 +111,26 @@ class InstallPortalClis(unittest.TestCase):
         self.assertEqual(install(discover(self.root), "bun", True, self.root, run), 0)
         self.assertEqual(run.calls, [])
 
-    def test_cli_dry_run_lists_every_shipped_portal(self):
-        proc = subprocess.run(
-            [sys.executable, str(REPO_ROOT / "tools" / "install_portal_clis.py"), "--dry-run"],
+    def run_script(self):
+        tools = self.root / "tools"
+        tools.mkdir(exist_ok=True)
+        for name in ("install_portal_clis.py", "security_guards.py"):
+            shutil.copy(REPO_ROOT / "tools" / name, tools / name)
+        return subprocess.run(
+            [sys.executable, str(tools / "install_portal_clis.py"), "--dry-run"],
             capture_output=True, text=True, encoding="utf-8",
         )
+
+    def test_cli_with_no_portals_installed_succeeds(self):
+        proc = self.run_script()
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        for cli in discover():
-            self.assertIn(f"would install  {cli.parent.name}", proc.stdout)
+        self.assertIn("nothing to install", proc.stdout)
+
+    def test_cli_dry_run_lists_a_copied_in_portal(self):
+        self.add_cli("board-search")
+        proc = self.run_script()
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("would install  board-search", proc.stdout)
 
 
 class FindBun(unittest.TestCase):
@@ -165,6 +177,9 @@ class FindBun(unittest.TestCase):
         orig_find = install_portal_clis.find_bun
         install_portal_clis.find_bun = lambda *args, **kwargs: None
         self.addCleanup(setattr, install_portal_clis, "find_bun", orig_find)
+        orig_discover = install_portal_clis.discover
+        install_portal_clis.discover = lambda: [self.root / "board-search" / "cli"]
+        self.addCleanup(setattr, install_portal_clis, "discover", orig_discover)
 
         with redirect_stdout(output):
             rc = install_portal_clis.main([])

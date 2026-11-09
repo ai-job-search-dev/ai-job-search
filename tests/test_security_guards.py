@@ -927,11 +927,11 @@ class ManifestGuardTests(GuardRepoFixture):
         result = run_guards(self.root)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_no_manifests_at_all_fails(self):
+    def test_no_manifests_at_all_passes(self):
+        # Upstream ships no portal CLI; a checkout with none copied in is valid.
         self.manifest.unlink()
         result = run_guards(self.root)
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("no package.json files found", result.stdout)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 class TrackedNodeModulesTests(GuardRepoFixture):

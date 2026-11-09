@@ -7,11 +7,11 @@
 # Compile success, lint correctness, and an extractable PDF text layer are
 # asserted everywhere.
 #
-# Deliberately NOT here: live smoke tests of the job-portal CLIs. They hit
-# real portals (network-flaky, and the linkedin-search skill is personal-use
-# only per its own ToS warning - CI-automated requests would violate that).
-# CI runs typechecks and the checked-in fixture/mock test suites only; live
-# portal testing stays a local, on-demand step.
+# No portal CLI ships here; they live in ai-job-search-dev/community-portals.
+# A fork that copies one into .agents/skills/ gets its typecheck and fixture
+# tests run by cli-checks. Deliberately NOT here: live smoke tests of portal
+# CLIs - they hit real portals (network-flaky, and some portals' terms forbid
+# automated requests). Live portal testing stays a local, on-demand step.
 #
 # Security posture: this template ships pre-approved Claude Code permissions
 # and CLI code that every fork user executes, so the security-guards job
@@ -217,10 +217,11 @@ jobs:
             --contains 'Dear [Hiring Manager / Team]'
 
   discover-clis:
-    # The matrix is discovered, not hardcoded, so a portal CLI added in a fork
-    # (the /add-portal path) gets typechecked and tested without the fork
+    # The matrix is discovered, not hardcoded, so a portal CLI a fork copies in
+    # or adds with /add-portal gets typechecked and tested without the fork
     # having to edit this workflow - the same reason security-guards globs
-    # .agents/**/package.json instead of naming the shipped portals.
+    # .agents/**/package.json instead of naming portals. Upstream ships none,
+    # so the matrix is empty there and cli-checks is skipped.
     name: Discover portal CLIs
     runs-on: ubuntu-latest
     outputs:
@@ -231,8 +232,11 @@ jobs:
           persist-credentials: false
       - id: list
         run: |
-          tools=$(find .agents/skills -mindepth 3 -maxdepth 3 -path '*/cli/package.json' \
-            | cut -d/ -f3 | sort | jq -R . | jq -cs .)
+          tools='[]'
+          if [ -d .agents/skills ]; then
+            tools=$(find .agents/skills -mindepth 3 -maxdepth 3 -path '*/cli/package.json' \
+              | cut -d/ -f3 | sort | jq -R . | jq -cs .)
+          fi
           echo "Discovered portal CLIs: $tools"
           echo "tools=$tools" >> "$GITHUB_OUTPUT"
 

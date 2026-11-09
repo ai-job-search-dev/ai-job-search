@@ -65,17 +65,11 @@ errors: list[str] = []
 # an entry must add it here too - that is the point: the diff shows both.
 ALLOWED_PERMISSIONS = {
     "Skill(job-application-assistant)",
-    # Narrowed from the upstream template's blanket Bash(bun run:*), which
-    # pre-approved `bun run <any file>`. One entry per shipped portal CLI,
-    # matching what each SKILL.md already declares in its allowed-tools.
-    # A portal added by /add-portal needs its own entry here and in
+    # No portal CLI ships here (they live in ai-job-search-dev/community-portals),
+    # and no blanket Bash(bun run:*), which pre-approved `bun run <any file>`.
+    # A portal a fork copies in or adds with /add-portal needs its own
+    # `Bash(bun run .agents/skills/<name>/cli/src/cli.ts:*)` entry here and in
     # .claude/settings.json - that review step is the point.
-    "Bash(bun run .agents/skills/jobbank-search/cli/src/cli.ts:*)",
-    "Bash(bun run .agents/skills/jobdanmark-search/cli/src/cli.ts:*)",
-    "Bash(bun run .agents/skills/jobindex-search/cli/src/cli.ts:*)",
-    "Bash(bun run .agents/skills/jobnet-search/cli/src/cli.ts:*)",
-    "Bash(bun run .agents/skills/linkedin-search/cli/src/cli.ts:*)",
-    "Bash(bun run .agents/skills/freehire-search/cli/src/cli.ts:*)",
     "Bash(python salary_lookup.py:*)",
     "Bash(python3 salary_lookup.py:*)",
     "Bash(python tools/rank_state.py:*)",
@@ -638,8 +632,6 @@ def check_package_manifests() -> None:
     manifests = [
         p for p in ROOT.glob(".agents/**/package.json") if "node_modules" not in p.parts
     ]
-    if not manifests:
-        errors.append(".agents: no package.json files found - glob roots are wrong or the tree moved")
     for manifest in manifests:
         relpath = manifest.relative_to(ROOT)
         try:

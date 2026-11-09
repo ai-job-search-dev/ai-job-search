@@ -1,8 +1,8 @@
-"""Tests for the /scrape Step 2 search-output contract across portal CLIs.
+"""Tests for the /scrape Step 2 search-output contract.
 
 Mirrors the pattern of test_html_report_command.py: derive the contract from
-the spec itself and compare it against the real portal CLIs, so a drift on
-either side fails with a clean diff.
+the spec itself. The portal CLIs it binds live in community-portals, which
+checks their side.
 
 Why this test exists: .claude/skills/job-scraper/SKILL.md Step 2 promises
 "Search output already includes title, company, location, date, and URL" for
@@ -26,7 +26,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRAPER_SKILL = REPO_ROOT / ".claude" / "skills" / "job-scraper" / "SKILL.md"
-PORTAL_CLIS = sorted((REPO_ROOT / ".agents" / "skills").glob("*-search"))
 
 # Derived, never copied: a hardcoded field list drifts in lockstep with
 # nothing - if Step 2's prose drops or adds a field, the known-good portals
@@ -44,35 +43,13 @@ def derive_contract_fields() -> frozenset[str]:
     return frozenset(fields)
 
 
-def search_output_source(search_ts: Path) -> str:
-    helpers_ts = search_ts.parent.parent / "helpers.ts"
-    files = [search_ts, helpers_ts] if helpers_ts.exists() else [search_ts]
-    return "\n".join(f.read_text(encoding="utf-8") for f in files)
-
-
 class ScrapeSearchOutputContractTests(unittest.TestCase):
-    """Every portal CLI's search output must carry the Step 2 contract fields."""
+    """The Step 2 contract sentence that portal CLIs are held to."""
 
     def test_step2_contract_sentence_is_found_in_the_scraper_skill(self):
         """Guards the anchor the field list is derived from."""
         fields = derive_contract_fields()
         self.assertGreaterEqual(fields, {"title", "company", "location", "date", "url"})
-
-    def test_every_portal_cli_emits_the_step2_contract_fields(self):
-        contract = derive_contract_fields()
-        failures: list[str] = []
-        for portal in PORTAL_CLIS:
-            search_ts = portal / "cli" / "src" / "commands" / "search.ts"
-            if not search_ts.exists():
-                failures.append(f"{portal.name}: no cli/src/commands/search.ts")
-                continue
-            source = search_output_source(search_ts)
-            emitted = set(re.findall(r"^\s*([a-zA-Z_][a-zA-Z0-9_]*):", source, re.MULTILINE))
-            missing = sorted(contract - emitted)
-            if missing:
-                failures.append(f"{portal.name}: missing {missing} in search output")
-        self.assertEqual([], failures, "; ".join(failures) or "no portal CLIs checked")
-
 
 
 # Step 4's storage schema, derived the same way as the Step 2 contract above:
@@ -153,13 +130,11 @@ class SeenJobsDedupContinuityTests(unittest.TestCase):
 
 
 # Step 1b sends one plain term per CLI call and takes quoting from the portal's
-# own SKILL.md. The rule is data each portal carries, so the test derives the
-# portal list from the skills tree and names no portal.
-_QUERY_SYNTAX_LINE = re.compile(r"^Query syntax:\s*\S", re.MULTILINE)
+# own SKILL.md. community-portals checks every portal carries that line.
 
 
 class PortalQuerySyntaxTests(unittest.TestCase):
-    """Every installed portal SKILL.md must state its query syntax."""
+    """Step 1b defers quoting to the portal's Query syntax line."""
 
     def test_step1b_points_at_the_query_syntax_line(self):
         text = SCRAPER_SKILL.read_text(encoding="utf-8")
@@ -168,19 +143,6 @@ class PortalQuerySyntaxTests(unittest.TestCase):
         self.assertIn("`Query syntax:`", step1b.group(0), "Step 1b no longer defers quoting to the portal's Query syntax line")
         self.assertIn("inside the argument the CLI receives", step1b.group(0))
         self.assertIn("deduplicate the pool by URL before Step 2", step1b.group(0))
-
-    def test_every_installed_portal_skill_has_a_query_syntax_line(self):
-        self.assertTrue(PORTAL_CLIS, "no installed portal skills found")
-        missing = [
-            portal.name
-            for portal in PORTAL_CLIS
-            if not _QUERY_SYNTAX_LINE.search((portal / "SKILL.md").read_text(encoding="utf-8"))
-        ]
-        self.assertEqual(
-            [],
-            missing,
-            "portal SKILL.md files without a `Query syntax:` line: " + ", ".join(missing),
-        )
 
 
 if __name__ == "__main__":
