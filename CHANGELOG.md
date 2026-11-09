@@ -67,20 +67,6 @@ per-file diff commands.
 
 ### Fixed
 
-- **Portal CLIs decode HTML entities in one pass** (#625,
-  `.agents/skills/freehire-search/cli/src/helpers.ts`, `.agents/skills/jobindex-search/cli/src/helpers.ts`,
-  `.agents/skills/jobindex-search/cli/src/commands/detail.ts`, `.agents/skills/jobnet-search/cli/src/helpers.ts`,
-  `.agents/skills/linkedin-search/cli/src/helpers.ts`, and the matching `tests/parsing.test.ts`,
-  `tests/detail-parsing.test.ts` and `tests/strip-html.test.ts`) - each decoder ran one
-  `String.replace` per entity, so the output of an earlier replacement was still visible to a later one and
-  an escaped reference was decoded twice: `&amp;lt;` became `<` instead of the literal text `&lt;`. Each
-  decoder now makes a single pass with one regex built from its own replacement map, so replacement text is
-  never scanned again and a double-encoded reference decodes exactly one level - `&amp;lt;` is the text
-  `&lt;`, and `&#38;amp;` is the text `&amp;`. Reordering the replacements instead would have fixed
-  `&amp;lt;` while breaking `&#38;amp;`; the single pass removes the whole class. The regex is derived from
-  the map keys, so a decoder's vocabulary and its pattern cannot drift apart. Jobindex's `detail` command
-  keeps its own copy, now covered by `parseDetailPage` entity tests.
-
 - **The four `@bunli/core` portal CLIs typecheck on a clean install again** (#768, closes #765,
   `.agents/skills/{jobbank,jobdanmark,jobindex,jobnet}-search/cli/package.json`,
   `tests/test_portal_cli_types.py`) - `bun-types` accepts any `@types/node`, while `@bunli/core`
