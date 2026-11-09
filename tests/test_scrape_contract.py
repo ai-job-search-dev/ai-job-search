@@ -173,10 +173,35 @@ class SeenJobsEmploymentTypeTests(unittest.TestCase):
             "employment_type must carry the same never-backfill rule as `posted_date`",
         )
 
-    def test_rank_shows_it_as_a_flag_never_a_veto(self):
+    @staticmethod
+    def _rank_employment_paragraph() -> str:
         text = RANK_COMMAND.read_text(encoding="utf-8")
-        self.assertIn("employment_type", text, "/rank never reads the stored employment type")
-        self.assertRegex(text, r"never a veto", "the mismatch flag must not veto")
+        start = text.find("**Employment type:**")
+        if start == -1:
+            return ""
+        end = text.find("\n\n", start)
+        return text[start:] if end == -1 else text[start:end]
+
+    def test_rank_shows_it_as_a_flag_never_a_veto(self):
+        # Scoped to the paragraph: "never a veto" is said about age and the
+        # posting guard elsewhere in the file, so a file-wide search would
+        # keep passing if this paragraph lost the promise.
+        paragraph = self._rank_employment_paragraph()
+        self.assertIn("employment_type", paragraph, "/rank never reads the stored employment type")
+        self.assertRegex(paragraph, r"never a veto", "the mismatch flag must not veto")
+
+    def test_rank_marks_the_type_and_its_separator_as_optional(self):
+        # A null type must not leave a dangling "·" after the score.
+        text = RANK_COMMAND.read_text(encoding="utf-8")
+        self.assertIn("(78)**[ \u00b7 <employment type>]", text)
+        self.assertRegex(self._rank_employment_paragraph(), r"separator included")
+
+    def test_portal_detail_output_counts_as_a_source(self):
+        # Step 3 reads the posting text, but a portal's `detail` output is what
+        # Step 2 fetched; the rule must not restrict the source to one of them.
+        text = SCRAPER_SKILL.read_text(encoding="utf-8")
+        start = text.index("**Employment type:**")
+        self.assertIn("`detail` output", text[start:text.index("\n\n", start)])
 
 
 class SeenJobsDedupContinuityTests(unittest.TestCase):
