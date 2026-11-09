@@ -67,6 +67,16 @@ per-file diff commands.
 
 ### Fixed
 
+- **`jobdanmark-search search --job-type` rejects unknown filters before making a request**
+  (#652, `.agents/skills/jobdanmark-search/cli/src/commands/search.ts`, `cli/tests/job-type-cli.test.ts`,
+  `cli/README.md`, `SKILL.md`) - an unrecognized value such as `fulltime` or `student` was sent to the
+  portal unchanged and came back as a successful empty search, so the agent could not tell a typo from a
+  quiet market. The settings API still lists `fuldtid`, `deltid`, `fleksjob`, `elev`, `studiejob` and
+  `praktik`, and all six are still accepted and sent unchanged. No live ad carries `fleksjob`, `elev`,
+  `studiejob`, or `praktik`, so those filters return zero jobs rather than being invalid. Anything else exits 1
+  with `BAD_ARG` before a request. The employment-type line is full-time and part-time only; the other types,
+  including the apprentice example, use `--text` (`--text elevplads`).
+
 - **The four `@bunli/core` portal CLIs typecheck on a clean install again** (#768, closes #765,
   `.agents/skills/{jobbank,jobdanmark,jobindex,jobnet}-search/cli/package.json`,
   `tests/test_portal_cli_types.py`) - `bun-types` accepts any `@types/node`, while `@bunli/core`
