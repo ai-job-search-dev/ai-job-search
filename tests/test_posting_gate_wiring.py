@@ -46,7 +46,10 @@ class OtherFrontDoors(unittest.TestCase):
         text = (REPO / ".claude" / "skills" / "job-application-assistant" / "SKILL.md").read_text(encoding="utf-8")
         step1 = re.search(r"### Step 1: Research & Evaluate Fit(.*?)(?=### Step 2)", text, re.DOTALL).group(1)
         self.assertIn("posting_guard", step1)
-        self.assertIn("framework_version: 1.3.6", text)
+        # The gate shipped in 1.3.6; any later edit bumps the marker again.
+        version = re.search(r"^framework_version: (\d+)\.(\d+)\.(\d+)$", text, re.MULTILINE)
+        self.assertIsNotNone(version)
+        self.assertGreaterEqual(tuple(int(part) for part in version.groups()), (1, 3, 6))
 
     def test_outcome_fresh_fetch_is_gated(self):
         text = (REPO / ".claude" / "commands" / "outcome.md").read_text(encoding="utf-8")

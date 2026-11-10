@@ -92,6 +92,9 @@ def load_state(path: Path) -> tuple[dict, dict]:
     seen = doc.get("seen") if isinstance(doc, dict) and "seen" in doc else doc
     if not isinstance(seen, dict):
         sys.exit(f"{path}: expected an object of job entries")
+    for key, value in seen.items():
+        if not isinstance(value, dict):
+            sys.exit(f"{path}: entry is not an object: {key}")
     return doc, seen
 
 
@@ -143,7 +146,8 @@ def norm(text) -> str:
     # Combining marks can distinguish names even after NFC (e.g. Indic vowels).
     return "".join(
         char for char in text
-        if char.isalnum() or unicodedata.category(char).startswith("M")
+        # "+" and "#" carry identity: "C++", "C#" and "C" are different jobs.
+        if char.isalnum() or char in "+#" or unicodedata.category(char).startswith("M")
     )
 
 

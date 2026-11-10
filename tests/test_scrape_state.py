@@ -70,6 +70,18 @@ class ScrapeStateTests(unittest.TestCase):
         self.assertEqual(stored["legacy_key"], old["legacy_key"])
         self.assertEqual(stored["fresh_builder"], fresh)
 
+    def test_c_sharp_and_c_plus_plus_titles_are_different_postings(self):
+        base = {
+            "company": "Acme", "first_seen": "2026-10-21", "posted_date": None, "deadline": None,
+            "fit": "high", "status": "new", "portal": "example-search", "source": "cli",
+        }
+        cpp = {**base, "title": "C++ Developer", "url": "https://jobs.test/1111111"}
+        self.assertEqual(len(self.run_tool("store", [cpp])["added"]), 1)
+        csharp = {**base, "title": "C# Developer", "url": "https://jobs.test/2222222"}
+        out = self.run_tool("candidates", [csharp])
+        self.assertEqual(out["selected"], [csharp])
+        self.assertEqual(len(self.run_tool("store", [csharp])["added"]), 1)
+
     def test_store_creates_missing_history_and_rejects_partial_entries_without_writing(self):
         good = {
             "title": "Builder", "company": "Fresh", "url": "https://jobs.test/fresh",

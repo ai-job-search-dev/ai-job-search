@@ -13,7 +13,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from job_key import make_key
-from rank_state import STATE, TRACKER, load_state, norm, save_state, tracker_pairs
+from rank_state import STATE, TRACKER, _force_utf8_output, load_state, norm, save_state, tracker_pairs
 
 
 def read_jobs(path: Path) -> list:
@@ -117,7 +117,10 @@ def run(args) -> int:
             raise ValueError("job has an invalid portal or source")
         key = make_key(job["company"], job["title"], job["url"])
         if key in seen:
-            raise ValueError(f"canonical key already exists for another posting: {key}")
+            raise ValueError(
+                f"canonical key already exists for another posting: {key} "
+                "(keys stored before a key-rule change: run python3 tools/job_key.py --audit --migrate)"
+            )
         seen[key] = job
     if selected:
         args.state.parent.mkdir(parents=True, exist_ok=True)
@@ -127,6 +130,7 @@ def run(args) -> int:
 
 
 def main() -> int:
+    _force_utf8_output()
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("command", choices=("candidates", "store", "history"))
     parser.add_argument("--results", type=Path)

@@ -85,6 +85,20 @@ class ToolsWriteUtf8(unittest.TestCase):
         out = json.loads(self.assert_clean_utf8(proc, 0, CJK))
         self.assertEqual([row["key"] for row in out["ranked"]], ["a"])
 
+    def test_scrape_candidates_lists_non_latin_hits(self):
+        # Copy the tool so its repo-relative history and tracker paths point at the temp dir.
+        tools_dir = self.tmp / "tools"
+        tools_dir.mkdir()
+        for name in ("scrape_state.py", "rank_state.py", "job_key.py"):
+            shutil.copy(TOOLS / name, tools_dir / name)
+        results = self.tmp / "hits.json"
+        results.write_text(json.dumps([
+            {"title": "Инженер", "company": CYRILLIC, "url": "https://example.com/jobs/1"},
+        ], ensure_ascii=False), encoding="utf-8")
+        proc = run_legacy_stdout([tools_dir / "scrape_state.py", "candidates", "--results", results])
+        out = json.loads(self.assert_clean_utf8(proc, 0, CYRILLIC))
+        self.assertEqual(len(out["selected"]), 1)
+
     def test_job_key_audit_reports_non_latin_entries(self):
         state = self.write_state({f"{CYRILLIC}_Инженер": self.entry(CYRILLIC, "Инженер")})
         proc = run_legacy_stdout([TOOLS / "job_key.py", "--audit", state])
@@ -158,7 +172,7 @@ class ToolsWriteUtf8(unittest.TestCase):
         subprocess.run(["git", "init", "-b", "master"], cwd=repo, check=True, capture_output=True)
         subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True, capture_output=True)
         subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True)
-        subprocess.run(["git", "remote", "add", "upstream", "https://github.com/MadsLorentzen/ai-job-search.git"], cwd=repo, check=True, capture_output=True)
+        subprocess.run(["git", "remote", "add", "upstream", "https://github.com/ai-job-search-dev/ai-job-search.git"], cwd=repo, check=True, capture_output=True)
         (repo / "file.txt").write_text("hello\n", encoding="utf-8")
         subprocess.run(["git", "add", "file.txt"], cwd=repo, check=True, capture_output=True)
         subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True)

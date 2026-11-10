@@ -1,6 +1,6 @@
 import { defineCommand, option } from "@bunli/core"
 import { z } from "zod"
-import { apiFetch, writeError } from "../helpers.js"
+import { apiFetch, stripInvisible, writeError } from "../helpers.js"
 
 export interface SearchApiResponse {
   jobAds: JobAdRaw[]
@@ -175,7 +175,7 @@ export function createSearchOutput(data: SearchApiResponse, flags: SearchFlags) 
     searchString: data.searchString ?? null,
   }
 
-  return { meta, facets, results }
+  return stripInvisible({ meta, facets, results })
 }
 
 export const search = defineCommand({
