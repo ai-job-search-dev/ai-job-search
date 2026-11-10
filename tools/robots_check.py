@@ -19,6 +19,9 @@ Rules implemented (RFC 9309), deliberately on the cautious side:
   * any other failure to read robots.txt leaves permission unconfirmed,
     and the retry does not happen - including a User-agent, Allow or
     Disallow line holding U+FFFD, i.e. a byte that is not valid UTF-8
+  * only an http or https URL with a host is checked at all; anything else
+    is unconfirmed without a request, and curl itself is pinned to http(s)
+    on the first hop and on every redirect
 
 Usage:  python3 tools/robots_check.py <url>
 Exit 0 = the retry may proceed. Exit 1 = do not retry; go to escalation step 3.
@@ -37,8 +40,12 @@ def _fetch(url, ua):
     # be read by curl as a flag. gate() rebuilds the target as
     # scheme://host/robots.txt before calling here, so this is hardening for
     # direct callers rather than a hole in the gate path itself.
+    # --proto pins the first hop to http(s) and --proto-redir every redirect
+    # -L follows, so neither the caller nor the site can steer curl to file:,
+    # gopher:, ftp: or any other protocol it was built with (GHSA-h8vc-753p-wpmh).
     r = subprocess.run(
-        ['curl', '-sS', '-L', '--max-redirs', '5', '--max-time', '12', '-A', ua,
+        ['curl', '-sS', '-L', '--proto', '=http,https', '--proto-redir', '=http,https',
+         '--max-redirs', '5', '--max-time', '12', '-A', ua,
          '-H', 'Accept: text/plain,*/*', '-w', '\n%{http_code}', '--', url],
         # robots.txt is UTF-8 (RFC 9309). Unpinned, Turkish Windows decoded it as
         # cp1254, where bytes like 0x81 are undefined: the pipe reader thread died,
@@ -124,14 +131,39 @@ def _match(pattern, path):
     silently skipped - a fail-open on any site that encodes its own rules.
     Under RFC 9309 section 2.2.2, '$' anchors the end of the URL only when
     at the end of the pattern; mid-pattern '$' is matched literally.
+
+    Matching is a table walk in O(len(pattern) * len(path)), never a regex.
+    Each '*' used to become '.*', and a non-matching rule with repeated
+    wildcard segments ("/*a*a*a...*b$") sent Python's backtracking engine into
+    exponential time - minutes at 16 segments - on a file the site controls
+    (GHSA-xhqf-8q8x-4jwm). Consecutive '*' match as one, as RFC 9309 implies.
     """
     if pattern == '':
         return -1
     pattern = unquote(pattern)
     end_anchor = pattern.endswith('$')
-    pat = pattern[:-1] if end_anchor else pattern
-    rx = '^' + ''.join('.*' if c == '*' else re.escape(c) for c in pat) + ('$' if end_anchor else '')
-    return len(pattern) if re.match(rx, path) else -1
+    pat = re.sub(r'\*{2,}', '*', pattern[:-1] if end_anchor else pattern)
+    # reach[j] is True when the first j pattern characters match the path
+    # consumed so far. A '*' extends a match over any character (reach[j]
+    # carries forward) and also matches nothing (reach[j-1] on the same row).
+    reach = [True] + [False] * len(pat)
+    for j, c in enumerate(pat, 1):
+        if c != '*':
+            break
+        reach[j] = True
+    if reach[-1] and not end_anchor:
+        return len(pattern)
+    for ch in path:
+        step = [False] * (len(pat) + 1)
+        for j, c in enumerate(pat, 1):
+            if c == '*':
+                step[j] = step[j - 1] or reach[j]
+            elif c == ch:
+                step[j] = reach[j - 1]
+        reach = step
+        if reach[-1] and not end_anchor:
+            return len(pattern)      # a prefix match is enough without '$'
+    return len(pattern) if reach[-1] else -1
 
 def allowed(text, agent, path):
     g = _groups(text)
@@ -144,7 +176,13 @@ def allowed(text, agent, path):
     return True if best_len < 0 else best_allow
 
 def gate(url):
-    parts = urlsplit(url)
+    parts = urlsplit(url)  # urlsplit lower-cases the scheme
+    # Only http(s) with a host is a page this tool can have a policy for; any
+    # other input fails closed before curl is asked anything.
+    if parts.scheme not in ('http', 'https'):
+        return 1, f'UNCONFIRMED (unsupported URL scheme {parts.scheme!r}) - do not retry, go to step 3'
+    if not parts.netloc:
+        return 1, 'UNCONFIRMED (no host in the URL) - do not retry, go to step 3'
     path = unquote(parts.path) or '/'
     if parts.query:
         path += '?' + unquote(parts.query)

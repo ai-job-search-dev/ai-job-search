@@ -1,6 +1,6 @@
 import { defineCommand, option } from "@bunli/core"
 import { z } from "zod"
-import { apiFetch, normalizeJobId, writeError, stripHtml } from "../helpers.js"
+import { apiFetch, normalizeJobId, writeError, stripHtml, stripInvisible, visibleHtml } from "../helpers.js"
 import type { JobAdRaw, SearchApiResponse } from "./search.js"
 
 export interface DetailApiResponse {
@@ -132,13 +132,18 @@ export function mapSearchAdToDetail(raw: JobAdRaw & { jobAdUrl?: string | null; 
  * The search command already maps that sentinel to null; detail must agree,
  * or an undisclosed deadline reads as 126 years expired and /rank's expiry
  * sweep retires the job the moment it is stored.
+ *
+ * The body is the employer's HTML: markup a browser never renders is dropped,
+ * and invisible characters are stripped from every field (see visibleHtml and
+ * stripInvisible).
  */
 export function prepareDetail(data: DetailApiResponse): DetailApiResponse {
   const deadline = data.application.deadlineDate
   if (deadline && deadline.startsWith("1900-01-01")) {
     data.application.deadlineDate = null
   }
-  return data
+  if (typeof data.body === "string") data.body = visibleHtml(data.body)
+  return stripInvisible(data)
 }
 
 export const detail = defineCommand({

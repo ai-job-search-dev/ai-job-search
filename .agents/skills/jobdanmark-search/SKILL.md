@@ -46,6 +46,8 @@ Invoke this skill when the user wants to:
 bun run .agents/skills/jobdanmark-search/cli/src/cli.ts search [flags]
 ```
 
+Query syntax: double quotes inside the argument make an exact phrase, word order included (e.g. `--text '"product owner"'`); single quotes are searched literally and return nothing; no OR.
+
 Key flags:
 - `--text <keyword>` — free-text search, e.g. `elektriker`, `sygeplejerske`, `softwareudvikler`
 - `--category <id>` — category ID (see Categories table below)

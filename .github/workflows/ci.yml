@@ -50,7 +50,7 @@ jobs:
       - run: pip install pyyaml
       - run: python tools/lint_skills.py
       - name: Framework version guard (upstream template only)
-        if: github.repository == 'MadsLorentzen/ai-job-search'
+        if: github.repository == 'ai-job-search-dev/ai-job-search'
         run: python tools/check_framework_version.py
 
   security-guards:
@@ -203,7 +203,7 @@ jobs:
           python3 tools/verify_pdf.py cv/main_example.pdf --min-chars 100
           python3 tools/verify_pdf.py cover_letters/cover_example.pdf --min-chars 100
       - name: Assert stock PDF structure (upstream template only)
-        if: github.repository == 'MadsLorentzen/ai-job-search'
+        if: github.repository == 'ai-job-search-dev/ai-job-search'
         run: |
           python3 tools/verify_pdf.py cv/main_example.pdf \
             --pages 2 \
@@ -269,7 +269,7 @@ jobs:
 
   placeholder-integrity:
     name: Placeholder integrity (upstream template only)
-    if: github.repository == 'MadsLorentzen/ai-job-search'
+    if: github.repository == 'ai-job-search-dev/ai-job-search'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4

@@ -45,6 +45,7 @@ import sys
 import tempfile
 import unicodedata
 from datetime import date, datetime, timedelta, timezone
+from fractions import Fraction
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -63,6 +64,10 @@ ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # owns the set; tests/test_rank_command.py asserts rank.md's JSON contract
 # names exactly these, so the spec and the tool cannot drift apart.
 AGENT_STATUSES = ("scored", "expired", "unreachable")
+
+# The values the two veto gates may take (rank.md Step 2). Step 5's veto is an
+# exact match on "FAIL", so any other spelling would shortlist a deal-breaker.
+GATE_VERDICTS = ("PASS", "FAIL", "FLAG")
 
 # A posting that could not be fetched is `unreachable`, not `expired`, and is
 # retried on later runs (#534). It gives up to `expired` only after this many
@@ -87,6 +92,9 @@ def load_state(path: Path) -> tuple[dict, dict]:
     seen = doc.get("seen") if isinstance(doc, dict) and "seen" in doc else doc
     if not isinstance(seen, dict):
         sys.exit(f"{path}: expected an object of job entries")
+    for key, value in seen.items():
+        if not isinstance(value, dict):
+            sys.exit(f"{path}: entry is not an object: {key}")
     return doc, seen
 
 
@@ -138,7 +146,8 @@ def norm(text) -> str:
     # Combining marks can distinguish names even after NFC (e.g. Indic vowels).
     return "".join(
         char for char in text
-        if char.isalnum() or unicodedata.category(char).startswith("M")
+        # "+" and "#" carry identity: "C++", "C#" and "C" are different jobs.
+        if char.isalnum() or char in "+#" or unicodedata.category(char).startswith("M")
     )
 
 
@@ -282,15 +291,18 @@ def cmd_sweep(args) -> int:
 def overall_score(scores: dict) -> int:
     if not isinstance(scores, dict):
         raise ValueError("scores must be an object")
-    total = 0.0
+    total = Fraction(0)
     for dim, weight in WEIGHTS.items():
         value = scores.get(dim)
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ValueError(f"missing or non-numeric score '{dim}'")
         if not 0 <= value <= 100:
             raise ValueError(f"score '{dim}' must be finite and between 0 and 100")
-        total += float(value) * weight
-    return int(total + 0.5)
+        # Scores and documented percentage weights are decimal quantities.
+        # Binary float summation can turn 59.5 into 59.49999999999999 and drop
+        # an otherwise valid result into the lower verdict band.
+        total += Fraction(str(value)) * Fraction(str(weight))
+    return int(total + Fraction(1, 2))
 
 
 def band(score: int) -> str:
@@ -390,6 +402,15 @@ def cmd_apply(args) -> int:
             score = overall_score(result.get("scores") or {})
         except ValueError as exc:
             errors.append({"key": key, "error": str(exc)})
+            continue
+        bad_gate = next(
+            (f for f in ("location_verdict", "language_gate") if result.get(f) and result[f] not in GATE_VERDICTS),
+            None,
+        )
+        if bad_gate:
+            errors.append(
+                {"key": key, "error": f"unknown {bad_gate} {result[bad_gate]!r}; expected one of {', '.join(GATE_VERDICTS)}"}
+            )
             continue
 
         # A missing deadline from the fresh fetch is not a correction to the
