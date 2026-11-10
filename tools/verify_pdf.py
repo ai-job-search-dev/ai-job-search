@@ -155,6 +155,18 @@ def _bare_number(token):
     return core
 
 
+def _currency_amount(token):
+    """A numeric amount with an attached Unicode currency symbol, or None."""
+    core = token.strip(_OUTER_PUNCTUATION)
+    if core and unicodedata.category(core[0]) == "Sc":
+        core = core[1:]
+    elif core and unicodedata.category(core[-1]) == "Sc":
+        core = core[:-1]
+    else:
+        return None
+    return core if _BARE_NUMBER.fullmatch(core) else None
+
+
 _TWO_DIGIT_YEAR = re.compile(r"\d{2}")
 
 
@@ -165,13 +177,17 @@ def _quantity_range(line, dash_index):
     (`2016-17`, `2019-20`): the short form is how academic years and seasons
     are written, and it was caught before the quantity rule existed. Anything
     else with bare numbers on both sides is a quantity (`1500-2000`,
-    `2000-5000`) and is left alone.
+    `2000-5000`) and is left alone. An attached currency symbol makes a
+    numeric pair an amount range, even when both amounts resemble years.
     """
     before = _TOKEN_BEFORE.search(line[:dash_index])
     after = _TOKEN_AFTER.search(line[dash_index + 1 :])
     if not before or not after:
         return False
-    left, right = _bare_number(before.group(1)), _bare_number(after.group(1))
+    left_money, right_money = _currency_amount(before.group(1)), _currency_amount(after.group(1))
+    left, right = left_money or _bare_number(before.group(1)), right_money or _bare_number(after.group(1))
+    if left_money is not None or right_money is not None:
+        return left is not None and right is not None
     if left is None or right is None:
         return False
     if _BARE_YEAR.fullmatch(left) and (_BARE_YEAR.fullmatch(right) or _TWO_DIGIT_YEAR.fullmatch(right)):

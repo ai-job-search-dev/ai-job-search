@@ -121,6 +121,16 @@ class FindNonAsciiDateRangesTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertEqual(find_non_ascii_date_ranges(text), [])
 
+    def test_attached_currency_symbols_make_numeric_ranges_quantities(self):
+        # The real PDF CLI previously reported these budget amounts as dates.
+        # Currency symbols identify amounts even when both values resemble years.
+        for symbol in ("€", "£", "$", "¥"):
+            for text in (f"Budget {symbol}2000–{symbol}5000 per month",
+                         f"Budget 1500{symbol}–2000{symbol} per month",
+                         f"Budget {symbol}2000–{symbol}2024 per month"):
+                with self.subTest(text=text):
+                    self.assertEqual(find_non_ascii_date_ranges(text), [])
+
     def test_numerically_formatted_date_ranges_are_still_caught(self):
         # A composite token (slashed, dotted, hyphenated) is not a bare number,
         # so the quantity rule does not apply and the year rule still fires.
