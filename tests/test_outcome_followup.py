@@ -64,6 +64,15 @@ class OutcomeFollowupBranchSpec(unittest.TestCase):
             "spec lost the cap that stops the follow-up branch from nagging indefinitely",
         )
 
+    def test_followup_candidates_reuse_the_open_pipeline_quiet_clock(self):
+        text = COMMAND.read_text(encoding="utf-8")
+        branch = text.split("## Step 2b: Follow-Up Branch", 1)[1].split("## Step 2c:", 1)[0]
+        candidates = branch.split("**Candidates.**", 1)[1].split("**Threshold.**", 1)[0]
+        # The canonical spec defines candidacy: a dated interview/reply note
+        # must reset direct followup just as it resets the Step 1.3 table.
+        self.assertIn("latest dated entry in `notes`", candidates)
+        self.assertIn("whichever is more recent", candidates)
+
     def test_threshold_contrast_with_gmail_sync_documented(self):
         text = COMMAND.read_text(encoding="utf-8")
         self.assertIn(

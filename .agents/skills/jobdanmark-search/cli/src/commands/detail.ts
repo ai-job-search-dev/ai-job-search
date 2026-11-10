@@ -1,7 +1,7 @@
 import { defineCommand, option } from "@bunli/core"
 import { z } from "zod"
 import { parse } from "node-html-parser"
-import { BASE_URL, htmlFetch, normalizeSlug, writeError } from "../helpers.js"
+import { BASE_URL, htmlFetch, normalizeSlug, stripInvisible, visibleHtml, writeError } from "../helpers.js"
 import { extractCity, toContractDate } from "./search.js"
 
 interface JsonLdJobPosting {
@@ -74,7 +74,7 @@ function cleanText(text: string): string {
  */
 function descriptionToText(html: string | undefined): string {
   if (!html) return ""
-  return parse(html)
+  return parse(visibleHtml(html))
     .structuredText.split("\n")
     .map(cleanText)
     .filter(Boolean)
@@ -235,9 +235,12 @@ function fromRenderedHtml(root: ReturnType<typeof parse>, slug: string, url: str
 }
 
 export function parseJobPostingFromHtml(html: string, slug: string, url: string): DetailResult {
-  const root = parse(html)
-  const jobPosting = findJobPostingJsonLd(root)
-  return jobPosting ? fromJsonLd(jobPosting, slug, url) : fromRenderedHtml(root, slug, url)
+  const jobPosting = findJobPostingJsonLd(parse(html))
+  // The rendered branch reads text nodes, so it parses the page without the
+  // markup a browser never shows; the JSON-LD lookup needs the scripts.
+  return stripInvisible(
+    jobPosting ? fromJsonLd(jobPosting, slug, url) : fromRenderedHtml(parse(visibleHtml(html)), slug, url),
+  )
 }
 
 export const detail = defineCommand({

@@ -1,0 +1,88 @@
+# Weekly release. Every Monday it tags master and publishes a GitHub Release
+# with GitHub-generated notes (one line per merged PR title), replacing the
+# hand-edited CHANGELOG.md, which is frozen at 1.7.4.
+#
+# commitizen (`cz bump --get-next`, configured in .cz.toml) picks the SemVer
+# version from the merged commit types; a manual run can override it.
+#
+# It skips a week with nothing to bump and refuses to release a master commit
+# whose CI run did not pass. The release is created through the API, so it
+# never commits to master. Upstream only: forks inherit this file and must not
+# cut releases of their own.
+
+name: Weekly release
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # 06:00 UTC every Monday
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Override the computed version (e.g. 2.0.0, no v). Leave blank to derive it from the merged commits."
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+
+jobs:
+  release:
+    name: Tag and publish the weekly release
+    if: github.repository == 'ai-job-search-dev/ai-job-search'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: master
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          last=$(gh release view --json tagName -q .tagName)
+          head=$(git rev-parse HEAD)
+          if [ "$(git rev-parse "$last^{commit}")" = "$head" ]; then
+            echo "No commits since $last, nothing to release"
+            exit 0
+          fi
+          if [ -n "$VERSION" ]; then
+            next="v$VERSION"
+          else
+            rc=0
+            next=$(uvx --from commitizen==4.19.3 cz bump --get-next) || rc=$?
+            case $rc in
+              0) next="v$next" ;;
+              21) echo "No feat, fix, refactor, perf or breaking commits since $last, nothing to release"; exit 0 ;;
+              *) echo "::error::cz bump --get-next exited $rc: $next"; exit 1 ;;
+            esac
+          fi
+          ci=$(gh run list -w ci.yml -b master -c "$head" -L 1 --json conclusion -q '.[0].conclusion')
+          if [ "$ci" != success ]; then
+            echo "::error::CI on $head is '${ci:-missing or not finished}', not releasing"
+            exit 1
+          fi
+          if ! [[ "$next" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'$next' is not a vMAJOR.MINOR.PATCH tag"
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/$next" >/dev/null; then
+            echo "::error::$next already exists"
+            exit 1
+          fi
+          if [ "$(printf '%s\n' "${last#v}" "${next#v}" | sort -V | tail -n1)" != "${next#v}" ]; then
+            echo "::error::$next is not newer than $last"
+            exit 1
+          fi
+          gh release create "$next" --target "$head" --generate-notes --notes-start-tag "$last"

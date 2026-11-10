@@ -9,7 +9,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = REPO_ROOT / "tools" / "upstream_triage.py"
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "upstream-watch.yml"
-UPSTREAM_SLUG = "MadsLorentzen/ai-job-search"
+UPSTREAM_SLUG = "ai-job-search-dev/ai-job-search"
 
 
 def git(root: Path, *args: str) -> str:
@@ -203,6 +203,61 @@ class AlreadyAppliedTests(TriageRepoFixture):
         # remains worth reviewing.
         self.assertIn("already applied (cherry-picked)", result.stdout)
         self.assertIn("**1** worth reviewing", result.stdout)
+
+
+class SubjectCollisionTests(TriageRepoFixture):
+    def test_different_patch_with_same_subject_requests_verification(self):
+        self.write("kept.py", "print('upstream fix')\n")
+        upstream_sha = self.commit("Fix configuration")
+        self.set_upstream_to_head()
+        git(self.root, "reset", "--hard", "HEAD~1")
+        self.write("shared.txt", "fork configuration\n")
+        fork_sha = self.commit("Fix configuration")
+
+        result = self.run_triage()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("**0** worth reviewing", result.stdout)
+        self.assertIn(f"subject matches fork commit {fork_sha[:9]}, patch differs: verify", result.stdout)
+        self.assertNotIn(f"git cherry-pick {upstream_sha}", result.stdout)
+        self.assertNotIn("already applied (cherry-picked)", result.stdout)
+
+    def test_conflict_resolved_personalized_port_has_distinct_verify_reason(self):
+        profile = ".claude/skills/job-application-assistant/01-candidate-profile.md"
+        self.write(profile, "Name: template\nGuidance: old\n")
+        self.commit("Add template profile")
+        self.write(profile, "Name: template\nGuidance: improved\n")
+        upstream_sha = self.commit("Improve profile guidance")
+        self.set_upstream_to_head()
+        git(self.root, "reset", "--hard", "HEAD~1")
+        self.write(profile, "Name: personal\nGuidance: old\n")
+        self.commit("Personalize profile")
+        picked = subprocess.run(["git", "cherry-pick", upstream_sha], cwd=self.root,
+                                capture_output=True, text=True)
+        self.assertNotEqual(picked.returncode, 0, "fixture must exercise a real conflict")
+        self.write(profile, "Name: personal\nGuidance: improved\n")
+        git(self.root, "add", profile)
+        git(self.root, "cherry-pick", "--continue")
+        fork_sha = git(self.root, "rev-parse", "HEAD").strip()
+        result = self.run_triage()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("**0** worth reviewing", result.stdout)
+        self.assertIn(f"subject matches fork commit {fork_sha[:9]}, patch differs: verify", result.stdout)
+        self.assertNotIn("already applied (cherry-picked)", result.stdout)
+
+    def test_same_patch_with_renamed_subject_is_still_already_applied(self):
+        self.write("kept.py", "print('upstream fix')\n")
+        upstream_sha = self.commit("Fix configuration")
+        self.set_upstream_to_head()
+        git(self.root, "reset", "--hard", "HEAD~1")
+        self.write("fork_only.txt", "fork\n")
+        self.commit("Fork configuration")
+        git(self.root, "cherry-pick", upstream_sha)
+        git(self.root, "commit", "--amend", "-m", "Port upstream configuration fix")
+
+        result = self.run_triage()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("**0** worth reviewing", result.stdout)
+        self.assertIn("already applied (cherry-picked)", result.stdout)
 
 
 class SuggestedCherryPickOrderTests(TriageRepoFixture):

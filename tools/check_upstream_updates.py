@@ -35,10 +35,13 @@ FRAMEWORK_FILES = [
     "AGENTS.md",
 ]
 
-UPSTREAM_REPO_SLUG = "MadsLorentzen/ai-job-search"
+UPSTREAM_REPO_SLUG = "ai-job-search-dev/ai-job-search"
 
 def run_git(args: list[str]) -> tuple[int, str, str]:
-    res = subprocess.run(["git"] + args, cwd=str(ROOT), capture_output=True, text=True)
+    res = subprocess.run(
+        ["git"] + args, cwd=str(ROOT), capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
+    )
     return res.returncode, res.stdout, res.stderr
 
 def get_remote_url(remote_name: str) -> str:
@@ -65,7 +68,16 @@ def parse_semver(version_str: str) -> tuple[int, int, int]:
         return (0, 0, 0)
     return tuple(int(x) for x in match.groups())
 
+def _force_utf8_output() -> None:
+    """Use UTF-8 for piped output even on legacy-console hosts."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure:
+            reconfigure(encoding="utf-8")
+
+
 def main() -> int:
+    _force_utf8_output()
     parser = argparse.ArgumentParser(description="Check for framework updates upstream.")
     parser.add_argument("--remote", default="upstream", help="Name of the git remote for upstream (default: upstream)")
     parser.add_argument("--branch", default="master", help="Branch name of the upstream repo (default: master)")

@@ -154,7 +154,8 @@ bun run src/cli.ts search \
       "location": "Viborg",
       "date": "2026-03-13",
       "deadline": "2026-04-05",
-      "url": "https://jobnet.dk/find-job/9ef43bce-d82b-4ea1-a098-7ff6520f99be"
+      "url": "https://jobnet.dk/find-job/9ef43bce-d82b-4ea1-a098-7ff6520f99be",
+      "applyUrl": null
     }
   ]
 }
@@ -162,7 +163,7 @@ bun run src/cli.ts search \
 
 > **Note**: The `description` field (raw HTML) is intentionally omitted from `search` results for brevity. Use `detail` to retrieve the full job description.
 
-> **Note**: Every result also carries the cross-portal contract fields `company`, `location`, `date`, `deadline` and `url` - derived respectively from `hiringOrgName`, `postalDistrictName`/`municipality`, and the destination URL (the employer's `jobAdUrl` for external ads, or `/find-job/{jobAdId}` for internal ones). `/scrape` Step 2 expects search output to include title, company, location, date, and URL, and dates follow the `YYYY-MM-DD` convention of the other portal CLIs. The API's `1900-01-01` deadline sentinel (deadline not disclosed) maps to `null`. The native fields above are preserved unchanged.
+> **Note**: Every result also carries the cross-portal contract fields `company`, `location`, `date`, `deadline`, `url`, and `applyUrl` - derived respectively from `hiringOrgName`, `postalDistrictName`/`municipality`, and the canonical portal URL `https://jobnet.dk/find-job/{jobAdId}`. `url` is always canonical on jobnet.dk for all ads so that deduplication, health checks, and `/apply` host routing identify the portal correctly. External ads carry their employer ATS destination in `applyUrl` (and `jobAdUrl`), while internal ads set `applyUrl` to `null`. `/scrape` Step 2 expects search output to include title, company, location, date, and URL, and dates follow the `YYYY-MM-DD` convention of the other portal CLIs. The API's `1900-01-01` deadline sentinel (deadline not disclosed) maps to `null`. The native fields above are preserved unchanged.
 
 > **Note**: `resultsPerPage` and `pageNumber` must always be provided — omitting them while also providing `searchString` causes the API to return error 1014 ("Fejl i formatering af inputs").
 
@@ -365,10 +366,10 @@ https://jobnet.dk/find-job/{jobAdId}
 ```
 
 The legacy `https://jobnet.dk/job/{jobAdId}` route redirects anonymous visitors into the
-MitID login flow, so it is never emitted. External ads (`isExternal: true`) 404 on `/find-job/`
-and hit the login wall on `/job/` - the search command routes external ads to their destination
-in `jobAdUrl` (falling back to `/find-job/{jobAdId}` when missing or not http(s)) instead of
-emitting a broken link.
+MitID login flow, so it is never emitted. External ads (`isExternal: true`) return 404 in a browser
+on `/find-job/` and hit the login wall on `/job/`. The search command keeps `url` canonical
+as `https://jobnet.dk/find-job/{jobAdId}` for all ads to preserve portal identity and route
+to `jobnet detail`, while providing the external destination in `applyUrl` (and `jobAdUrl`).
 
 Company logo images (prefix relative logoUrl from API):
 

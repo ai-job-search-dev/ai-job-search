@@ -18,7 +18,9 @@ The output file (salary_data.json) will be written to the repository root.
 Expected Excel format:
     - A header row with column names
     - A "Company" or "Firma" column (required)
-    - An optional "City" or "By" column
+    - An optional "City" or "By" column. A combined header such as
+      "Firmanavn og by" / "Company and City" (no separate city column)
+      is split on the last comma, and both parts are stripped, into company and city.
     - Any number of numeric data columns (salary index, count, etc.)
 
 The script auto-detects the header row and column layout. For Excel files
@@ -95,6 +97,28 @@ def parse_numeric_cell(value):
         if re.fullmatch(r"[+-]?\d+\.\d{3}", text):
             raise ValueError("ambiguous dot separator")
     return _finite_float(text)
+
+
+def split_combined_company_city(value):
+    """Split a combined name-and-city cell on its last comma.
+
+    The IDA demonstration workbook heads its company column "Firmanavn og by"
+    and stores "Ørsted A/S,Fredericia" (no space after the comma). salary_lookup's
+    --city filter only reads entry["city"], so leaving the city in the company
+    string makes the documented
+    `python3 salary_lookup.py "Ørsted" --city "Fredericia"` miss. Split on the
+    last comma and strip both parts: a city may contain spaces ("Kongens Lyngby")
+    and a company may contain ", " ("Rambøll Danmark A/S, Odense,Odense C"
+    keeps "Rambøll Danmark A/S, Odense"). A cell with no comma stays the company
+    with an empty city.
+    """
+    if not isinstance(value, str) or "," not in value:
+        return value, ""
+    company, city = value.rsplit(",", 1)
+    company, city = company.strip(), city.strip()
+    if company and city:
+        return company, city
+    return value, ""
 
 
 def header_matches(header, patterns):
@@ -197,24 +221,38 @@ def parse_sheet(ws, sheet_label=None):
     for cell in ws[header_row]:
         headers.append(" ".join(str(cell.value).split()) if cell.value else "")
 
-    # Find company and city columns
-    company_col = None
-    city_col = None
-    for i, h in enumerate(headers):
-        if header_matches(h, COMPANY_PATTERNS):
-            company_col = i
-        elif header_matches(h, CITY_PATTERNS):
-            city_col = i
+    # Find company and city columns. Three tiers, each taking the FIRST match:
+    #   1. an exact pattern header ("Company", "Firma", "By");
+    #   2. a header that carries the pattern but is not a count/index column
+    #      ("Company Name", "Firmanavn og by");
+    #   3. any header carrying the pattern.
+    # The old loop kept the LAST pattern match, so "Company Name | ... |
+    # Company Index" made the salary index the company column: every row's
+    # company read "108.5". #571 added tier 1; tiers 2-3 cover a qualified
+    # name header that sits next to a qualified salary header. The city
+    # lookup skips the company column: a combined "Company and city" header
+    # carries both words, and must not shadow a real city column after it.
+    def metadata_column(patterns, skip=None):
+        usable = [(i, h) for i, h in enumerate(headers) if i != skip]
+        exact = next((i for i, h in usable if h.lower().strip() in patterns), None)
+        if exact is not None:
+            return exact
+        candidates = [i for i, h in usable if header_matches(h, patterns)]
+        plain = [i for i in candidates if detect_column_type(headers[i]) is None]
+        return (plain or candidates or [None])[0]
 
-    # A qualified salary header such as "Company Index" may also contain a
-    # metadata token. Prefer an unqualified metadata column when one exists,
-    # leaving the qualified column available as salary data.
-    company_col = next((i for i, h in enumerate(headers) if h.lower() in COMPANY_PATTERNS), company_col)
-    city_col = next((i for i, h in enumerate(headers) if h.lower() in CITY_PATTERNS), city_col)
+    company_col = metadata_column(COMPANY_PATTERNS)
+    city_col = metadata_column(CITY_PATTERNS, skip=company_col)
 
     if company_col is None:
         print(f"Warning: Could not find company column in sheet '{ws.title}'.", file=sys.stderr)
         return []
+
+    # "Firmanavn og by" / "Company and City": one column holds both, and there
+    # is no separate city column. Split the cell so --city can see the city.
+    combined_name_and_city = city_col is None and header_matches(
+        headers[company_col], CITY_PATTERNS
+    )
 
     # Identify data columns (everything that's not company/city or an identifier)
     data_cols = []
@@ -319,6 +357,8 @@ def parse_sheet(ws, sheet_label=None):
             city_name = str(row[city_col]).strip()
         else:
             city_name = ""
+        if combined_name_and_city and not city_name:
+            company_name, city_name = split_combined_company_city(company_name)
 
         entry = {
             "company": company_name,
