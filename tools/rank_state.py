@@ -146,7 +146,8 @@ def norm(text) -> str:
     # Combining marks can distinguish names even after NFC (e.g. Indic vowels).
     return "".join(
         char for char in text
-        if char.isalnum() or unicodedata.category(char).startswith("M")
+        # "+" and "#" carry identity: "C++", "C#" and "C" are different jobs.
+        if char.isalnum() or char in "+#" or unicodedata.category(char).startswith("M")
     )
 
 
