@@ -105,6 +105,8 @@ def slugify(text: str) -> str:
     decomposed = unicodedata.normalize("NFKD", str(text))
     folded = decomposed.translate(_LATIN_FOLD_TABLE)
     ascii_only = folded.encode("ascii", "ignore").decode("ascii")
+    # Spell out "+" and "#" so "C++", "C#" and "C" titles keep distinct keys.
+    ascii_only = ascii_only.replace("+", "plus").replace("#", "sharp")
     return _NON_SLUG.sub("-", ascii_only.lower()).strip("-")
 
 

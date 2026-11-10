@@ -117,7 +117,10 @@ def run(args) -> int:
             raise ValueError("job has an invalid portal or source")
         key = make_key(job["company"], job["title"], job["url"])
         if key in seen:
-            raise ValueError(f"canonical key already exists for another posting: {key}")
+            raise ValueError(
+                f"canonical key already exists for another posting: {key} "
+                "(keys stored before a key-rule change: run python3 tools/job_key.py --audit --migrate)"
+            )
         seen[key] = job
     if selected:
         args.state.parent.mkdir(parents=True, exist_ok=True)
