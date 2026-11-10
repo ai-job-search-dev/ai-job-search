@@ -5,12 +5,15 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tools.verify_pdf import (
+    ROOT,
     VerificationError,
     build_parser,
+    check_dump_target,
     extract_text_layer,
     find_non_ascii_date_ranges,
     normalize_text,
     parse_page_count,
+    main,
     run_tool,
     verify_pdf,
 )
@@ -329,6 +332,52 @@ class RunToolTests(unittest.TestCase):
 
         with self.assertRaisesRegex(VerificationError, "invalid PDF"):
             run_tool(["pdfinfo", "example.pdf"])
+
+
+class DumpTargetTests(unittest.TestCase):
+    """`.claude/settings.json` pre-approves verify_pdf.py with any arguments, so
+    `--dump-text` was a prompt-free write to any path on disk (it also created
+    missing parent directories). The CLI now writes only a .txt under the
+    repo's cv/ or cover_letters/, the place apply.md Step 5d documents."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.root = Path(self.temp_dir.name)
+        (self.root / "cv").mkdir()
+
+    def test_documented_target_is_allowed(self):
+        self.assertIsNone(check_dump_target(self.root / "cv" / "main_acme_analyst.txt", self.root))
+        self.assertIsNone(check_dump_target(ROOT / "cv" / "main_acme_analyst.txt"))
+
+    def test_targets_outside_the_output_dirs_are_refused(self):
+        outside = Path(self.temp_dir.name).parent / "elsewhere.txt"
+        for path, reason in [
+            (outside, "inside this repo's cv/"),
+            (self.root / "tools" / "notes.txt", "inside this repo's cv/"),
+            (self.root / "cv" / ".." / "tools" / "x.txt", "inside this repo's cv/"),
+            (self.root / "cv" / "main_acme.py", "must name a .txt file"),
+            (Path.home() / ".zshrc", "must name a .txt file"),
+        ]:
+            with self.subTest(path=path):
+                self.assertIn(reason, check_dump_target(path, self.root))
+
+    def test_symlink_out_of_cv_is_refused(self):
+        link = self.root / "cv" / "main_acme.txt"
+        try:
+            link.symlink_to(self.root / "outside.txt")
+        except OSError as exc:  # Windows without Developer Mode or admin rights (WinError 1314)
+            self.skipTest(f"cannot create symlinks here: {exc}")
+        self.assertEqual(check_dump_target(link, self.root), "must not be a symlink")
+
+    @patch("tools.verify_pdf.verify_pdf")
+    def test_cli_refuses_before_extracting_or_writing(self, mock_verify):
+        target = Path(self.temp_dir.name) / "victim" / "rc.txt"
+        with patch("sys.stderr"):
+            code = main(["cv/main_example.pdf", "--dump-text", str(target)])
+        self.assertEqual(code, 1)
+        mock_verify.assert_not_called()
+        self.assertFalse(target.parent.exists(), "the CLI must not create the parent directory")
 
 
 if __name__ == "__main__":

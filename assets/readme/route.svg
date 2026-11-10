@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 256" width="1280" height="256" role="img" aria-labelledby="t d">
+  <title id="t">The workflow</title>
+  <desc id="d">Six commands in order: /setup builds your profile, /scrape finds new postings, /rank shortlists the fits, /apply tailors a CV and cover letter, /interview preps every round, /outcome tracks each result.</desc>
+  <style>
+    .pulse{transform-box:fill-box;transform-origin:center}
+    .courier{animation:go 12s linear infinite}
+    .flow{animation:flow 1.6s linear infinite}
+    .done{animation:done 12s linear infinite}
+    @keyframes go{0%{transform:translateX(0);opacity:0}3%{opacity:1}84%{transform:translateX(1020px);opacity:1}92%,100%{transform:translateX(1020px);opacity:0}}
+    @keyframes done{0%{stroke-dashoffset:1}84%,93%{stroke-dashoffset:0;opacity:1}98%,100%{stroke-dashoffset:0;opacity:0}}
+    @keyframes flow{to{stroke-dashoffset:-24}}
+    .s0 .fill{animation:f0 12s linear infinite}.s0 .pulse{animation:p0 12s ease-out infinite}.s0 .lbl{animation:l0 12s linear infinite}@keyframes f0{0%,0.00%{opacity:0}0.60%,93%{opacity:1}98%,100%{opacity:0}}@keyframes p0{0%,0.00%{transform:scale(.6);opacity:0}0.60%{opacity:.9}9.00%,100%{transform:scale(2.3);opacity:0}}@keyframes l0{0%,0.00%{fill-opacity:.55}0.60%,93%{fill-opacity:1}98%,100%{fill-opacity:.55}}.s1 .fill{animation:f1 12s linear infinite}.s1 .pulse{animation:p1 12s ease-out infinite}.s1 .lbl{animation:l1 12s linear infinite}@keyframes f1{0%,16.79%{opacity:0}17.40%,93%{opacity:1}98%,100%{opacity:0}}@keyframes p1{0%,16.79%{transform:scale(.6);opacity:0}17.40%{opacity:.9}25.80%,100%{transform:scale(2.3);opacity:0}}@keyframes l1{0%,16.79%{fill-opacity:.55}17.40%,93%{fill-opacity:1}98%,100%{fill-opacity:.55}}.s2 .fill{animation:f2 12s linear infinite}.s2 .pulse{animation:p2 12s ease-out infinite}.s2 .lbl{animation:l2 12s linear infinite}@keyframes f2{0%,33.59%{opacity:0}34.20%,93%{opacity:1}98%,100%{opacity:0}}@keyframes p2{0%,33.59%{transform:scale(.6);opacity:0}34.20%{opacity:.9}42.60%,100%{transform:scale(2.3);opacity:0}}@keyframes l2{0%,33.59%{fill-opacity:.55}34.20%,93%{fill-opacity:1}98%,100%{fill-opacity:.55}}.s3 .fill{animation:f3 12s linear infinite}.s3 .pulse{animation:p3 12s ease-out infinite}.s3 .lbl{animation:l3 12s linear infinite}@keyframes f3{0%,50.39%{opacity:0}51.00%,93%{opacity:1}98%,100%{opacity:0}}@keyframes p3{0%,50.39%{transform:scale(.6);opacity:0}51.00%{opacity:.9}59.40%,100%{transform:scale(2.3);opacity:0}}@keyframes l3{0%,50.39%{fill-opacity:.55}51.00%,93%{fill-opacity:1}98%,100%{fill-opacity:.55}}.s4 .fill{animation:f4 12s linear infinite}.s4 .pulse{animation:p4 12s ease-out infinite}.s4 .lbl{animation:l4 12s linear infinite}@keyframes f4{0%,67.19%{opacity:0}67.80%,93%{opacity:1}98%,100%{opacity:0}}@keyframes p4{0%,67.19%{transform:scale(.6);opacity:0}67.80%{opacity:.9}76.20%,100%{transform:scale(2.3);opacity:0}}@keyframes l4{0%,67.19%{fill-opacity:.55}67.80%,93%{fill-opacity:1}98%,100%{fill-opacity:.55}}.s5 .fill{animation:f5 12s linear infinite}.s5 .pulse{animation:p5 12s ease-out infinite}.s5 .lbl{animation:l5 12s linear infinite}@keyframes f5{0%,83.99%{opacity:0}84.60%,93%{opacity:1}98%,100%{opacity:0}}@keyframes p5{0%,83.99%{transform:scale(.6);opacity:0}84.60%{opacity:.9}93.00%,100%{transform:scale(2.3);opacity:0}}@keyframes l5{0%,83.99%{fill-opacity:.55}84.60%,93%{fill-opacity:1}98%,100%{fill-opacity:.55}}
+    @media (prefers-reduced-motion: reduce){*{animation:none!important}}
+    @media (prefers-reduced-motion: reduce){.fill{opacity:1}.done{stroke-dashoffset:0}.courier{opacity:0}}
+  </style>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0F2229"/><stop offset="1" stop-color="#15333C"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.55" cy="0.0" r="0.6">
+      <stop offset="0" stop-color="#2A9D8F" stop-opacity=".30"/><stop offset="1" stop-color="#2A9D8F" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="card"><rect width="1280" height="256" rx="28"/></clipPath>
+    
+  </defs>
+  <g clip-path="url(#card)">
+    <rect width="1280" height="256" fill="url(#bg)"/>
+    <rect width="1280" height="256" fill="url(#glow)"/>
+    <line x1="130" y1="92" x2="1150" y2="92" stroke="#9FE0CF" stroke-opacity=".3" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="1 11" class="flow"/>
+    <line x1="130" y1="92" x2="1150" y2="92" pathLength="1" stroke="#2A9D8F" stroke-width="3" stroke-dasharray="1 1" class="done"/>
+    <g class="s0">
+      <circle class="pulse" cx="130" cy="92" r="20" fill="none" stroke="#9FE0CF" stroke-width="2"/>
+      <circle cx="130" cy="92" r="20" fill="#0F2229" stroke="#9FE0CF" stroke-opacity=".35" stroke-width="2"/>
+      <circle class="fill" cx="130" cy="92" r="20" fill="#2A9D8F"/>
+      <circle cx="130" cy="92" r="6" fill="#EEF3EF"/>
+      <text class="lbl" x="130" y="158" text-anchor="middle" font-family="ui-monospace,'SF Mono','JetBrains Mono','Cascadia Code',Menlo,Consolas,monospace" font-size="22" font-weight="700" fill="#9FE0CF">/setup</text>
+      <text x="130" y="188" text-anchor="middle" font-family="ui-rounded,'SF Pro Rounded','Nunito','Varela Round','Segoe UI Variable Display','Segoe UI',system-ui,-apple-system,sans-serif" font-size="17" fill="#EEF3EF" fill-opacity=".72">Build your profile</text>
+    </g>
+    <g class="s1">
+      <circle class="pulse" cx="334" cy="92" r="20" fill="none" stroke="#9FE0CF" stroke-width="2"/>
+      <circle cx="334" cy="92" r="20" fill="#0F2229" stroke="#9FE0CF" stroke-opacity=".35" stroke-width="2"/>
+      <circle class="fill" cx="334" cy="92" r="20" fill="#2A9D8F"/>
+      <circle cx="334" cy="92" r="6" fill="#EEF3EF"/>
+      <text class="lbl" x="334" y="158" text-anchor="middle" font-family="ui-monospace,'SF Mono','JetBrains Mono','Cascadia Code',Menlo,Consolas,monospace" font-size="22" font-weight="700" fill="#9FE0CF">/scrape</text>
+      <text x="334" y="188" text-anchor="middle" font-family="ui-rounded,'SF Pro Rounded','Nunito','Varela Round','Segoe UI Variable Display','Segoe UI',system-ui,-apple-system,sans-serif" font-size="17" fill="#EEF3EF" fill-opacity=".72">Find new postings</text>
+    </g>
+    <g class="s2">
+      <circle class="pulse" cx="538" cy="92" r="20" fill="none" stroke="#9FE0CF" stroke-width="2"/>
+      <circle cx="538" cy="92" r="20" fill="#0F2229" stroke="#9FE0CF" stroke-opacity=".35" stroke-width="2"/>
+      <circle class="fill" cx="538" cy="92" r="20" fill="#2A9D8F"/>
+      <circle cx="538" cy="92" r="6" fill="#EEF3EF"/>
+      <text class="lbl" x="538" y="158" text-anchor="middle" font-family="ui-monospace,'SF Mono','JetBrains Mono','Cascadia Code',Menlo,Consolas,monospace" font-size="22" font-weight="700" fill="#9FE0CF">/rank</text>
+      <text x="538" y="188" text-anchor="middle" font-family="ui-rounded,'SF Pro Rounded','Nunito','Varela Round','Segoe UI Variable Display','Segoe UI',system-ui,-apple-system,sans-serif" font-size="17" fill="#EEF3EF" fill-opacity=".72">Shortlist the fits</text>
+    </g>
+    <g class="s3">
+      <circle class="pulse" cx="742" cy="92" r="20" fill="none" stroke="#F4704F" stroke-width="2"/>
+      <circle cx="742" cy="92" r="20" fill="#0F2229" stroke="#9FE0CF" stroke-opacity=".35" stroke-width="2"/>
+      <circle class="fill" cx="742" cy="92" r="20" fill="#F4704F"/>
+      <circle cx="742" cy="92" r="6" fill="#EEF3EF"/>
+      <text class="lbl" x="742" y="158" text-anchor="middle" font-family="ui-monospace,'SF Mono','JetBrains Mono','Cascadia Code',Menlo,Consolas,monospace" font-size="22" font-weight="700" fill="#F4704F">/apply</text>
+      <text x="742" y="188" text-anchor="middle" font-family="ui-rounded,'SF Pro Rounded','Nunito','Varela Round','Segoe UI Variable Display','Segoe UI',system-ui,-apple-system,sans-serif" font-size="17" fill="#EEF3EF" fill-opacity=".72">Tailor CV + letter</text>
+    </g>
+    <g class="s4">
+      <circle class="pulse" cx="946" cy="92" r="20" fill="none" stroke="#9FE0CF" stroke-width="2"/>
+      <circle cx="946" cy="92" r="20" fill="#0F2229" stroke="#9FE0CF" stroke-opacity=".35" stroke-width="2"/>
+      <circle class="fill" cx="946" cy="92" r="20" fill="#2A9D8F"/>
+      <circle cx="946" cy="92" r="6" fill="#EEF3EF"/>
+      <text class="lbl" x="946" y="158" text-anchor="middle" font-family="ui-monospace,'SF Mono','JetBrains Mono','Cascadia Code',Menlo,Consolas,monospace" font-size="22" font-weight="700" fill="#9FE0CF">/interview</text>
+      <text x="946" y="188" text-anchor="middle" font-family="ui-rounded,'SF Pro Rounded','Nunito','Varela Round','Segoe UI Variable Display','Segoe UI',system-ui,-apple-system,sans-serif" font-size="17" fill="#EEF3EF" fill-opacity=".72">Prep every round</text>
+    </g>
+    <g class="s5">
+      <circle class="pulse" cx="1150" cy="92" r="20" fill="none" stroke="#9FE0CF" stroke-width="2"/>
+      <circle cx="1150" cy="92" r="20" fill="#0F2229" stroke="#9FE0CF" stroke-opacity=".35" stroke-width="2"/>
+      <circle class="fill" cx="1150" cy="92" r="20" fill="#2A9D8F"/>
+      <circle cx="1150" cy="92" r="6" fill="#EEF3EF"/>
+      <text class="lbl" x="1150" y="158" text-anchor="middle" font-family="ui-monospace,'SF Mono','JetBrains Mono','Cascadia Code',Menlo,Consolas,monospace" font-size="22" font-weight="700" fill="#9FE0CF">/outcome</text>
+      <text x="1150" y="188" text-anchor="middle" font-family="ui-rounded,'SF Pro Rounded','Nunito','Varela Round','Segoe UI Variable Display','Segoe UI',system-ui,-apple-system,sans-serif" font-size="17" fill="#EEF3EF" fill-opacity=".72">Track each result</text>
+    </g>
+    <g class="courier"><rect x="113" y="42" width="34" height="24" rx="3" fill="#EEF3EF" stroke="#8aa39a" stroke-width="1.5"/><path d="M115 44 L130.0 55.2 L145 44" fill="none" stroke="#8aa39a" stroke-width="1.6" stroke-linejoin="round"/><circle cx="130" cy="57" r="4" fill="#E63946"/></g>
+  </g>
+  <rect x=".5" y=".5" width="1279" height="255" rx="27.5" fill="none" stroke="#9FE0CF" stroke-opacity=".14"/>
+</svg>

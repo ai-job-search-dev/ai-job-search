@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 440" width="1280" height="440" role="img" aria-labelledby="t d">
+  <title id="t">How /apply works</title>
+  <desc id="d">A job posting passes an integrity gate and fit evaluation, then loops through draft, review, revise, and compile plus inspect until the CV is exactly two pages, the cover letter one page, and the ATS text layer is checked.</desc>
+  <style>
+    .orbit{transform-box:view-box;transform-origin:640px 214px;animation:spin 6s linear infinite}
+    .node{opacity:0}
+    .flow{animation:flow 1.6s linear infinite}
+    .out{animation:out 12s ease-out infinite}
+    .o1{animation-delay:.25s}.o2{animation-delay:.5s}
+    .write rect+rect{transform-box:fill-box;transform-origin:left;animation:write 6s ease-out infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes hit{0%{opacity:1}22%,100%{opacity:0}}
+    @keyframes flow{to{stroke-dashoffset:-24}}
+    @keyframes out{0%,45%{opacity:.18}52%,94%{opacity:1}100%{opacity:.18}}
+    @keyframes write{0%{transform:scaleX(0)}40%,100%{transform:scaleX(1)}}
+    .n0{animation:hit 6s linear -6.000s infinite}.n1{animation:hit 6s linear -4.500s infinite}.n2{animation:hit 6s linear -3.000s infinite}.n3{animation:hit 6s linear -1.500s infinite}
+    @media (prefers-reduced-motion: reduce){*{animation:none!important}}
+    @media (prefers-reduced-motion: reduce){.n0{opacity:1}.out{opacity:1}}
+  </style>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0F2229"/><stop offset="1" stop-color="#15333C"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.6">
+      <stop offset="0" stop-color="#2A9D8F" stop-opacity=".30"/><stop offset="1" stop-color="#2A9D8F" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="card"><rect width="1280" height="440" rx="28"/></clipPath>
+    
+  </defs>
+  <g clip-path="url(#card)">
+    <rect width="1280" height="440" fill="url(#bg)"/>
+    <rect width="1280" height="440" fill="url(#glow)"/>
+    <g class=""><rect x="120" y="128" width="120" height="160" rx="6" fill="#EEF3EF"/><rect x="132" y="144" width="53" height="6" rx="2" fill="#2b4a52"/><rect x="132" y="157" width="86" height="4" rx="2" fill="#a9bcb5"/><rect x="132" y="170" width="86" height="4" rx="2" fill="#a9bcb5"/><rect x="132" y="183" width="67" height="4" rx="2" fill="#a9bcb5"/><rect x="132" y="196" width="86" height="4" rx="2" fill="#a9bcb5"/><rect x="132" y="209" width="86" height="4" rx="2" fill="#a9bcb5"/><rect x="132" y="222" width="67" height="4" rx="2" fill="#a9bcb5"/><rect x="132" y="235" width="86" height="4" rx="2" fill="#a9bcb5"/><rect x="132" y="248" width="86" height="4" rx="2" fill="#a9bcb5"/></g>
+    <text x="180" y="334" text-anchor="middle" font-family="ui-rounded,'SF Pro Rounded','Nunito','Varela Round','Segoe UI Variable Display','Segoe UI',system-ui,-apple-system,sans-serif" font-size="19" font-weight="600" fill="#EEF3EF">Job posting</text>
+    <text x="180" y="362" text-anchor="middle" font-family="ui-rounded,'SF Pro Rounded','Nunito','Varela Round','Segoe UI Variable Display','Segoe UI',system-ui,-apple-system,sans-serif" font-size="16" fill="#EEF3EF" fill-opacity=".6">integrity gate + fit score</text>
+    <path d="M262 214 H498" stroke="#9FE0CF" stroke-opacity=".35" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="1 11" class="flow"/>
+    <path d="M780 214 C 880 214, 900 196, 960 196" fill="none" stroke="#9FE0CF" stroke-opacity=".35" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="1 11" class="flow"/>
+    <circle cx="640" cy="214" r="118" fill="none" stroke="#9FE0CF" stroke-opacity=".22" stroke-width="2"/>
+    <g class="orbit">
+      <circle cx="640" cy="214" r="118" fill="none" stroke="#F4704F" stroke-width="3" stroke-linecap="round" stroke-dasharray="70 671.4" transform="rotate(142 640 214)"/>
+      <circle cx="522" cy="214" r="7" fill="#F4704F"/>
+    </g>
+    <circle cx="522.0" cy="214.0" r="15" fill="#0F2229" stroke="#9FE0CF" stroke-opacity=".4" stroke-width="2"/><circle class="node n0" cx="522.0" cy="214.0" r="15" fill="#2A9D8F"/><text x="522.0" y="262.0" text-anchor="middle" font-family="ui-rounded,'SF Pro Rounded','Nunito','Varela Round','Segoe UI Variable Display','Segoe UI',system-ui,-apple-system,sans-serif" font-size="19" font-weight="600" fill="#EEF3EF">Draft</text><circle cx="640.0" cy="96.0" r="15" fill="#0F2229" stroke="#9FE0CF" stroke-opacity=".4" stroke-width="2"/><circle class="node n1" cx="640.0" cy="96.0" r="15" fill="#2A9D8F"/><text x="640.0" y="62.0" text-anchor="middle" font-family="ui-rounded,'SF Pro Rounded','Nunito','Varela Round','Segoe UI Variable Display','Segoe UI',system-ui,-apple-system,sans-serif" font-size="19" font-weight="600" fill="#EEF3EF">Review</text><circle cx="758.0" cy="214.0" r="15" fill="#0F2229" stroke="#9FE0CF" stroke-opacity=".4" stroke-width="2"/><circle class="node n2" cx="758.0" cy="214.0" r="15" fill="#2A9D8F"/><text x="758.0" y="262.0" text-anchor="middle" font-family="ui-rounded,'SF Pro Rounded','Nunito','Varela Round','Segoe UI Variable Display','Segoe UI',system-ui,-apple-system,sans-serif" font-size="19" font-weight="600" fill="#EEF3EF">Revise</text><circle cx="640.0" cy="332.0" r="15" fill="#0F2229" stroke="#9FE0CF" stroke-opacity=".4" stroke-width="2"/><circle class="node n3" cx="640.0" cy="332.0" r="15" fill="#2A9D8F"/><text x="640.0" y="380.0" text-anchor="middle" font-family="ui-rounded,'SF Pro Rounded','Nunito','Varela Round','Segoe UI Variable Display','Segoe UI',system-ui,-apple-system,sans-serif" font-size="19" font-weight="600" fill="#EEF3EF">Compile + inspect</text>
+    <g class="write"><rect x="602" y="164" width="76" height="100" rx="6" fill="#EEF3EF"/><rect x="614" y="180" width="29" height="6" rx="2" fill="#2b4a52"/><rect x="614" y="193" width="47" height="4" rx="2" fill="#a9bcb5"/><rect x="614" y="206" width="47" height="4" rx="2" fill="#a9bcb5"/><rect x="614" y="219" width="36" height="4" rx="2" fill="#a9bcb5"/><rect x="614" y="232" width="47" height="4" rx="2" fill="#a9bcb5"/><rect x="614" y="245" width="47" height="4" rx="2" fill="#a9bcb5"/></g>
+    <g class="out o0"><circle cx="1000" cy="96" r="16" fill="#2A9D8F"/><path d="M992 96 l6 6 l11 -12" fill="none" stroke="#EEF3EF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><text x="1030" y="103" font-family="ui-rounded,'SF Pro Rounded','Nunito','Varela Round','Segoe UI Variable Display','Segoe UI',system-ui,-apple-system,sans-serif" font-size="20" fill="#EEF3EF">CV, exactly 2 pages</text></g><g class="out o1"><circle cx="1000" cy="196" r="16" fill="#2A9D8F"/><path d="M992 196 l6 6 l11 -12" fill="none" stroke="#EEF3EF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><text x="1030" y="203" font-family="ui-rounded,'SF Pro Rounded','Nunito','Varela Round','Segoe UI Variable Display','Segoe UI',system-ui,-apple-system,sans-serif" font-size="20" fill="#EEF3EF">Cover letter, 1 page</text></g><g class="out o2"><circle cx="1000" cy="296" r="16" fill="#2A9D8F"/><path d="M992 296 l6 6 l11 -12" fill="none" stroke="#EEF3EF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><text x="1030" y="303" font-family="ui-rounded,'SF Pro Rounded','Nunito','Varela Round','Segoe UI Variable Display','Segoe UI',system-ui,-apple-system,sans-serif" font-size="20" fill="#EEF3EF">ATS text layer checked</text></g>
+  </g>
+  <rect x=".5" y=".5" width="1279" height="439" rx="27.5" fill="none" stroke="#9FE0CF" stroke-opacity=".14"/>
+</svg>
