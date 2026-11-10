@@ -81,7 +81,10 @@ class TrustBoundaryWiring(unittest.TestCase):
         text = RESEARCH.read_text(encoding="utf-8")
         boundary = re.search(r"## Trust boundary(.*?)(?=\n## )", text, re.DOTALL).group(1)
         self.assertIn("posting_guard", boundary)
-        self.assertIn("framework_version: 1.1.7", text)
+        # The gate line shipped in 1.1.7; any later edit bumps the marker again.
+        version = re.search(r"^framework_version: (\d+)\.(\d+)\.(\d+)$", text, re.MULTILINE)
+        self.assertIsNotNone(version)
+        self.assertGreaterEqual(tuple(int(part) for part in version.groups()), (1, 1, 7))
 
 
 if __name__ == "__main__":
