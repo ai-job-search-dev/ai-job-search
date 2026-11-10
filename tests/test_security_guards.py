@@ -957,6 +957,19 @@ class LocalNegationsTests(GuardRepoFixture):
 
 
 class ManifestGuardTests(GuardRepoFixture):
+    def test_prepare_wrapper_hooks_fail(self):
+        # Bun runs these root-package hooks around prepare during install,
+        # even when the manifest has no dependencies or prepare script.
+        for script in ("preprepare", "postprepare"):
+            with self.subTest(script=script):
+                self.write_manifest(
+                    {"name": "example-cli", "scripts": {script: "echo test"}}
+                )
+                result = run_guards(self.root)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("lifecycle script", result.stdout)
+                self.assertIn(script, result.stdout)
+
     def test_each_lifecycle_script_fails(self):
         for script in sorted(security_guards.FORBIDDEN_SCRIPTS):
             with self.subTest(script=script):

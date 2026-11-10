@@ -26,9 +26,10 @@ Checks:
    them (leading whitespace is part of the pattern), and every .gitignore in
    a subdirectory, which outranks the root file, is checked for negations.
 3. .agents/**/package.json — no npm/bun lifecycle scripts (preinstall,
-   install, postinstall, prepare, prepack), no trustedDependencies, no
-   workspaces, and no bunfig.toml or .npmrc beside the manifest. Catches
-   code execution smuggled into `bun install`, and a registry swap.
+   install, postinstall, preprepare, prepare, postprepare, prepack), no
+   trustedDependencies, no workspaces, and no bunfig.toml or .npmrc beside
+   the manifest. Catches code execution smuggled into `bun install`, and a
+   registry swap.
 4. Skill and command frontmatter — every `allowed-tools` entry in
    .claude/skills/*/SKILL.md, .agents/skills/*/SKILL.md and
    .claude/commands/*.md must be in ALLOWED_SKILL_TOOLS (a portal skill may
@@ -262,7 +263,11 @@ ALLOWED_HOOKS: set[str] = set()
 ALLOWED_SETTINGS_KEYS = {"permissions", "hooks"}
 ALLOWED_PERMISSIONS_KEYS = {"allow", "ask", "deny"}
 
-FORBIDDEN_SCRIPTS = {"preinstall", "install", "postinstall", "prepare", "prepack"}
+# Bun also runs the root package's preprepare and postprepare hooks on install,
+# even with no dependencies and no prepare script (verified on Bun 1.3.10/1.4.2).
+FORBIDDEN_SCRIPTS = {
+    "preinstall", "install", "postinstall", "preprepare", "prepare", "postprepare", "prepack"
+}
 # Manifest keys that pull code into `bun install` by another door: `workspaces`
 # installs sub-packages with their own lifecycle scripts (a workspace
 # postinstall ran under Bun 1.3.10, scripts the top-level check never saw), and
