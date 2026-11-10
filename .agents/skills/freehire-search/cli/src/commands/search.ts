@@ -1,4 +1,4 @@
-import { apiGet, toResult, writeError, type FreehireJob, type JobResult } from "../helpers.js"
+import { apiGet, stripInvisible, toResult, writeError, type FreehireJob, type JobResult } from "../helpers.js"
 
 // The agent variant of the job search: the same query, ranking, and facets as the
 // web's /jobs/search, but each hit carries the posting's full description instead
@@ -175,7 +175,7 @@ export async function runSearch(opts: SearchOpts): Promise<number> {
       )
       return 1
     }
-    let rows = (env.data ?? []).map(toResult)
+    let rows = stripInvisible((env.data ?? []).map(toResult))
     // The web search still carries each hit's truncated preview, and the cost
     // this flag exists to avoid is the share of CLI output descriptions occupy
     // in agent context - so the lean mode drops them client-side.

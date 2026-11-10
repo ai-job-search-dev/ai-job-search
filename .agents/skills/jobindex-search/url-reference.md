@@ -59,7 +59,7 @@ Category uses a two-part path: `{group}/{slug}`:
 
 | Parameter | Description | Examples |
 |-----------|-------------|----------|
-| `q` | Search query | `q=data+engineer` (broad), `q=%27data+engineer%27` (exact match) |
+| `q` | Search query | `q=data+engineer` (broad), `q=%22data+engineer%22` (exact match) |
 | `jobage` | Max age in days | `jobage=1` (today), `jobage=3`, `jobage=7`, `jobage=30` |
 | `page` | Page number (1-indexed) | `page=1`, `page=2` |
 
@@ -69,8 +69,8 @@ Category uses a two-part path: `{group}/{slug}`:
 # Basic keyword search
 playwright-cli goto "https://www.jobindex.dk/jobsoegning?q=python+developer"
 
-# Exact match search (single quotes around query)
-playwright-cli goto "https://www.jobindex.dk/jobsoegning?q=%27python+developer%27"
+# Exact match search (double quotes around query)
+playwright-cli goto "https://www.jobindex.dk/jobsoegning?q=%22python+developer%22"
 
 # Search in Storkøbenhavn area
 playwright-cli goto "https://www.jobindex.dk/jobsoegning/storkoebenhavn?q=python+developer"
