@@ -173,12 +173,59 @@ class DetectColumnTypeTests(unittest.TestCase):
         self.assertTrue(header_matches("Firmanavn og by", COMPANY_PATTERNS))
         ws = FakeWorksheet([
             ("Firmanavn og by", "Antal", "Indeks"),
-            ("Example A/S, Aarhus", 12, 105.0),
+            ("Example A/S,Aarhus", 12, 105.0),
         ])
         companies = parse_sheet(ws)
         self.assertEqual(len(companies), 1)
-        self.assertEqual(companies[0]["company"], "Example A/S, Aarhus")
+        self.assertEqual(companies[0]["company"], "Example A/S")
+        self.assertEqual(companies[0]["city"], "Aarhus")
         self.assertEqual(companies[0]["categories"]["all_employees"], {"count": 12, "index": 105.0})
+
+    def test_parse_sheet_does_not_split_a_comma_in_a_company_only_column(self):
+        # A "Company" header is not a combined name-and-city column. "Acme, Inc."
+        # stays the company; splitting it would invent a city named "Inc.".
+        ws = FakeWorksheet([
+            ("Company", "Antal", "Indeks"),
+            ("Acme, Inc.", 12, 105.0),
+        ])
+        companies = parse_sheet(ws)
+        self.assertEqual(len(companies), 1)
+        self.assertEqual(companies[0]["company"], "Acme, Inc.")
+        self.assertEqual(companies[0]["city"], "")
+
+    def test_parse_sheet_splits_english_combined_company_and_city_header(self):
+        ws = FakeWorksheet([
+            ("Company and City", "Count", "Index"),
+            ("Ørsted A/S,Kongens Lyngby", 200, 105.2),
+        ])
+        companies = parse_sheet(ws)
+        self.assertEqual(len(companies), 1)
+        self.assertEqual(companies[0]["company"], "Ørsted A/S")
+        self.assertEqual(companies[0]["city"], "Kongens Lyngby")
+
+    def test_parse_sheet_splits_on_the_last_comma_when_the_company_contains_one(self):
+        # IDA cells have no space after the separating comma. A company can
+        # itself contain ", " ("Rambøll Danmark A/S, Odense,Odense C").
+        ws = FakeWorksheet([
+            ("Firmanavn og by", "Antal", "Indeks"),
+            ("Rambøll Danmark A/S, Odense,Odense C", 12, 105.0),
+            ("Ørsted A/S,Fredericia", 200, 105.2),
+        ])
+        companies = parse_sheet(ws)
+        self.assertEqual(
+            [(c["company"], c["city"]) for c in companies],
+            [("Rambøll Danmark A/S, Odense", "Odense C"), ("Ørsted A/S", "Fredericia")],
+        )
+
+    def test_parse_sheet_keeps_a_combined_cell_with_no_comma_as_company_only(self):
+        ws = FakeWorksheet([
+            ("Firmanavn og by", "Antal", "Indeks"),
+            ("Example A/S", 12, 105.0),
+        ])
+        companies = parse_sheet(ws)
+        self.assertEqual(len(companies), 1)
+        self.assertEqual(companies[0]["company"], "Example A/S")
+        self.assertEqual(companies[0]["city"], "")
 
     def test_parse_sheet_detects_city_column_with_token_header(self):
         # City headers are matched with the same token-based header_matches()
@@ -540,6 +587,81 @@ class BareCountIndexPairingTests(unittest.TestCase):
         self.assertNotIn("N/A*", rendered.split("* N/A =")[0])
         self.assertRegex(rendered, r"All Employees\s+500\s+108\.5\s+\+8\.5%")
         self.assertNotRegex(rendered, r"^\s*Count\s+500", )
+
+
+class QualifiedCompanyHeaderNextToQualifiedSalaryHeader(unittest.TestCase):
+    """A name header must win over a salary header that also carries the word.
+
+    The detection loop kept the LAST header matching a company pattern, so
+    "Company Name | City | Company Count | Company Index" made the index
+    column the company column and every row's company read "108.5". #571
+    added an exact-match preference, which only helps when a header is
+    exactly "Company"; the qualified name header stayed exposed. The Danish
+    case below is a constructed header in the same shape, not the IDA
+    workbook, whose pairs are headed "Antal" and "Indeks" and already convert.
+    """
+
+    def test_company_name_wins_over_company_index(self):
+        ws = FakeWorksheet([
+            ("Company Name", "City", "Company Count", "Company Index"),
+            ("Acme Corp", "Berlin", 25, 108.5),
+        ])
+
+        entry = parse_sheet(ws)[0]
+
+        self.assertEqual(entry["company"], "Acme Corp")
+        self.assertEqual(entry["city"], "Berlin")
+        self.assertEqual(entry["categories"], {"company": {"count": 25, "index": 108.5}})
+
+    def test_danish_name_header_wins_over_qualified_index_header(self):
+        # The cell carries no comma so the case tests which column wins and
+        # does not depend on how a combined name-and-city cell is split (#660).
+        ws = FakeWorksheet([
+            ("Firmanavn og by", "Antal", "Firmaets indeks"),
+            ("Acme A/S", 25, 108.5),
+        ])
+
+        entry = parse_sheet(ws)[0]
+
+        self.assertEqual(entry["company"], "Acme A/S")
+        self.assertEqual(sum(1 for c in entry["categories"].values() if c.get("index") == 108.5), 1)
+        self.assertEqual(sum(1 for c in entry["categories"].values() if c.get("count") == 25), 1)
+
+    def test_exact_header_still_wins_over_a_qualified_name_header(self):
+        # Tier 1 (#571) is unchanged: "Company" beats "Company Name" wherever it sits.
+        ws = FakeWorksheet([
+            ("Company Name", "Company", "Salary Index"),
+            ("Acme Corp (legal)", "Acme", 108.5),
+        ])
+
+        self.assertEqual(parse_sheet(ws)[0]["company"], "Acme")
+
+    def test_city_column_never_aliases_the_company_column(self):
+        # "Firmanavn og by" carries both a company and a city pattern word.
+        ws = FakeWorksheet([
+            ("Firmanavn og by", "Antal", "Indeks"),
+            ("Acme A/S", 25, 108.5),
+        ])
+
+        entry = parse_sheet(ws)[0]
+
+        self.assertEqual(entry["company"], "Acme A/S")
+        self.assertEqual(entry["city"], "")
+        self.assertEqual(entry["categories"], {"all_employees": {"count": 25, "index": 108.5}})
+
+    def test_combined_header_before_a_real_city_column_keeps_the_city(self):
+        # The city lookup must skip the company column: with the combined
+        # header first, the first city-pattern match used to land on it and
+        # was then cleared, dropping a real city column that followed.
+        for headers, row, city in (
+            (("Company and city", "City name", "Count", "Index"), ("Acme Corp", "Berlin", 25, 108.5), "Berlin"),
+            (("Firmanavn og by", "City name", "Antal", "Indeks"), ("Acme A/S", "Aarhus", 25, 108.5), "Aarhus"),
+        ):
+            with self.subTest(headers=headers):
+                entry = parse_sheet(FakeWorksheet([headers, row]))[0]
+                self.assertEqual(entry["company"], row[0])
+                self.assertEqual(entry["city"], city)
+                self.assertEqual(entry["categories"], {"all_employees": {"count": 25, "index": 108.5}})
 
 
 class CompoundCategoryPairingTests(unittest.TestCase):

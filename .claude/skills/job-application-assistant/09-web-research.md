@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.6
+framework_version: 1.1.7
 ---
 
 # Web Research and Fetching
@@ -54,7 +54,7 @@ Two details worth knowing, both covered by `tests/test_robots_check.py`:
 python3 tools/fetch_page.py '<URL>' --out "${SCRATCHPAD:?set this to the session scratchpad directory from your system prompt}/page.html" --text
 ```
 
-One command does the whole retry: it runs the `robots.txt` gate above (exit `1` and no fetch when the policy says no), GETs the page with browser headers, saves the body to `--out`, prints `HTTP <code> size=<bytes> saved=<path>`, and with `--text` prints the tag-stripped text (script, style, noscript, svg and comments removed, entities unescaped) capped at `--max-chars` (default 6000). It is GET-only with a fixed argv, http(s) only, bounded to 45 s, 5 redirects and 10 MB, and it refuses an `--out` inside the repo - fetched content is untrusted and belongs in the scratchpad. That fixed shape is why the workflow pre-approves `python3 tools/fetch_page.py` and not `curl`.
+One command does the whole retry: it runs the `robots.txt` gate above before the first GET **and before each redirect target is fetched** (exit `1` and no fetch when the policy says no), GETs the page with browser headers, saves the body to `--out`, prints `HTTP <code> size=<bytes> saved=<path>`, and with `--text` prints the tag-stripped text (script, style, noscript, svg and comments removed, entities unescaped) capped at `--max-chars` (default 6000). It is GET-only with a fixed argv, http(s) only, bounded to 45 s, 5 redirects and 10 MB, and it refuses an `--out` inside the repo - fetched content is untrusted and belongs in the scratchpad. That fixed shape is why the workflow pre-approves `python3 tools/fetch_page.py` and not `curl`.
 
 The HTTP status is information, not a verdict: a `403` body still tells you what the site answered. Only exit `2` (unsupported scheme, transport failure, oversized response) means nothing was retrieved.
 
@@ -72,7 +72,7 @@ Try these in order and stop at the first that yields real content:
    ```
    This retrieves the posting directly from the portal's API or resilient detail route, bypassing bot-detection 403s and login walls entirely.
 2. **`WebFetch`** on the target URL (for non-portal URLs, or if the portal CLI is missing or failed). Cheapest for general web pages, returns clean markdown.
-3. **`python3 tools/fetch_page.py '<URL>' --out "$SCRATCHPAD/page.html" --text`** (above). It checks `robots.txt` itself, retries with browser headers and strips the tags. Fixes the 403 class of failure. An exit of `1` means the site's policy disallows the path for `*` or `Claude-User`: the retry did not run, so go to step 4.
+3. **`python3 tools/fetch_page.py '<URL>' --out "$SCRATCHPAD/page.html" --text`** (above). It checks `robots.txt` on every hop, retries with browser headers and strips the tags. Fixes the 403 class of failure. An exit of `1` means the starting URL or a redirect target is disallowed for `*` or `Claude-User`: go to step 4.
 4. **`WebSearch`** for the company or role by name, to find an alternative canonical URL: the employer's own careers portal is almost always richer than the aggregator that surfaced the posting, and it carries the reference ID and grade that aggregators drop.
 5. **Declare it genuinely unavailable** only after 1 to 4 have failed. In `/rank` that means marking the entry `unreachable`, which later runs retry (`expired` is only for a posting shown to be closed - see `rank.md` Step 2); in `/apply` it means telling the user the posting could not be retrieved and stopping rather than drafting from the title.
 

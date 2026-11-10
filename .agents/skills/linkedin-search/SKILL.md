@@ -46,6 +46,8 @@ Run it on your own responsibility.
 bun run .agents/skills/linkedin-search/cli/src/cli.ts search --location "<place>" [flags]
 ```
 
+Query syntax: phrase quoting not honoured; OR not verified.
+
 Key flags:
 - `--location <text>` / `-l <text>` — **required.** A LinkedIn place string, e.g. `"Mumbai, Maharashtra, India"`, `"Berlin, Germany"`, `"London, United Kingdom"`, or `"Remote"`.
 - `--query <text>` / `-q <text>` — keyword search (title, skill, role). Recommended.

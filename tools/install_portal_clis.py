@@ -13,10 +13,15 @@ One command for every shell, since Python is already a prerequisite - the
 README previously carried a PowerShell and a Bash loop, each with its own
 hand-copied list of portal names.
 
-A manifest that declares an npm/bun lifecycle script or trustedDependencies is
-skipped and reported instead of installed: those are the hooks that run code
-during `bun install`, and tools/security_guards.py forbids them in-tree. A
-borrowed portal that carries one gets read by a human before it runs.
+A manifest that declares an npm/bun lifecycle script, trustedDependencies or
+workspaces, or that has a bunfig.toml or .npmrc beside it, is skipped and reported
+instead of installed: those are the doors that run code or reconfigure the
+install during `bun install`, and tools/security_guards.py forbids them
+in-tree. A borrowed portal that carries one gets read by a human before it
+runs.
+
+Every install also passes --ignore-scripts, including on older Bun releases
+that run a built-in list of dependency hooks without trustedDependencies.
 
 Each CLI installs independently; one failure does not stop the rest. Exit 0
 when every CLI installed, 1 when bun is missing, a manifest was skipped, or an
@@ -25,6 +30,7 @@ install failed.
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -33,7 +39,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from security_guards import FORBIDDEN_SCRIPTS  # noqa: E402
+from security_guards import FORBIDDEN_SCRIPTS, INSTALL_CONFIG_FILES  # noqa: E402
 
 
 def discover(root: Path = ROOT) -> list[Path]:
@@ -55,6 +61,14 @@ def unsafe_reason(cli_dir: Path) -> str | None:
         return f"declares lifecycle script(s) {bad}"
     if "trustedDependencies" in data:
         return "declares trustedDependencies"
+    if "workspaces" in data:
+        # Workspace packages carry their own lifecycle scripts, which the check
+        # above never reads; a workspace postinstall ran under Bun 1.3.10.
+        return "declares workspaces"
+    for name in INSTALL_CONFIG_FILES:
+        if (cli_dir / name).exists():
+            # Reconfigures the install itself: registry, scopes, trusted packages.
+            return f"carries a {name}"
     return None
 
 
@@ -72,7 +86,7 @@ def install(cli_dirs: list[Path], bun: str, dry_run: bool, root: Path = ROOT, ru
             print(f"would install  {name}")
             continue
         print(f"installing  {name}", flush=True)
-        if run([bun, "install"], cwd=cli_dir).returncode != 0:
+        if run([bun, "install", "--ignore-scripts"], cwd=cli_dir).returncode != 0:
             print(f"FAIL  {name}: bun install exited non-zero")
             failures.append(name)
     if failures:
@@ -83,6 +97,30 @@ def install(cli_dirs: list[Path], bun: str, dry_run: bool, root: Path = ROOT, ru
     return 0
 
 
+_BUN_CANDIDATE_DIRS = (
+    "~/.bun/bin",  # default for bun.sh installer (curl -fsSL https://bun.sh/install | bash)
+    "/opt/homebrew/bin",  # Homebrew on Apple Silicon macOS
+    "/usr/local/bin",  # Homebrew on Intel macOS / standard Linux
+    "/home/linuxbrew/.linuxbrew/bin",  # Linuxbrew system
+    "~/.linuxbrew/bin",  # Linuxbrew user
+    "~/.local/bin",  # pipx / user local
+    "/usr/bin",  # distro packages
+)
+
+
+def find_bun(candidate_dirs: tuple[str, ...] = _BUN_CANDIDATE_DIRS) -> str | None:
+    """Return `bun` on PATH, or at a standard install location."""
+    found = shutil.which("bun")
+    if found:
+        return found
+    binary = "bun.exe" if sys.platform == "win32" else "bun"
+    for dir_path in candidate_dirs:
+        candidate = Path(dir_path).expanduser() / binary
+        if candidate.is_file() and (sys.platform == "win32" or os.access(candidate, os.X_OK)):
+            return str(candidate)
+    return None
+
+
 def _force_utf8_output() -> None:
     """Write UTF-8 whatever the host's default encoding is (a fork's portal name may not be ASCII)."""
     for stream in (sys.stdout, sys.stderr):
@@ -91,20 +129,29 @@ def _force_utf8_output() -> None:
             reconfigure(encoding="utf-8")
 
 
-def main() -> int:
+def main(argv=None) -> int:
     _force_utf8_output()
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--dry-run", action="store_true", help="list what would be installed, run nothing")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     cli_dirs = discover()
     if not cli_dirs:
         print("No portal CLIs found under .agents/skills/*/cli/ - nothing to install.")
         return 0
-    bun = shutil.which("bun")
+    bun = find_bun()
     if not bun and not args.dry_run:
-        print("bun is not on PATH. Install it from https://bun.sh, open a new shell, and re-run.")
+        print(
+            "bun was not found on PATH and was not found at any of the usual install locations.\n"
+            '  - installed via bun.sh? export PATH="$HOME/.bun/bin:$PATH"\n'
+            "  - installed via Homebrew/Linuxbrew? brew install bun\n"
+            "  - installed elsewhere? reinstall to a directory on PATH"
+        )
         return 1
+    if bun:
+        bun_dir = str(Path(bun).parent)
+        if bun_dir not in os.environ.get("PATH", "").split(os.pathsep):
+            os.environ["PATH"] = bun_dir + os.pathsep + os.environ.get("PATH", "")
     return install(cli_dirs, bun or "bun", args.dry_run)
 
 

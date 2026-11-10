@@ -24,8 +24,31 @@ import unicodedata
 from pathlib import Path
 
 
+ROOT = Path(__file__).resolve().parent.parent
+
+# `.claude/settings.json` pre-approves this tool with any arguments, so where
+# `--dump-text` may write is part of that permission. The workflow only dumps a
+# CV's text layer beside it (`apply.md` Step 5d writes `cv/main_<company>_<role>.txt`);
+# a path anywhere else - a shell rc file, a script the allowlist runs - would be
+# an overwrite nobody was asked about.
+DUMP_TEXT_DIRS = ("cv", "cover_letters")
+
+
 class VerificationError(Exception):
     """Raised when a generated PDF does not satisfy its checks."""
+
+
+def check_dump_target(path, root=ROOT):
+    """Return why `--dump-text` may not write to `path`, or None if it may."""
+    path = Path(path)
+    if path.suffix != ".txt":
+        return "must name a .txt file"
+    if path.is_symlink():
+        return "must not be a symlink"
+    parent = path.resolve().parent
+    if not any(parent.is_relative_to((root / d).resolve()) for d in DUMP_TEXT_DIRS):
+        return "must be inside this repo's " + " or ".join(f"{d}/" for d in DUMP_TEXT_DIRS)
+    return None
 
 
 def run_tool(command):
@@ -302,7 +325,7 @@ def build_parser():
     parser.add_argument(
         "--dump-text",
         type=Path,
-        help="write the extracted text layer to this path (UTF-8)",
+        help="write the extracted text layer to this .txt path under cv/ or cover_letters/ (UTF-8)",
     )
     parser.add_argument(
         "--ascii-dates",
@@ -332,6 +355,11 @@ def _force_utf8_output() -> None:
 def main(argv=None):
     _force_utf8_output()
     args = build_parser().parse_args(argv)
+    if args.dump_text is not None:
+        reason = check_dump_target(args.dump_text)
+        if reason:
+            print(f"Error: --dump-text {args.dump_text}: {reason}", file=sys.stderr)
+            return 1
     try:
         extractor, text, pages = verify_pdf(
             args.pdf,

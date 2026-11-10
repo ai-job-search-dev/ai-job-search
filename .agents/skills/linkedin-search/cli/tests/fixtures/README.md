@@ -2,7 +2,7 @@
 
 `detail-orbis-excerpt.html` contains verbatim excerpts from the guest response for
 posting `4345841651`, captured by **portapulito** through this CLI's `htmlFetch`
-on 2026-07-14 and published in [upstream PR #153](https://github.com/MadsLorentzen/ai-job-search/pull/153).
+on 2026-07-14 and published in [upstream PR #153](https://github.com/ai-job-search-dev/ai-job-search/pull/153).
 That PR was closed because it was accidentally submitted to upstream instead of
 the author's personalized fork; it was not merged.
 

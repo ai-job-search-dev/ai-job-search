@@ -148,7 +148,8 @@ describe("Jobnet search normalization", () => {
       location: "København Ø",
       date: "2026-07-02",
       deadline: "2026-08-01",
-      url: "https://example.com/jobs/job-2",
+      url: "https://jobnet.dk/find-job/job-2",
+      applyUrl: "https://example.com/jobs/job-2",
       jobAdUrl: "https://example.com/jobs/job-2",
     });
     expect(output.results[0].hiringOrgName).toBe("Acme");
@@ -157,30 +158,35 @@ describe("Jobnet search normalization", () => {
     expect(output.results[0].id).toBe(output.results[0].jobAdId);
   });
 
-  test("external ads emit destination jobAdUrl as url, or fallback to find-job link when missing/invalid", () => {
+  test("external ads keep canonical find-job url and provide destination as applyUrl and jobAdUrl", () => {
     const response = apiResponse();
-    // External ad with valid http(s) jobAdUrl emits that URL
+    // External ad with valid http(s) jobAdUrl emits canonical url and destination applyUrl/jobAdUrl
     response.jobAds[1].isExternal = true;
     response.jobAds[1].jobAdUrl = "https://employer.example/apply";
     const withUrl = createSearchOutput(response, { ...flags, limit: undefined });
-    expect(withUrl.results[1].url).toBe("https://employer.example/apply");
+    expect(withUrl.results[1].url).toBe("https://jobnet.dk/find-job/job-2");
+    expect(withUrl.results[1].applyUrl).toBe("https://employer.example/apply");
     expect(withUrl.results[1].jobAdUrl).toBe("https://employer.example/apply");
+    expect(withUrl.results[1].isExternal).toBe(true);
 
-    // External ad without jobAdUrl falls back to find-job link to preserve a unique URL for /scrape deduplication
+    // External ad without jobAdUrl keeps canonical find-job url and null applyUrl/jobAdUrl
     response.jobAds[1].jobAdUrl = null;
     const withoutUrl = createSearchOutput(response, { ...flags, limit: undefined });
     expect(withoutUrl.results[1].url).toBe("https://jobnet.dk/find-job/job-2");
+    expect(withoutUrl.results[1].applyUrl).toBeNull();
     expect(withoutUrl.results[1].jobAdUrl).toBeNull();
     expect(withoutUrl.results[1].isExternal).toBe(true);
 
-    // External ad with non-http(s) scheme falls back to find-job link and clears jobAdUrl
+    // External ad with non-http(s) scheme keeps canonical find-job url and null applyUrl/jobAdUrl
     response.jobAds[1].jobAdUrl = "javascript:alert(1)";
     const invalidUrl = createSearchOutput(response, { ...flags, limit: undefined });
     expect(invalidUrl.results[1].url).toBe("https://jobnet.dk/find-job/job-2");
+    expect(invalidUrl.results[1].applyUrl).toBeNull();
     expect(invalidUrl.results[1].jobAdUrl).toBeNull();
 
-    // Internal ad always keeps find-job link
+    // Internal ad always keeps find-job link and null applyUrl
     expect(withoutUrl.results[0].url).toBe("https://jobnet.dk/find-job/job-1");
+    expect(withoutUrl.results[0].applyUrl).toBeNull();
     expect(withoutUrl.results[0].isExternal).toBe(false);
   });
 
