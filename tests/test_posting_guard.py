@@ -401,6 +401,44 @@ class Urls(GuardFixture):
         self.assertEqual(f["hidden_urls"], ["https://evil.example/exfil?d="])
         self.assertIn("1 hidden URL", out.splitlines()[0])
 
+    def test_hidden_attributes_extract_urls(self):
+        html = (
+            "<p>Apply for Senior Engineer position at Acme Corp.</p>\n"
+            "<div style=\"display:none\">\n"
+            "  <a href=\"https://tracker.evil.example/beacon?candidate=1\">Application Portal</a>\n"
+            "  <img src=\"https://pixel.evil.example/track.png\" />\n"
+            "</div>\n"
+            "<img src=\"https://pixel.evil.example/standalone.png\" style=\"display:none\" />\n"
+        )
+        code, out, err = self.run_main("--html", "--json", stdin_text=html)
+        self.assertEqual(code, 0, err)
+        f = self.findings_of(out)
+        self.assertEqual(f["hidden_blocks"], ["Application Portal"])
+        self.assertEqual(f["hidden_urls"], [
+            "https://tracker.evil.example/beacon?candidate=1",
+            "https://pixel.evil.example/track.png",
+            "https://pixel.evil.example/standalone.png",
+        ])
+        first = out.splitlines()[0]
+        self.assertIn("1 hidden block and 3 hidden URLs removed", first)
+
+    def test_hidden_attribute_entity_decoding(self):
+        html = "<div hidden><a href=\"https://tracker.evil.example/beacon?a=1&amp;b=2\">Portal</a></div>"
+        code, out, err = self.run_main("--html", "--json", stdin_text=html)
+        self.assertEqual(code, 0, err)
+        f = self.findings_of(out)
+        self.assertEqual(f["hidden_urls"], ["https://tracker.evil.example/beacon?a=1&b=2"])
+
+    def test_visible_attributes_not_counted_as_hidden_urls(self):
+        html = (
+            "<p>Visit <a href='https://careers.example.com/apply'>careers</a></p>"
+            "<img src='https://example.com/logo.png' />"
+        )
+        code, out, err = self.run_main("--html", "--json", stdin_text=html)
+        self.assertEqual(code, 0, err)
+        f = self.findings_of(out)
+        self.assertEqual(f["hidden_urls"], [])
+
 
 class Homoglyphs(GuardFixture):
     def test_homoglyph_company_name_flagged(self):
