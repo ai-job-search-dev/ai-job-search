@@ -1,4 +1,4 @@
-import { apiGet, normalizeSlug, toDetail, writeError, type FreehireJob, type JobDetailResult } from "../helpers.js"
+import { apiGet, normalizeSlug, stripInvisible, toDetail, writeError, type FreehireJob, type JobDetailResult } from "../helpers.js"
 
 export interface DetailOpts {
   id: string // a freehire public slug or a /jobs/<slug> URL
@@ -35,7 +35,7 @@ export async function runDetail(opts: DetailOpts): Promise<number> {
       writeError("job not found", "NOT_FOUND")
       return 1
     }
-    const job = toDetail(env.data)
+    const job = stripInvisible(toDetail(env.data))
 
     if (opts.format === "plain") {
       const lines = [

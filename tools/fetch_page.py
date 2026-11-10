@@ -15,10 +15,10 @@ Properties, each pinned by tests/test_fetch_page.py:
     never be parsed as an option. The urllib fallback (used only when curl is
     absent) has the same shape.
   * http(s) only. Any other scheme exits 2 before anything else happens.
-  * robots.txt is enforced, not advised. robots_check.gate() runs first and a
-    non-zero gate exits 1 with its message; no flag skips it. The retry is for
-    firewalls on sites whose published policy allows access, never for sites
-    that said no.
+  * robots.txt is enforced, not advised. robots_check.gate() runs before each
+    GET, including redirect targets, and a non-zero gate exits 1 with its
+    message; no flag skips it. The retry is for firewalls on sites whose
+    published policy allows access, never for sites that said no.
   * Fetched content never lands in the repo. --out defaults to the system temp
     directory and a path that resolves inside the repo root is refused.
   * Bounded: 45 s, 5 redirects, 10 MB - on both the curl and the urllib path,
@@ -39,18 +39,22 @@ Exit codes: 0 fetched; 1 refused by robots policy (go to escalation step 4);
 """
 
 import argparse
+from functools import lru_cache
 import gzip
 import hashlib
 import html
+import os
 import re
 import shutil
+import string
 import subprocess
 import sys
 import tempfile
+import time
 import zlib
 from pathlib import Path
 from urllib.error import HTTPError
-from urllib.parse import urlsplit
+from urllib.parse import quote, urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -65,41 +69,83 @@ MAX_REDIRECTS = 5
 MAX_BYTES = 10 * 1024 * 1024
 
 
-def build_curl_argv(url: str, out: Path) -> list:
-    """The one curl invocation this script ever runs. GET, bounded, `--` last."""
+@lru_cache(maxsize=1)
+def _curl_supports_compressed() -> bool:
+    """Return whether the bare curl used for fetching can decode content."""
+    try:
+        proc = subprocess.run(
+            ["curl", "--version"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return proc.returncode == 0 and bool(
+        re.search(r"^Features:.*\b(?:libz|brotli|zstd)\b", proc.stdout, re.IGNORECASE | re.MULTILINE)
+    )
+
+
+def build_curl_argv(url: str, out: Path, headers: Path, timeout: float) -> list:
+    """One GET without automatic redirects, so the next hop can be gated."""
+    compressed = ["--compressed"] if _curl_supports_compressed() else []
     return [
-        "curl", "-sSL",
-        "--max-redirs", str(MAX_REDIRECTS),
-        "--max-time", str(TIMEOUT_SECONDS),
+        "curl", "-sS",
+        "--max-redirs", "0",
+        "--max-time", str(timeout),
         "--max-filesize", str(MAX_BYTES),
-        "--compressed",
+        *compressed,
         "-A", BROWSER,
         "-H", f"Accept: {ACCEPT}",
         "-H", f"Accept-Language: {ACCEPT_LANGUAGE}",
+        "-D", str(headers),
         "-o", str(out),
-        "-w", "HTTP %{http_code} size=%{size_download}",
+        "-w", "%{http_code}",
         "--", url,
     ]
 
 
-def fetch_with_curl(url: str, out: Path) -> str:
-    proc = subprocess.run(
-        build_curl_argv(url, out),
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-        timeout=TIMEOUT_SECONDS + 15,
-    )
-    if proc.returncode != 0:
-        raise RuntimeError(f"curl exit {proc.returncode}: {proc.stderr.strip()}")
-    return proc.stdout.strip()
+def _location(header_text: str) -> str | None:
+    """Read Location from the final response (a proxy may add an earlier one)."""
+    for block in reversed(re.split(r"\r?\n\r?\n", header_text)):
+        if not block.startswith("HTTP/"):
+            continue
+        for line in block.splitlines():
+            if line.lower().startswith("location:"):
+                return line.partition(":")[2].strip()
+        break
+    return None
 
 
-class _BoundedRedirects(HTTPRedirectHandler):
-    """urllib's default is 10 hops; match curl's --max-redirs."""
-    max_redirections = MAX_REDIRECTS
+def fetch_with_curl(url: str, out: Path, timeout: float) -> tuple[int, str | None]:
+    fd, header_name = tempfile.mkstemp(prefix=".fetch_page_headers.")
+    os.close(fd)  # curl must be able to open it on Windows too
+    headers = Path(header_name)
+    try:
+        proc = subprocess.run(
+            build_curl_argv(url, out, headers, timeout),
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=timeout + 15,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(f"curl exit {proc.returncode}: {proc.stderr.strip()}")
+        code = int(proc.stdout.strip())
+        location = _location(headers.read_text(encoding="iso-8859-1"))
+    finally:
+        headers.unlink(missing_ok=True)
+    if out.stat().st_size > MAX_BYTES:
+        raise RuntimeError(f"response exceeds {MAX_BYTES} bytes after decompression")
+    return code, location
 
 
-def fetch_with_urllib(url: str, out: Path) -> str:
-    """Fallback for machines without curl. Same headers and bounds, gzip/deflate only."""
+class _NoRedirects(HTTPRedirectHandler):
+    """Return the 3xx response to the caller for a robots check first."""
+
+    def redirect_request(self, request, response, code, message, headers, new_url):
+        return None
+
+
+def fetch_with_urllib(url: str, out: Path, timeout: float) -> tuple[int, str | None]:
+    """Fallback for machines without curl. One GET, gzip/deflate only."""
     request = Request(url, headers={
         "User-Agent": BROWSER,
         "Accept": ACCEPT,
@@ -107,15 +153,14 @@ def fetch_with_urllib(url: str, out: Path) -> str:
         "Accept-Encoding": "gzip, deflate",
     })
     try:
-        response = build_opener(_BoundedRedirects()).open(request, timeout=TIMEOUT_SECONDS)  # noqa: S310
+        response = build_opener(_NoRedirects()).open(request, timeout=timeout)  # noqa: S310
     except HTTPError as exc:
-        if 300 <= exc.code < 400:
-            # Redirects are followed transparently; a 3xx surfacing here means
-            # the hop limit was hit (urllib reports a loop this way).
-            raise RuntimeError(f"more than {MAX_REDIRECTS} redirects") from exc
         response = exc
     with response:
         code = response.status if hasattr(response, "status") else response.code
+        location = response.headers.get("Location")
+        if code in (301, 302, 303, 307, 308) and location:
+            return code, location
         encoding = (response.headers.get("Content-Encoding") or "").lower()
         body = response.read(MAX_BYTES + 1)
     if len(body) > MAX_BYTES:
@@ -123,11 +168,16 @@ def fetch_with_urllib(url: str, out: Path) -> str:
     if encoding == "gzip":
         body = gzip.decompress(body)
     elif encoding == "deflate":
-        body = zlib.decompress(body, -zlib.MAX_WBITS)
+        try:
+            # HTTP deflate carries a zlib wrapper (RFC 9110 section 8.4.1.2).
+            body = zlib.decompress(body)
+        except zlib.error:
+            # Keep compatibility with servers that send legacy raw DEFLATE.
+            body = zlib.decompress(body, -zlib.MAX_WBITS)
     if len(body) > MAX_BYTES:
         raise RuntimeError(f"response exceeds {MAX_BYTES} bytes after decompression")
     out.write_bytes(body)
-    return f"HTTP {code} size={len(body)}"
+    return code, location
 
 
 def strip_tags(markup: str, limit: int) -> str:
@@ -195,19 +245,47 @@ def main(argv=None) -> int:
         )
         return 2
 
-    rc, message = gate(args.url)
-    print(message)
-    if rc != 0:
-        print(
-            "fetch_page: refused - robots.txt does not permit this path, so the "
-            "browser-header retry does not run. Go to escalation step 4: search for "
-            "the employer's own posting."
-        )
-        return 1
-
     try:
-        out.parent.mkdir(parents=True, exist_ok=True)
-        status = fetch_with_curl(args.url, out) if shutil.which("curl") else fetch_with_urllib(args.url, out)
+        current = args.url
+        deadline = None
+        for redirects in range(MAX_REDIRECTS + 1):
+            scheme = urlsplit(current).scheme.lower()
+            if scheme not in ("http", "https"):
+                raise ValueError(f"redirect target must be http(s), got scheme {scheme!r}")
+            rc, message = gate(current)
+            print(message)
+            if rc != 0:
+                print(
+                    "fetch_page: refused - robots.txt does not permit this path, so the "
+                    "browser-header retry does not run. Go to escalation step 4: search for "
+                    "the employer's own posting."
+                )
+                return 1
+            if deadline is None:
+                deadline = time.monotonic() + TIMEOUT_SECONDS
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("fetch exceeded the time limit")
+            out.parent.mkdir(parents=True, exist_ok=True)
+            fd, body_name = tempfile.mkstemp(dir=out.parent, prefix=".fetch_page.", suffix=".tmp")
+            os.close(fd)  # curl/urllib may reopen the path on Windows
+            body = Path(body_name)
+            try:
+                code, location = (
+                    fetch_with_curl(current, body, remaining)
+                    if shutil.which("curl") else fetch_with_urllib(current, body, remaining)
+                )
+                if code in (301, 302, 303, 307, 308) and location:
+                    if redirects == MAX_REDIRECTS:
+                        raise RuntimeError(f"more than {MAX_REDIRECTS} redirects")
+                    # Encode the header's raw bytes before resolving; preserve Unicode in the base URL.
+                    current = urljoin(current, quote(location, encoding="iso-8859-1", safe=string.punctuation))
+                    continue
+                os.replace(body, out)
+                status = f"HTTP {code} size={out.stat().st_size}"
+                break
+            finally:
+                body.unlink(missing_ok=True)
     except Exception as exc:  # transport failures of any shape: report, exit 2
         print(f"fetch_page: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
