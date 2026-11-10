@@ -1,6 +1,6 @@
 import { defineCommand, option } from "@bunli/core"
 import { z } from "zod"
-import { apiPost, writeError, BASE_URL } from "../helpers.js"
+import { apiPost, writeError, stripInvisible, BASE_URL } from "../helpers.js"
 
 export interface ApiSearchItem {
   title: string
@@ -64,7 +64,7 @@ export function normalizeItem(item: ApiSearchItem): Record<string, unknown> {
   // payload and the /scrape agent can never use an image or overlay colour.
   // The #340 compatibility duplicates (companyName, publishedDate,
   // applicationDeadline) stay.
-  return {
+  return stripInvisible({
     title: item.title,
     companyName: item.companyName,
     companyAddress: item.companyAddress,
@@ -82,7 +82,7 @@ export function normalizeItem(item: ApiSearchItem): Record<string, unknown> {
     location: extractCity(item.companyAddress),
     date: toContractDate(item.publishedDate),
     deadline: toContractDate(item.applicationDeadline),
-  }
+  })
 }
 
 export const search = defineCommand({
