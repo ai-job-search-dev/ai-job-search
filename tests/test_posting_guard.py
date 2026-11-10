@@ -605,6 +605,39 @@ class Calibration(GuardFixture):
         # href targets are attributes, not text: hidden nav links are not "hidden URLs".
         self.assertEqual(self.findings_of(out)["hidden_urls"], [])
 
+    def test_decoration_and_custom_properties_do_not_hide_visible_posting_text(self):
+        # These declarations are serialized by the browser after assigning the
+        # DOM style properties; each retains black, visible text.
+        styles = [f"{name}: transparent" for name in ("background-color", "border-color", "text-decoration-color")]
+        styles += ["stroke-opacity: 0", "--opacity: 0", "--display: none"]
+        for style in styles:
+            with self.subTest(style=style):
+                page = self.write("posting.html", (
+                    f'<article style="color: black; {style};">'
+                    'Software Engineer: Python and SQL experience</article>'
+                    '<article style="color: transparent;">Hidden content</article>'
+                ))
+                code, out, err = self.run_main("--in", str(page), "--html", "--json")
+                self.assertEqual(code, 0, err)
+                self.assertIn("Software Engineer: Python and SQL experience", self.text_of(out))
+                self.assertNotIn("Hidden content", self.text_of(out))
+                self.assertEqual(self.findings_of(out)["hidden_blocks"], ["Hidden content"])
+
+    def test_offscreen_margins_still_hide_once_names_are_anchored(self):
+        # Anchoring the property names must not lose the off-screen margin
+        # trick, which the unanchored pattern only caught as a suffix of "left".
+        for style in ("margin-left: -9999px", "position: absolute; margin-top: -10000px"):
+            with self.subTest(style=style):
+                page = self.write("posting.html", (
+                    '<article>Software Engineer: Python and SQL experience</article>'
+                    f'<article style="{style};">Hidden content</article>'
+                ))
+                code, out, err = self.run_main("--in", str(page), "--html", "--json")
+                self.assertEqual(code, 0, err)
+                self.assertIn("Software Engineer: Python and SQL experience", self.text_of(out))
+                self.assertNotIn("Hidden content", self.text_of(out))
+                self.assertEqual(self.findings_of(out)["hidden_blocks"], ["Hidden content"])
+
     def test_leading_bom_is_encoding_noise(self):
         code, out, err = self.run_main("--text", "--json", stdin_text="﻿Plain posting.")
         self.assertTrue(out.startswith("posting_guard: clean"), out.splitlines()[0])

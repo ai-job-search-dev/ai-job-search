@@ -97,14 +97,14 @@ VARIATION = re.compile("[︀-️\U000E0100-\U000E01EF]")
 VARIATION_RUN = re.compile("[︀-️\U000E0100-\U000E01EF]{2,}")
 
 HIDDEN_STYLE = re.compile(
-    r"display\s*:\s*none"
+    r"(?:^|;)\s*(?:display\s*:\s*none"
     r"|visibility\s*:\s*hidden"
     r"|opacity\s*:\s*0(?![.\d]*[1-9])"
     r"|font-size\s*:\s*0(?:\.0+)?(?:px|pt|em|rem|%)?(?![\d.])"
     r"|color\s*:\s*transparent"
     r"|clip\s*:\s*rect\(\s*0"
     r"|clip-path\s*:\s*inset\(\s*100%"
-    r"|(?:left|top|text-indent)\s*:\s*-\d{4,}px",
+    r"|(?:(?:margin-)?(?:left|top)|text-indent)\s*:\s*-\d{4,}px)",
     re.I,
 )
 PRESTRIP = re.compile(r"<!DOCTYPE[^>]*>|<\?[^>]*\?>", re.I)
