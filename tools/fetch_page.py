@@ -29,8 +29,9 @@ Usage:
 
 Prints `HTTP <code> size=<bytes> saved=<path>` and exits 0 whatever the HTTP
 status - the status is information for the escalation order, not a failure.
-With --text, also prints the tag-stripped page text (script/style/noscript/svg
-and comments removed, entities unescaped, whitespace folded), capped at
+With --text, also prints the tag-stripped page text (script/style/noscript/svg/
+template and comments removed, including when the closer is missing, entities
+unescaped, whitespace folded), capped at
 --max-chars (default 6000), after a `--- text ---` line. A saved body that is
 not valid UTF-8 is decoded by the charset the page declares (page_decode.py).
 
@@ -181,11 +182,20 @@ def fetch_with_urllib(url: str, out: Path, timeout: float) -> tuple[int, str | N
 
 
 def strip_tags(markup: str, limit: int) -> str:
-    """Plain text from HTML: drop script/style/noscript/svg and comments, strip
+    """Plain text from HTML: drop script/style/noscript/svg/template and comments, strip
     tags, unescape entities, fold whitespace. Modern sites embed copy inside
-    JSON blobs, so stray attribute fragments around real text are normal."""
-    text = re.sub(r"(?is)<(script|style|noscript|svg)[^>]*>.*?</\1>", " ", markup)
-    text = re.sub(r"(?s)<!--.*?-->", " ", text)
+    JSON blobs, so stray attribute fragments around real text are normal.
+
+    A missing closer hides through the end of the input, as a browser does and
+    as posting_guard.py does. Otherwise a page cut off inside <script>, or a
+    <template> block, is printed into the agent's context by --text.
+    """
+    text = re.sub(r"(?s)<!--.*?(?:-->|\Z)", " ", markup)
+    text = re.sub(
+        r"(?is)<(script|style|noscript|svg|template)\b[^>]*>.*?(?:</\1\s*>|\Z)",
+        " ",
+        text,
+    )
     text = html.unescape(re.sub(r"(?s)<[^>]+>", " ", text))
     text = re.sub(r"[ \t\xa0]+", " ", text)
     text = re.sub(r"\n\s*\n+", "\n", text).strip()
