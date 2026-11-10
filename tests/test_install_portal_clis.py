@@ -33,6 +33,7 @@ class FakeRun:
 
     def __call__(self, argv, cwd):
         self.calls.append(Path(cwd).parent.name)
+        self.argvs = getattr(self, "argvs", []) + [list(argv)]
         return subprocess.CompletedProcess(argv, 1 if Path(cwd).parent.name in self.fail else 0)
 
 
@@ -70,6 +71,33 @@ class InstallPortalClis(unittest.TestCase):
     def test_trusted_dependencies_is_unsafe(self):
         self.assertIn("trustedDependencies", unsafe_reason(self.add_cli("x", {"trustedDependencies": ["y"]})))
 
+    # GHSA-wq7j-x5jq-pjrw: the gate read only the top-level manifest, but a
+    # `workspaces` entry pulls in sub-packages with their own lifecycle scripts
+    # (a workspace postinstall ran under Bun 1.3.10), and a bunfig.toml beside
+    # the manifest reconfigures the install itself (registry, scopes, cache).
+    def test_workspaces_is_unsafe(self):
+        self.assertIn("workspaces", unsafe_reason(self.add_cli("x", {"workspaces": ["packages/*"]})))
+
+    def test_bunfig_is_unsafe(self):
+        cli = self.add_cli("x")
+        (cli / "bunfig.toml").write_text('[install]\nregistry = "https://registry.example"\n', encoding="utf-8")
+        self.assertIn("bunfig.toml", unsafe_reason(cli))
+
+    def test_npmrc_is_unsafe(self):
+        # Bun reads .npmrc too: a registry line beside the manifest fetches
+        # every dependency from a server the portal's author picked.
+        cli = self.add_cli("x")
+        (cli / ".npmrc").write_text("registry=https://registry.example/\n", encoding="utf-8")
+        self.assertIn(".npmrc", unsafe_reason(cli))
+
+    def test_bun_install_never_runs_lifecycle_scripts(self):
+        # #718: --ignore-scripts on every install, so a dependency's hook stays
+        # off whatever the Bun release's default trust list says.
+        self.add_cli("a-search")
+        run = FakeRun()
+        self.assertEqual(install(discover(self.root), "bun", False, self.root, run), 0)
+        self.assertEqual(run.argvs, [["bun", "install", "--ignore-scripts"]])
+
     def test_one_failure_does_not_stop_the_rest(self):
         for name in ("a-search", "b-search", "c-search"):
             self.add_cli(name)
@@ -91,6 +119,59 @@ class InstallPortalClis(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         for cli in discover():
             self.assertIn(f"would install  {cli.parent.name}", proc.stdout)
+
+
+class FindBun(unittest.TestCase):
+    def setUp(self):
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+
+    def test_find_bun_prefers_path(self):
+        import shutil
+        orig_which = shutil.which
+        shutil.which = lambda name: "/custom/bin/bun" if name == "bun" else None
+        self.addCleanup(setattr, shutil, "which", orig_which)
+
+        self.assertEqual(install_portal_clis.find_bun(), "/custom/bin/bun")
+
+    def test_find_bun_falls_back_to_candidate_directory(self):
+        import shutil
+        orig_which = shutil.which
+        shutil.which = lambda name: None
+        self.addCleanup(setattr, shutil, "which", orig_which)
+
+        binary = "bun.exe" if sys.platform == "win32" else "bun"
+        fake_bin = self.root / ".bun" / "bin"
+        fake_bin.mkdir(parents=True)
+        fake_bun = fake_bin / binary
+        fake_bun.write_text("#!/bin/sh\n", encoding="utf-8")
+        if sys.platform != "win32":
+            fake_bun.chmod(0o755)
+
+        found = install_portal_clis.find_bun(candidate_dirs=(str(fake_bin),))
+        self.assertEqual(found, str(fake_bun))
+
+    def test_find_bun_returns_none_when_missing(self):
+        import shutil
+        orig_which = shutil.which
+        shutil.which = lambda name: None
+        self.addCleanup(setattr, shutil, "which", orig_which)
+
+        self.assertIsNone(install_portal_clis.find_bun(candidate_dirs=(str(self.root / "empty"),)))
+
+    def test_missing_bun_message_suggests_export(self):
+        output = io.StringIO()
+        orig_find = install_portal_clis.find_bun
+        install_portal_clis.find_bun = lambda *args, **kwargs: None
+        self.addCleanup(setattr, install_portal_clis, "find_bun", orig_find)
+
+        with redirect_stdout(output):
+            rc = install_portal_clis.main([])
+        self.assertEqual(rc, 1)
+        text = output.getvalue()
+        self.assertIn("bun was not found on PATH", text)
+        self.assertIn("export PATH=", text)
 
 
 if __name__ == "__main__":

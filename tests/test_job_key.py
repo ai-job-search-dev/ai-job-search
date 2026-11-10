@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
-from job_key import is_canonical, is_legacy_shape, make_key, slugify  # noqa: E402
+from job_key import _LATIN_FOLD, is_canonical, is_legacy_shape, make_key, slugify  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 TOOL = REPO / "tools" / "job_key.py"
@@ -159,12 +159,49 @@ class MixedScriptNamesKeepTheirIdentity(unittest.TestCase):
         # NFKD folds these without dropping a letter, so existing keys stay put.
         self.assertEqual(make_key("Zürich Versicherung", "Ingénieur ﬁnance"), "zurich-versicherung_ingenieur-finance")
 
-    def test_latin_letters_without_a_decomposition_do_not_re_key(self):
-        # "ø" and "æ" have no NFKD decomposition and are dropped by the fold,
-        # but they are Latin letters: "Ørsted" has keyed as "rsted" since the
-        # rule existed, and a live Danish seen_jobs.json must not re-key.
-        self.assertEqual(make_key("Ørsted A/S", "Senior Engineer"), "rsted-a-s_senior-engineer")
-        self.assertEqual(make_key("Mærsk", "Søfarende"), "mrsk_sfarende")
+    def test_latin_letters_without_a_decomposition_are_folded(self):
+        # "ø" and "æ" have no NFKD decomposition, so the ASCII fold used to drop
+        # them ("Mærsk" -> "mrsk"). #537 folds them through a table instead; a
+        # live seen_jobs.json is moved by `--audit --migrate`.
+        self.assertEqual(make_key("Ørsted A/S", "Senior Engineer"), "orsted-a-s_senior-engineer")
+        self.assertEqual(make_key("Mærsk", "Søfarende"), "maersk_sofarende")  # was mrsk_sfarende before #537
+
+    def test_ao_and_ro_no_longer_collide(self):
+        self.assertNotEqual(make_key("Ærø", "Pilot"), make_key("Rø", "Pilot"))
+        self.assertEqual(slugify("Ærø"), "aero")
+
+    def test_unchanged_letters_keep_their_keys(self):
+        self.assertEqual(slugify("Århus"), "arhus")  # å stays a, not aa
+        self.assertEqual(slugify("é"), "e")
+
+    def test_every_table_character_folds_including_capitals(self):
+        for ch, folded in _LATIN_FOLD.items():
+            with self.subTest(ch=ch):
+                self.assertEqual(slugify(f"x{ch}y"), f"x{folded.lower()}y")
+
+    def test_latin_extended_a_letters_fold_including_capitals(self):
+        cases = {
+            "ı": "i",
+            "ħ": "h", "Ħ": "h",
+            "ĸ": "k",
+            "ŋ": "ng", "Ŋ": "ng",
+            "ŧ": "t", "Ŧ": "t",
+        }
+        for ch, folded in cases.items():
+            with self.subTest(ch=ch):
+                self.assertEqual(slugify(f"x{ch}y"), f"x{folded}y")
+
+    def test_turkish_dotless_i_keeps_its_letters(self):
+        self.assertEqual(slugify("Kılıç"), "kilic")
+
+    def test_fold_applies_to_decomposed_input_too(self):
+        # "Å" typed as A + combining ring: NFKD keeps the A and the mark is dropped.
+        self.assertEqual(slugify("Århus"), "arhus")
+
+    def test_letter_that_decomposes_into_a_table_letter_is_folded(self):
+        # "ǿ" (U+01FF) is NFKD "ø" + acute, so the fold must run after NFKD.
+        self.assertEqual(slugify("ǿ"), "o")
+        self.assertEqual(slugify("Ǿ"), "o")
 
 
 class CompanyFallbackCLI(unittest.TestCase):
@@ -285,6 +322,129 @@ class AuditCLI(unittest.TestCase):
                 self.assertEqual(proc.returncode, 1)
                 self.assertIn("entry url is not a string: acme_soc-analyst", proc.stderr)
                 self.assertNotIn("Traceback", proc.stderr)
+
+
+class MigrateCLI(unittest.TestCase):
+    """`--audit --migrate` rewrites drifted keys in place, safely."""
+
+    OLD = "mrsk_sfarende"
+    NEW = "maersk_sofarende"
+
+    def setUp(self):
+        import tempfile
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.path = Path(self._tmp.name) / "seen_jobs.json"
+
+    def write(self, seen):
+        self.path.write_text(json.dumps({"seen": seen}, ensure_ascii=False), encoding="utf-8")
+
+    def migrate(self):
+        proc = subprocess.run(
+            [sys.executable, str(TOOL), "--audit", str(self.path), "--migrate"],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        return json.loads(proc.stdout), proc
+
+    def seen(self):
+        return json.loads(self.path.read_text(encoding="utf-8"))["seen"]
+
+    def backups(self):
+        return list(self.path.parent.glob("seen_jobs.json.bak-*"))
+
+    def test_rewrites_the_key_and_keeps_the_entry(self):
+        entry = {"company": "Mærsk", "title": "Søfarende", "status": "ranked"}
+        self.write({self.OLD: entry})
+        report, proc = self.migrate()
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(self.seen(), {self.NEW: entry})
+        self.assertEqual(report["migrated"], [{"old": self.OLD, "new": self.NEW}])
+        self.assertEqual(report["keys_not_matching_current_rule"], 0)
+
+    def test_backup_holds_the_original_bytes(self):
+        self.write({self.OLD: {"company": "Mærsk", "title": "Søfarende"}})
+        original = self.path.read_bytes()
+        report, _ = self.migrate()
+        backups = self.backups()
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_bytes(), original)
+        self.assertEqual(report["backup"], str(backups[0]))
+
+    def test_existing_new_key_is_reported_not_overwritten(self):
+        existing = {"company": "Mærsk", "title": "Søfarende", "status": "applied"}
+        stale = {"company": "Mærsk", "title": "Søfarende", "status": "new"}
+        self.write({self.NEW: existing, self.OLD: stale})
+        report, _ = self.migrate()
+        self.assertEqual(self.seen(), {self.NEW: existing, self.OLD: stale})
+        self.assertEqual(report["migrate_collisions"], [{"old": self.OLD, "new": self.NEW}])
+        self.assertEqual(report["migrated"], [])
+        self.assertEqual(self.backups(), [])
+
+    def test_chain_moves_in_one_run_and_the_second_run_is_byte_identical(self):
+        # A is keyed "wrong", and today's key for A is x. B sits on x and today
+        # belongs on y. Moving B first frees x for A.
+        a = {"company": "Mærsk", "title": "Søfarende", "status": "new"}
+        b = {"company": "Ørsted", "title": "Engineer", "status": "applied"}
+        x = self.NEW
+        y = make_key("Ørsted", "Engineer")
+        self.write({"stale-a_x": a, x: b})  # file order: A first, so B must not block it
+        self.assertEqual(make_key("Mærsk", "Søfarende"), x)
+        report, _ = self.migrate()
+        self.assertEqual(self.seen(), {x: a, y: b})
+        self.assertEqual({m["old"]: m["new"] for m in report["migrated"]}, {"stale-a_x": x, x: y})
+        self.assertEqual(report["migrate_collisions"], [])
+        after = self.path.read_bytes()
+        again, _ = self.migrate()
+        self.assertEqual(again["migrated"], [])
+        self.assertEqual(self.path.read_bytes(), after)
+        self.assertEqual(len(self.backups()), 1)
+
+    def test_migrating_one_key_changes_only_the_lines_that_carry_it(self):
+        # Written the way tools/rank_state.save_state writes it.
+        seen = {
+            self.OLD: {"company": "Mærsk", "title": "Søfarende", "tags": ["a", "b"]},
+            "acme_soc": {"company": "Acme", "title": "SOC", "url": "https://x/1"},
+        }
+        text = json.dumps({"seen": seen}, indent=2, ensure_ascii=False) + chr(10)
+        self.path.write_text(text, encoding="utf-8")
+        self.migrate()
+        before, after = text.splitlines(), self.path.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(before), len(after))
+        changed = [(o, n) for o, n in zip(before, after) if o != n]
+        self.assertEqual(len(changed), 1)
+        self.assertIn(self.OLD, changed[0][0])
+        self.assertIn(self.NEW, changed[0][1])
+
+    def test_second_run_changes_nothing(self):
+        self.write({self.OLD: {"company": "Mærsk", "title": "Søfarende"}, "acme_soc": {"company": "Acme", "title": "SOC"}})
+        self.migrate()
+        after_first = self.path.read_bytes()
+        report, _ = self.migrate()
+        self.assertEqual(report["migrated"], [])
+        self.assertEqual(self.path.read_bytes(), after_first)
+        self.assertEqual(len(self.backups()), 1)
+
+    def test_no_drift_writes_no_backup(self):
+        self.write({"acme_soc": {"company": "Acme", "title": "SOC"}})
+        before = self.path.read_bytes()
+        report, _ = self.migrate()
+        self.assertEqual(report["migrated"], [])
+        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(self.backups(), [])
+
+    def test_audit_alone_never_rewrites(self):
+        self.write({self.OLD: {"company": "Mærsk", "title": "Søfarende"}})
+        before = self.path.read_bytes()
+        proc = subprocess.run(
+            [sys.executable, str(TOOL), "--audit", str(self.path)], capture_output=True, text=True, encoding="utf-8"
+        )
+        self.assertEqual(json.loads(proc.stdout)["keys_not_matching_current_rule"], 1)
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_migrate_without_audit_is_a_usage_error(self):
+        proc = subprocess.run([sys.executable, str(TOOL), "--migrate"], capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(proc.returncode, 2)
 
 
 if __name__ == "__main__":

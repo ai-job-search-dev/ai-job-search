@@ -14,6 +14,8 @@ right answer differs between them.
 import fnmatch
 import re
 import subprocess
+import shutil
+import tempfile
 import sys
 import unittest
 from pathlib import Path
@@ -462,6 +464,32 @@ class FallbackGlobFindsOneRolesDocuments(unittest.TestCase):
                         "returns first, and it archives that as what was submitted."
                         % (path.name, cv_glob, hits, role),
                     )
+
+    def test_archiving_keeps_each_submitted_sources_extension_and_bytes(self):
+        """Run the copy using the archive names persisted in /outcome's spec.
+
+        /add-template permits .typ, and /apply records that actual source path
+        in the tracker. An archive suffix must not relabel Typst source as TeX.
+        """
+        body = section(OUTCOME, "## Step 3: Archive the Application Materials")
+        destinations = re.search(r"\*\*`(cv_draft[^`]+)` and `(cover_letter[^`]+)`\*\*", body)
+        self.assertIsNotNone(destinations, "the archive must name both destination sources")
+        for extension, content in ((".tex", b"\\documentclass{article}\n"),
+                                   (".typ", b"#set text(size: 11pt)\n")):
+            for directory, stem, target in (
+                ("cv", "main", destinations.group(1)),
+                ("cover_letters", "cover", destinations.group(2)),
+            ):
+                with self.subTest(extension=extension, document=directory), tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    source = root / directory / (stem + "_acme_ml-engineer" + extension)
+                    source.parent.mkdir()
+                    source.write_bytes(content)
+                    destination = root / target.replace("<CV_EXT>", extension).replace("<COVER_EXT>", extension)
+                    shutil.copyfile(source, destination)
+                    self.assertEqual(destination.suffix, source.suffix,
+                                     "archiving must preserve the submitted template's actual format")
+                    self.assertEqual(destination.read_bytes(), source.read_bytes())
 
     def test_the_glob_finds_a_non_tex_template(self):
         """`/add-template` makes `.typ` a real output; a hardcoded `.tex` misses it."""
