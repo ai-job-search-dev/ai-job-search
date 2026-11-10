@@ -24,6 +24,10 @@ evaluates anything:
     `tag`, and always flagged, because no legitimate posting contains one -
     other than the three UK subdivision flag emoji, which are matched in
     full and kept;
+  * text spelled in invisible characters (a run of tag characters, a run of
+    variation selectors carrying one byte each) - decoded, listed under
+    `invisible_text` and scanned like hidden content, so an instruction
+    spelled that way is quoted instead of merely counted;
   * instruction-shaped lines aimed at an agent rather than a reader - quoted,
     never removed (an SSH administrator posting legitimately says "SSH");
   * URLs that only exist in hidden content - listed;
@@ -33,7 +37,7 @@ evaluates anything:
 Removal is the defense: hidden content never reaches the cleaned text the
 workflow reads. The ⚠ in the verdict is for the user and fires only on signals
 that indicate targeting (instruction-shaped lines, tampering characters,
-mixed-script words); hidden blocks and hidden URLs are reported as context,
+invisible text, mixed-script words); hidden blocks and hidden URLs are reported as context,
 because navigation chrome is hidden on nearly every real page. It advises; it
 never blocks. The archive gets counts only (see /apply Step 6b); excerpts are
 for the terminal.
@@ -72,10 +76,12 @@ FORMAT = "­  "  # soft hyphen, line/paragraph separators
 BOM = "﻿"
 # U+E0000-U+E007F: the Unicode "tags" block, one invisible code point per ASCII
 # character. A payload written in it survives copy-paste, never renders, and
-# is decoded by a model as if it were the ASCII it mirrors; a single one
-# inside "ignore" also splits the word past every instruction pattern.
+# is decoded by a model as if it were the ASCII it mirrors ("ASCII smuggling");
+# a single one inside "ignore" also splits the word past every instruction
+# pattern.
 TAG_CHARS = "".join(chr(c) for c in range(0xE0000, 0xE0080))
 INVISIBLE = ZERO_WIDTH + BIDI + FORMAT + BOM + TAG_CHARS
+TAG_RUN = re.compile("[\U000E0000-\U000E007F]+")
 # The one legitimate use of tag characters: the England, Scotland and Wales
 # flags (black flag, tag letters gbeng/gbsct/gbwls, cancel tag). Matched in
 # full and left intact; a payload inside a well-formed tag sequence, extra
@@ -84,16 +90,21 @@ RGI_TAG_FLAG = re.compile(
     "\U0001F3F4\U000E0067\U000E0062(?:\U000E0065\U000E006E\U000E0067"
     "|\U000E0073\U000E0063\U000E0074|\U000E0077\U000E006C\U000E0073)\U000E007F"
 )
+# Variation selectors (U+FE00-FE0F, U+E0100-E01EF) pick a glyph variant and
+# render as nothing on their own; a run of them carries one byte each. A lone
+# one (the VS16 in ❤️) is encoding noise; a run is a payload.
+VARIATION = re.compile("[︀-️\U000E0100-\U000E01EF]")
+VARIATION_RUN = re.compile("[︀-️\U000E0100-\U000E01EF]{2,}")
 
 HIDDEN_STYLE = re.compile(
-    r"display\s*:\s*none"
+    r"(?:^|;)\s*(?:display\s*:\s*none"
     r"|visibility\s*:\s*hidden"
     r"|opacity\s*:\s*0(?![.\d]*[1-9])"
     r"|font-size\s*:\s*0(?:\.0+)?(?:px|pt|em|rem|%)?(?![\d.])"
     r"|color\s*:\s*transparent"
     r"|clip\s*:\s*rect\(\s*0"
     r"|clip-path\s*:\s*inset\(\s*100%"
-    r"|(?:left|top|text-indent)\s*:\s*-\d{4,}px",
+    r"|(?:(?:margin-)?(?:left|top)|text-indent)\s*:\s*-\d{4,}px)",
     re.I,
 )
 PRESTRIP = re.compile(r"<!DOCTYPE[^>]*>|<\?[^>]*\?>", re.I)
@@ -157,11 +168,14 @@ def _fold(text: str) -> str:
 def clean_text(text: str):
     """Remove invisible characters.
 
-    Returns (text, {"invisible_chars": {category: count}, "invisible_flagged": n})
-    where the flagged count covers a zero-width or BOM character between two
-    letters (splitting a word to dodge a scan) and any bidi override or isolate.
-    A BOM at offset 0, emoji joiners, RTL marks and soft hyphens are counted
-    but not flagged: they are encoding noise, not tampering.
+    Returns (text, {"invisible_chars": {category: count}, "invisible_flagged": n,
+    "invisible_text": [decoded, ...]}) where the flagged count covers a
+    zero-width or BOM character between two letters (splitting a word to dodge
+    a scan) and any bidi override or isolate. A BOM at offset 0, emoji joiners,
+    RTL marks, soft hyphens, emoji flag tags and a lone variation selector are
+    counted but not flagged: they are encoding noise, not tampering. Tag
+    character runs and variation selector runs are decoded into
+    invisible_text instead, since what they spell is the payload.
     """
     counts = {}
     flagged = 0
@@ -170,9 +184,13 @@ def clean_text(text: str):
         if n:
             counts[key] = n
     flags = RGI_TAG_FLAG.findall(text)
-    tags = sum(1 for ch in RGI_TAG_FLAG.sub("", text) if "\U000E0000" <= ch <= "\U000E007F")
+    unflagged = RGI_TAG_FLAG.sub("", text)  # the text minus its legitimate flags
+    tags = sum(1 for ch in unflagged if "\U000E0000" <= ch <= "\U000E007F")
     if tags:
         counts["tag"] = tags
+    variation = len(VARIATION.findall(text))
+    if variation:
+        counts["variation"] = variation
     for i, ch in enumerate(text):
         if ch in BIDI_TAMPER:
             flagged += 1
@@ -181,6 +199,17 @@ def clean_text(text: str):
             after = text[i + 1] if i + 1 < len(text) else ""
             if before.isalpha() and after.isalpha():
                 flagged += 1
+    invisible_text = []
+    for run in TAG_RUN.findall(unflagged):
+        decoded = "".join(chr(ord(c) - 0xE0000) for c in run if 0x20 <= ord(c) - 0xE0000 < 0x7F).strip()
+        if decoded:
+            invisible_text.append(decoded[:LINE_MAX])
+    for run in VARIATION_RUN.findall(text):
+        data = bytes(ord(c) - 0xFE00 if ord(c) <= 0xFE0F else ord(c) - 0xE0100 + 16 for c in run)
+        decoded = "".join(c for c in data.decode("utf-8", errors="replace") if c.isprintable()).strip()
+        if decoded:
+            invisible_text.append(decoded[:LINE_MAX])
+    text = VARIATION.sub("", text)
     if flags:
         # Strip around the flags so the visible emoji survive intact.
         strip = {ord(c): None for c in INVISIBLE}
@@ -193,7 +222,7 @@ def clean_text(text: str):
         text = "".join(pieces)
     else:
         text = text.translate({ord(c): None for c in INVISIBLE})
-    return _fold(text), {"invisible_chars": counts, "invisible_flagged": flagged}
+    return _fold(text), {"invisible_chars": counts, "invisible_flagged": flagged, "invisible_text": invisible_text}
 
 
 def _attrs(raw: str) -> dict:
@@ -272,7 +301,11 @@ def clean_html(markup: str):
         hidden_buf.clear()
         hidden_at = None
         if block:
-            hidden_blocks.append(block[:EXCERPT])
+            # The excerpt is reported verbatim to the agent, so it carries no
+            # invisible characters; the raw block goes to hidden_text, where
+            # guard() counts and decodes them. Clean before cutting, or a run of
+            # invisible characters at the front would leave an empty excerpt.
+            hidden_blocks.append(clean_text(block)[0][:EXCERPT])
             hidden_parts.append(block)
 
     def pop_to(index):
@@ -386,6 +419,9 @@ def verdict(findings: dict) -> str:
     n = int((findings.get("invisible_chars") or {}).get("tag") or 0)
     if n:
         alarms.append(_plural(n, "tag character (text hidden from the reader)", "tag characters (text hidden from the reader)"))
+    n = len(findings.get("invisible_text") or [])
+    if n:
+        alarms.append(_plural(n, "string spelled in invisible characters", "strings spelled in invisible characters"))
     n = len(findings.get("homoglyph_runs") or [])
     if n:
         alarms.append(_plural(n, "mixed-script word", "mixed-script words"))
@@ -417,7 +453,16 @@ def guard(raw: str, mode: str):
     else:
         text, hidden_text, hidden_blocks = raw, "", []
     text, tf = clean_text(text)
-    hidden_text, _ = clean_text(hidden_text)
+    hidden_text, hidden_tf = clean_text(hidden_text)
+    # Invisible characters inside hidden content count and alarm like visible
+    # ones: a tag-spelled instruction in a display:none block is the same
+    # payload, only better hidden. What they spell is hidden content: scanned
+    # and reported, never part of the cleaned text.
+    for key, n in hidden_tf["invisible_chars"].items():
+        tf["invisible_chars"][key] = tf["invisible_chars"].get(key, 0) + n
+    tf["invisible_flagged"] += hidden_tf["invisible_flagged"]
+    tf["invisible_text"] += hidden_tf["invisible_text"]
+    hidden_text = "\n".join([hidden_text, *tf["invisible_text"]])
     findings = {"hidden_blocks": hidden_blocks, **tf, **scan(text, hidden_text)}
     findings["verdict"] = verdict(findings)
     return text, findings
@@ -425,7 +470,7 @@ def guard(raw: str, mode: str):
 
 def _plain_findings(findings: dict) -> str:
     lines = []
-    for key in ("hidden_blocks", "instruction_like", "hidden_urls", "homoglyph_runs"):
+    for key in ("hidden_blocks", "instruction_like", "invisible_text", "hidden_urls", "homoglyph_runs"):
         items = findings[key]
         lines.append(f"{key} ({len(items)}):")
         lines.extend(f'  - "{item}"' for item in items)

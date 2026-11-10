@@ -22,6 +22,7 @@ class UnicodeSalaryCLI(unittest.TestCase):
         names = [
             "腾讯", "東京 AI", "北京 AI", "Acme Corp", "Café Étoile",
             "Nestlé Danmark A/S", "Ørsted A/S", "Mærsk A/S", "Åland A/S",
+            "Þekkingarmiðlun ehf.",
         ]
         data = {"companies": [
             {"company": name, "categories": {"all_employees": {"index": 105}}}
@@ -60,3 +61,18 @@ class UnicodeSalaryCLI(unittest.TestCase):
                                 ("Aaland", "Åland A/S")]:
             with self.subTest(query=query):
                 self.assertEqual(self.lookup(query), [expected])
+
+    def test_official_ascii_and_native_nordic_company_spellings_match(self):
+        # The company uses Þekkingarmiðlun and thekkingarmidlun.is publicly.
+        # As in the other cases, the index is synthetic, not its salary data.
+        for query in ("Thekkingarmidlun", "THEKKINGARMIDLUN", "Þekkingarmiðlun", "ÞEKKINGARMIÐLUN"):
+            with self.subTest(query=query):
+                self.assertEqual(self.lookup(query), ["Þekkingarmiðlun ehf."])
+
+    def test_native_nordic_query_finds_ascii_company_data(self):
+        (self.root / "salary_data.json").write_text(json.dumps({"companies": [
+            {"company": "Thekkingarmidlun", "categories": {"all_employees": {"index": 105}}},
+        ]}), encoding="utf-8")
+        for query in ("Þekkingarmiðlun", "ÞEKKINGARMIÐLUN"):
+            with self.subTest(query=query):
+                self.assertEqual(self.lookup(query), ["Thekkingarmidlun"])

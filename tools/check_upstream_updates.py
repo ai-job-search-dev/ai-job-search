@@ -35,7 +35,7 @@ FRAMEWORK_FILES = [
     "AGENTS.md",
 ]
 
-UPSTREAM_REPO_SLUG = "MadsLorentzen/ai-job-search"
+UPSTREAM_REPO_SLUG = "ai-job-search-dev/ai-job-search"
 
 def run_git(args: list[str]) -> tuple[int, str, str]:
     res = subprocess.run(

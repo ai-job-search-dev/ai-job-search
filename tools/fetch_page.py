@@ -29,8 +29,9 @@ Usage:
 
 Prints `HTTP <code> size=<bytes> saved=<path>` and exits 0 whatever the HTTP
 status - the status is information for the escalation order, not a failure.
-With --text, also prints the tag-stripped page text (script/style/noscript/svg
-and comments removed, entities unescaped, whitespace folded), capped at
+With --text, also prints the tag-stripped page text (script/style/noscript/svg/
+template and comments removed, including when the closer is missing, entities
+unescaped, whitespace folded), capped at
 --max-chars (default 6000), after a `--- text ---` line. A saved body that is
 not valid UTF-8 is decoded by the charset the page declares (page_decode.py).
 
@@ -39,6 +40,7 @@ Exit codes: 0 fetched; 1 refused by robots policy (go to escalation step 4);
 """
 
 import argparse
+from functools import lru_cache
 import gzip
 import hashlib
 import html
@@ -68,14 +70,31 @@ MAX_REDIRECTS = 5
 MAX_BYTES = 10 * 1024 * 1024
 
 
+@lru_cache(maxsize=1)
+def _curl_supports_compressed() -> bool:
+    """Return whether the bare curl used for fetching can decode content."""
+    try:
+        proc = subprocess.run(
+            ["curl", "--version"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return proc.returncode == 0 and bool(
+        re.search(r"^Features:.*\b(?:libz|brotli|zstd)\b", proc.stdout, re.IGNORECASE | re.MULTILINE)
+    )
+
+
 def build_curl_argv(url: str, out: Path, headers: Path, timeout: float) -> list:
     """One GET without automatic redirects, so the next hop can be gated."""
+    compressed = ["--compressed"] if _curl_supports_compressed() else []
     return [
         "curl", "-sS",
         "--max-redirs", "0",
         "--max-time", str(timeout),
         "--max-filesize", str(MAX_BYTES),
-        "--compressed",
+        *compressed,
         "-A", BROWSER,
         "-H", f"Accept: {ACCEPT}",
         "-H", f"Accept-Language: {ACCEPT_LANGUAGE}",
@@ -150,7 +169,12 @@ def fetch_with_urllib(url: str, out: Path, timeout: float) -> tuple[int, str | N
     if encoding == "gzip":
         body = gzip.decompress(body)
     elif encoding == "deflate":
-        body = zlib.decompress(body, -zlib.MAX_WBITS)
+        try:
+            # HTTP deflate carries a zlib wrapper (RFC 9110 section 8.4.1.2).
+            body = zlib.decompress(body)
+        except zlib.error:
+            # Keep compatibility with servers that send legacy raw DEFLATE.
+            body = zlib.decompress(body, -zlib.MAX_WBITS)
     if len(body) > MAX_BYTES:
         raise RuntimeError(f"response exceeds {MAX_BYTES} bytes after decompression")
     out.write_bytes(body)
@@ -158,11 +182,20 @@ def fetch_with_urllib(url: str, out: Path, timeout: float) -> tuple[int, str | N
 
 
 def strip_tags(markup: str, limit: int) -> str:
-    """Plain text from HTML: drop script/style/noscript/svg and comments, strip
+    """Plain text from HTML: drop script/style/noscript/svg/template and comments, strip
     tags, unescape entities, fold whitespace. Modern sites embed copy inside
-    JSON blobs, so stray attribute fragments around real text are normal."""
-    text = re.sub(r"(?is)<(script|style|noscript|svg)[^>]*>.*?</\1>", " ", markup)
-    text = re.sub(r"(?s)<!--.*?-->", " ", text)
+    JSON blobs, so stray attribute fragments around real text are normal.
+
+    A missing closer hides through the end of the input, as a browser does and
+    as posting_guard.py does. Otherwise a page cut off inside <script>, or a
+    <template> block, is printed into the agent's context by --text.
+    """
+    text = re.sub(r"(?s)<!--.*?(?:-->|\Z)", " ", markup)
+    text = re.sub(
+        r"(?is)<(script|style|noscript|svg|template)\b[^>]*>.*?(?:</\1\s*>|\Z)",
+        " ",
+        text,
+    )
     text = html.unescape(re.sub(r"(?s)<[^>]+>", " ", text))
     text = re.sub(r"[ \t\xa0]+", " ", text)
     text = re.sub(r"\n\s*\n+", "\n", text).strip()

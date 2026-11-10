@@ -1,6 +1,6 @@
 import { defineCommand, option } from "@bunli/core"
 import { z } from "zod"
-import { rssFetch, fetchWithUA, writeError, parseRssDescription, extractJobIdFromUrl, BASE_URL, type RssItem } from "../helpers.js"
+import { rssFetch, fetchWithUA, writeError, parseRssDescription, extractJobIdFromUrl, stripInvisible, BASE_URL, type RssItem } from "../helpers.js"
 
 export function normalizeSearchItem(item: RssItem): Record<string, unknown> {
   const parsed = parseRssDescription(item.description)
@@ -12,7 +12,7 @@ export function normalizeSearchItem(item: RssItem): Record<string, unknown> {
   // as an absent one: posted "", date null.
   const parsedDate = item.pubDate ? new Date(item.pubDate) : null
   const posted = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate.toISOString() : ""
-  return {
+  return stripInvisible({
     id,
     title: item.title,
     company: parsed.company,
@@ -23,7 +23,7 @@ export function normalizeSearchItem(item: RssItem): Record<string, unknown> {
     posted,
     date: posted ? posted.slice(0, 10) : null,
     deadline: parsed.deadline,
-  }
+  })
 }
 
 export const search = defineCommand({

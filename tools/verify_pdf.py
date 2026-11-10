@@ -24,8 +24,31 @@ import unicodedata
 from pathlib import Path
 
 
+ROOT = Path(__file__).resolve().parent.parent
+
+# `.claude/settings.json` pre-approves this tool with any arguments, so where
+# `--dump-text` may write is part of that permission. The workflow only dumps a
+# CV's text layer beside it (`apply.md` Step 5d writes `cv/main_<company>_<role>.txt`);
+# a path anywhere else - a shell rc file, a script the allowlist runs - would be
+# an overwrite nobody was asked about.
+DUMP_TEXT_DIRS = ("cv", "cover_letters")
+
+
 class VerificationError(Exception):
     """Raised when a generated PDF does not satisfy its checks."""
+
+
+def check_dump_target(path, root=ROOT):
+    """Return why `--dump-text` may not write to `path`, or None if it may."""
+    path = Path(path)
+    if path.suffix != ".txt":
+        return "must name a .txt file"
+    if path.is_symlink():
+        return "must not be a symlink"
+    parent = path.resolve().parent
+    if not any(parent.is_relative_to((root / d).resolve()) for d in DUMP_TEXT_DIRS):
+        return "must be inside this repo's " + " or ".join(f"{d}/" for d in DUMP_TEXT_DIRS)
+    return None
 
 
 def run_tool(command):
@@ -132,6 +155,18 @@ def _bare_number(token):
     return core
 
 
+def _currency_amount(token):
+    """A numeric amount with an attached Unicode currency symbol, or None."""
+    core = token.strip(_OUTER_PUNCTUATION)
+    if core and unicodedata.category(core[0]) == "Sc":
+        core = core[1:]
+    elif core and unicodedata.category(core[-1]) == "Sc":
+        core = core[:-1]
+    else:
+        return None
+    return core if _BARE_NUMBER.fullmatch(core) else None
+
+
 _TWO_DIGIT_YEAR = re.compile(r"\d{2}")
 
 
@@ -142,13 +177,17 @@ def _quantity_range(line, dash_index):
     (`2016-17`, `2019-20`): the short form is how academic years and seasons
     are written, and it was caught before the quantity rule existed. Anything
     else with bare numbers on both sides is a quantity (`1500-2000`,
-    `2000-5000`) and is left alone.
+    `2000-5000`) and is left alone. An attached currency symbol makes a
+    numeric pair an amount range, even when both amounts resemble years.
     """
     before = _TOKEN_BEFORE.search(line[:dash_index])
     after = _TOKEN_AFTER.search(line[dash_index + 1 :])
     if not before or not after:
         return False
-    left, right = _bare_number(before.group(1)), _bare_number(after.group(1))
+    left_money, right_money = _currency_amount(before.group(1)), _currency_amount(after.group(1))
+    left, right = left_money or _bare_number(before.group(1)), right_money or _bare_number(after.group(1))
+    if left_money is not None or right_money is not None:
+        return left is not None and right is not None
     if left is None or right is None:
         return False
     if _BARE_YEAR.fullmatch(left) and (_BARE_YEAR.fullmatch(right) or _TWO_DIGIT_YEAR.fullmatch(right)):
@@ -302,7 +341,7 @@ def build_parser():
     parser.add_argument(
         "--dump-text",
         type=Path,
-        help="write the extracted text layer to this path (UTF-8)",
+        help="write the extracted text layer to this .txt path under cv/ or cover_letters/ (UTF-8)",
     )
     parser.add_argument(
         "--ascii-dates",
@@ -332,6 +371,11 @@ def _force_utf8_output() -> None:
 def main(argv=None):
     _force_utf8_output()
     args = build_parser().parse_args(argv)
+    if args.dump_text is not None:
+        reason = check_dump_target(args.dump_text)
+        if reason:
+            print(f"Error: --dump-text {args.dump_text}: {reason}", file=sys.stderr)
+            return 1
     try:
         extractor, text, pages = verify_pdf(
             args.pdf,

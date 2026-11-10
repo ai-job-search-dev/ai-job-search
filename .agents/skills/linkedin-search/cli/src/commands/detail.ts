@@ -1,4 +1,4 @@
-import { DETAIL_URL, htmlFetch, parseJobDetail, writeError } from "../helpers.js"
+import { DETAIL_URL, htmlFetch, parseJobDetail, stripInvisible, writeError } from "../helpers.js"
 
 export interface DetailOpts {
   id: string
@@ -55,7 +55,7 @@ export async function runDetail(opts: DetailOpts): Promise<number> {
       writeError("Job not found", "NOT_FOUND")
       return 1
     }
-    const job = parseJobDetail(html, id)
+    const job = stripInvisible(parseJobDetail(html, id))
 
     if (opts.format === "plain") {
       const lines = [

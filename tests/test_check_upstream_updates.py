@@ -10,7 +10,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = REPO_ROOT / "tools" / "check_upstream_updates.py"
 
-TEMPLATE_URL = "https://github.com/MadsLorentzen/ai-job-search.git"
+TEMPLATE_URL = "https://github.com/ai-job-search-dev/ai-job-search.git"
 FORK_URL = "https://github.com/octocat/ai-job-search.git"
 
 FRAMEWORK_FILES = [
