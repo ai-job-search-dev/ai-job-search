@@ -327,6 +327,17 @@ Upstream keeps improving the methodology files your fork has personalized, so pl
      Forks also inherit a `.github/workflows/upstream-watch.yml` that runs this weekly and writes the result into a single rolling issue (it no-ops on the upstream template itself, and stays disabled on a fork until you enable Actions).
 3. **Merge normally.** `git merge upstream/master` (or `git pull`) three-way-merges upstream's edits around your personalization; because methodology edits rarely touch the lines `/setup` filled in, most updates land cleanly. A conflict in a personalized file is a *feature*, not a failure — it means upstream changed methodology in a section you customized, and the version marker plus its changelog commit tell you why. Resolve by keeping your data and adopting the methodology change around it.
 
+### Tracking your own directory without editing `security_guards.py`
+
+If your fork keeps a tracked placeholder under a personal-data ignore rule (for example a `leads/` folder with a `.gitkeep`), `tools/security_guards.py` rejects the `!leads/.gitkeep` negation because it is not in `ALLOWED_IGNORE_NEGATIONS`. Editing that set works, but every upstream change near it then conflicts on merge. Instead, list the negation in `.github/security-guards-local.txt`:
+
+```text
+# fork-only tracked placeholders
+!leads/.gitkeep
+```
+
+One negation per line; blank lines and `#` comments are ignored. The file can only *extend* the allowlist: any other line (a plain ignore rule, say) fails the guard, and a negation not listed here or in `ALLOWED_IGNORE_NEGATIONS` still fails. If the file is absent nothing changes. The upstream template never ships it, and the guard fails if it appears there (CI decides which side it is on from `GITHUB_REPOSITORY`).
+
 ## Troubleshooting
 
 ### "salary_data.json not found"
