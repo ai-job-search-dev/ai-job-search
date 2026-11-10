@@ -104,7 +104,7 @@ HIDDEN_STYLE = re.compile(
     r"|color\s*:\s*transparent"
     r"|clip\s*:\s*rect\(\s*0"
     r"|clip-path\s*:\s*inset\(\s*100%"
-    r"|(?:left|top|text-indent)\s*:\s*-\d{4,}px)",
+    r"|(?:(?:margin-)?(?:left|top)|text-indent)\s*:\s*-\d{4,}px)",
     re.I,
 )
 PRESTRIP = re.compile(r"<!DOCTYPE[^>]*>|<\?[^>]*\?>", re.I)

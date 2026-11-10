@@ -623,6 +623,21 @@ class Calibration(GuardFixture):
                 self.assertNotIn("Hidden content", self.text_of(out))
                 self.assertEqual(self.findings_of(out)["hidden_blocks"], ["Hidden content"])
 
+    def test_offscreen_margins_still_hide_once_names_are_anchored(self):
+        # Anchoring the property names must not lose the off-screen margin
+        # trick, which the unanchored pattern only caught as a suffix of "left".
+        for style in ("margin-left: -9999px", "position: absolute; margin-top: -10000px"):
+            with self.subTest(style=style):
+                page = self.write("posting.html", (
+                    '<article>Software Engineer: Python and SQL experience</article>'
+                    f'<article style="{style};">Hidden content</article>'
+                ))
+                code, out, err = self.run_main("--in", str(page), "--html", "--json")
+                self.assertEqual(code, 0, err)
+                self.assertIn("Software Engineer: Python and SQL experience", self.text_of(out))
+                self.assertNotIn("Hidden content", self.text_of(out))
+                self.assertEqual(self.findings_of(out)["hidden_blocks"], ["Hidden content"])
+
     def test_leading_bom_is_encoding_noise(self):
         code, out, err = self.run_main("--text", "--json", stdin_text="﻿Plain posting.")
         self.assertTrue(out.startswith("posting_guard: clean"), out.splitlines()[0])
