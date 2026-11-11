@@ -332,7 +332,7 @@ Failures here are template-level problems: fix them in the `<CV_EXT>` source (e.
 
 | Keyword | Priority | Status | Note |
 |---------|----------|--------|------|
-| ... | required/preferred | covered / synonym-only / missing (have it) / missing (gap) | where it appears, or why absent |
+| ... | required/preferred | covered / synonym-only / unconfirmed (related tool) / missing (have it) / missing (gap) | where it appears, or why absent |
 
 - **covered** — the term appears (verbatim or trivial inflection).
 - **synonym-only** — the concept is present under a different term. If the posting's exact term is truthfully applicable per the profile, prefer the posting's term (ATS keyword matches are often literal).
