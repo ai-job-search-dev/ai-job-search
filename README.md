@@ -414,6 +414,8 @@ ai-job-search/
 │   ├── references/                    # Reference letters
 │   └── applications/                  # Past application records (<company>_<role>/)
 ├── .github/workflows/ci.yml           # CI: LaTeX smoke compiles, skill lint, CLI typechecks
+├── .github/workflows/release.yml      # Weekly SemVer release from merged PR titles (skipped on forks)
+├── .github/workflows/upstream-watch.yml  # Weekly upstream triage into a rolling issue (reports only)
 ├── salary_lookup.py                   # Salary benchmarking tool (BYO data)
 ├── tools/
 │   ├── check_framework_version.py     # CI check: framework_version bumped when skill files change
@@ -421,9 +423,13 @@ ai-job-search/
 │   ├── convert_salary_excel.py        # Convert salary Excel to JSON
 │   ├── fetch_page.py                  # GET-only browser-header retry for 403s (robots.txt enforced)
 │   ├── install_portal_clis.py         # Install every discovered portal CLI (bun install)
+│   ├── job_key.py                     # Canonical job key (company + title slug) shared by /scrape and /rank
 │   ├── lint_skills.py                 # CI lint for skills, commands, settings.json
+│   ├── page_decode.py                 # Decode a saved page by its declared charset (EUC-KR, Shift_JIS, ...)
 │   ├── posting_guard.py               # Integrity gate: strip hidden text, flag injection-shaped lines
+│   ├── rank_state.py                  # /rank state: candidates, deadline sweep, apply scores to seen_jobs.json
 │   ├── robots_check.py                # Gate the browser-header retry against robots.txt
+│   ├── scrape_state.py                # /scrape state: candidates, store, history over seen_jobs.json
 │   ├── security_guards.py             # CI guards: permission allow/ask/deny, skill grants, gitignore, manifests
 │   ├── upstream_triage.py             # Sort upstream commits into worth-reviewing vs probably-skip
 │   ├── verify_layout.py               # Measure a compiled PDF's page layout (holes, orphans, footer collisions)
