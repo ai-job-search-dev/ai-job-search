@@ -29,6 +29,11 @@ const missingValueCases: string[][] = [
   ["search", "--key", "python", "--type"],
   ["search", "--key", "python", "--company"],
   ["search", "--key", "python", "--since", "--limit", "5"],
+  // `--flag=` and `--flag ''` carry no value either: bunli kept the
+  // empty string and the handler dropped the filter, so the search ran unfiltered.
+  ["search", "--key", "python", "--remote="],
+  ["search", "--key", "python", "--remote", ""],
+  ["search", "--key=", "--remote", "helt"],
 ];
 for (const args of missingValueCases) {
   test(`missing option value: ${args.join(" ")}`, async () => {
