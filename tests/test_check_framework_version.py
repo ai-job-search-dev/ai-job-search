@@ -11,6 +11,7 @@ Each test builds an isolated git repo with the script copied inside it
 (the script resolves ROOT from __file__), so the real repo is never read
 or written.
 """
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -192,3 +193,21 @@ class RunGitEncodingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class FrontmatterLineEndings(unittest.TestCase):
+    """A Windows checkout has CRLF files (core.autocrlf) and Notepad adds a
+    BOM; the version marker is the same file either way."""
+
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location("check_framework_version_frontmatter", Path(__file__).resolve().parent.parent / "tools" / "check_framework_version.py")
+        self.module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.module)
+
+    def test_crlf_and_bom_do_not_hide_the_version_marker(self):
+        text = "---\nframework_version: 1.2.7\n---\n# Title\n"
+        for label, variant in (("crlf", text.replace("\n", "\r\n")), ("bom", "\ufeff" + text), ("bom+crlf", "\ufeff" + text.replace("\n", "\r\n"))):
+            with self.subTest(label=label):
+                self.assertEqual(self.module.parse_frontmatter_text(variant), self.module.parse_frontmatter_text(text))
+                self.assertEqual(self.module.parse_frontmatter_text(text).get("framework_version"), "1.2.7")
