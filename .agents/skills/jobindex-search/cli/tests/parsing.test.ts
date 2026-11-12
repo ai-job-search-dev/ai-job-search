@@ -43,6 +43,16 @@ describe("decodeHtmlEntities (via parseJobCards)", () => {
     const [c] = parseJobCards(card("h6", "Engineer", "N&#xF8;rrebro ApS"));
     expect(c.company).toBe("Nørrebro ApS");
   });
+
+  test("decodes an entity once: &amp;lt; is the text \"&lt;\", not \"<\"", () => {
+    const [c] = parseJobCards(card("h7", "R&amp;lt;D &amp;amp; Ops &#38;amp; &#x26;quot;"));
+    expect(c.title).toBe("R&lt;D &amp; Ops &amp; &quot;");
+  });
+
+  test("a numeric ampersand decodes one level: &#38;amp; is \"&amp;\", not \"&\"", () => {
+    expect(parseJobCards(card("h8", "&#38;amp;"))[0].title).toBe("&amp;");
+    expect(parseJobCards(card("h9", "&#x26;amp;"))[0].title).toBe("&amp;");
+  });
 });
 
 describe("extractDivContent", () => {

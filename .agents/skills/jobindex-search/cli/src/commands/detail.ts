@@ -31,25 +31,39 @@ function numericEntity(cp: number): string {
 /**
  * Decode HTML entities in text
  */
+// The named references this portal's markup carries. The pattern is built from
+// these keys, so the vocabulary and the regex cannot drift apart, and one pass
+// over the text means replacement output is never scanned again: a
+// double-encoded reference such as `&#38;amp;` decodes exactly one level, to
+// the literal text `&amp;`.
+const NAMED_ENTITIES: Record<string, string> = {
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+  amp: "&",
+  oslash: "ø",
+  Oslash: "Ø",
+  aelig: "æ",
+  AElig: "Æ",
+  aring: "å",
+  Aring: "Å",
+}
+
+const ENTITY_PATTERN = new RegExp(
+  `&(#(?:[xX][0-9a-fA-F]+|[0-9]+)|${Object.keys(NAMED_ENTITIES)
+    .sort((a, b) => b.length - a.length)
+    .join("|")});`,
+  "g",
+)
+
 function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    // Danish letters appear as named entities in employer-hosted ad markup.
-    .replace(/&oslash;/g, "ø")
-    .replace(/&Oslash;/g, "Ø")
-    .replace(/&aelig;/g, "æ")
-    .replace(/&AElig;/g, "Æ")
-    .replace(/&aring;/g, "å")
-    .replace(/&Aring;/g, "Å")
-    // Numeric character references: decimal (&#233;) and hexadecimal (&#xE9;).
-    .replace(/&#(\d+);/g, (_, dec) => numericEntity(parseInt(dec, 10)))
-    .replace(/&#[xX]([0-9a-fA-F]+);/g, (_, hex) => numericEntity(parseInt(hex, 16)))
-    .replace(/&nbsp;/g, " ")
+  return text.replace(ENTITY_PATTERN, (_, entity: string) => {
+    if (!entity.startsWith("#")) return NAMED_ENTITIES[entity]!
+    const hex = entity[1]?.toLowerCase() === "x"
+    return numericEntity(parseInt(entity.slice(hex ? 2 : 1), hex ? 16 : 10))
+  })
 }
 
 /**

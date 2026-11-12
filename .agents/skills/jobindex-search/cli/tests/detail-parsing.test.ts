@@ -150,3 +150,22 @@ describe("parseDetailPage - external ATS passthrough shape", () => {
     expect(parsed.deadline).toBeNull();
   });
 });
+
+// Browsers decode each character reference once, even when it creates another reference.
+test("detail decodes escaped references only once", () => {
+  const page = NATIVE_PAGE.replaceAll("Udvikler til Camunda/AWS", "R&amp;lt;D &#38;amp; &#x26;quot;");
+  const job = parseDetailPage(page, `${JOBANNONCE_URL}h1690934`, "h1690934");
+  expect(job.title).toBe("R&lt;D &amp; &quot;");
+});
+
+test("detail decodes a numeric ampersand one level: &#38;amp; is \"&amp;\"", () => {
+  const page = NATIVE_PAGE.replaceAll("Udvikler til Camunda/AWS", "&#38;amp;");
+  const job = parseDetailPage(page, `${JOBANNONCE_URL}h1690934`, "h1690934");
+  expect(job.title).toBe("&amp;");
+});
+
+test("detail still decodes the Danish named references it carries", () => {
+  const page = NATIVE_PAGE.replaceAll("Udvikler til Camunda/AWS", "S&oslash;ren &AElig;bl&aring;");
+  const job = parseDetailPage(page, `${JOBANNONCE_URL}h1690934`, "h1690934");
+  expect(job.title).toBe("Søren Æblå");
+});
