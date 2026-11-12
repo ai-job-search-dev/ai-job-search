@@ -17,6 +17,7 @@ The ATS apex list stays the fixed set it is.
 """
 
 import re
+import tempfile
 import unittest
 from pathlib import Path
 from urllib.parse import urlparse
@@ -33,7 +34,7 @@ HOST_LITERAL = re.compile(r"https?://([A-Za-z0-9.-]+\.[A-Za-z]{2,})")
 NON_PORTAL_HOSTS = {"schema.org", "www.w3.org", "example.com", "localhost"}
 
 
-def installed_portal_skills() -> list[Path]:
+def installed_portal_skills(skills_dir: Path = SKILLS_DIR) -> list[Path]:
     """Every `*-search` skill with a CLI source tree, enabled or not.
 
     Rule 1 says "configured job portal in `.agents/skills/`" - a portal that is
@@ -41,7 +42,7 @@ def installed_portal_skills() -> list[Path]:
     a posting the user pastes into /apply, so discovery is by installation.
     """
     return sorted(
-        d for d in SKILLS_DIR.glob("*-search") if (d / "cli" / "src").is_dir()
+        d for d in skills_dir.glob("*-search") if (d / "cli" / "src").is_dir()
     )
 
 
@@ -71,8 +72,8 @@ def portal_hosts(skill_dir: Path) -> set[str]:
     return hosts
 
 
-def discover_installed_portal_hosts() -> set[str]:
-    return set().union(*(portal_hosts(d) for d in installed_portal_skills()))
+def discover_installed_portal_hosts(skills_dir: Path = SKILLS_DIR) -> set[str]:
+    return set().union(*(portal_hosts(d) for d in installed_portal_skills(skills_dir)))
 
 
 INSTALLED_PORTAL_HOSTS = discover_installed_portal_hosts()
@@ -89,7 +90,7 @@ KNOWN_ATS_APEXES = {
 
 
 
-def resolve_portal_skill(url_str: str) -> Path | None:
+def resolve_portal_skill(url_str: str, skills_dir: Path = SKILLS_DIR) -> Path | None:
     """Resolve a posting URL to its matching installed portal skill directory, if any."""
     try:
         parsed = urlparse(url_str)
@@ -98,7 +99,7 @@ def resolve_portal_skill(url_str: str) -> Path | None:
         return None
     if not host:
         return None
-    for skill in installed_portal_skills():
+    for skill in installed_portal_skills(skills_dir):
         for portal in portal_hosts(skill):
             if host == portal or host.endswith(f".{portal}"):
                 return skill
@@ -222,22 +223,8 @@ class ApplyHostVerificationSpecTests(unittest.TestCase):
             tier, host = classify_posting_host(url)
             self.assertEqual(tier, "official_ats", f"{url} should classify as official_ats, got {tier}")
 
-    def test_classifier_identifies_installed_portal_hosts(self):
-        # A regional subdomain and the bare apex must both pass for every portal;
-        # the derived set is what makes this hold for a portal added by /add-portal.
-        urls = [
-            "https://www.jobindex.dk/jobannonce/12345",
-            "https://dk.linkedin.com/jobs/view/999999",
-            "https://jobnet.dk/find-job/8888",
-            "https://freehire.me/jobs/golang-zensar-2bxu6dxm",
-        ]
-        for url in urls:
-            tier, host = classify_posting_host(url)
-            self.assertEqual(tier, "installed_portal", f"{url} should classify as installed_portal, got {tier}")
-
     def test_classifier_default_is_the_discovered_set_not_a_copy(self):
         self.assertEqual(classify_posting_host.__defaults__, (None,))
-        self.assertTrue(INSTALLED_PORTAL_HOSTS, "discovery found no portal hosts under .agents/skills/")
         # An explicit set still overrides, which is how a fork's test can probe a candidate portal.
         self.assertEqual(
             classify_posting_host("https://jobs.newboard.test/x", {"newboard.test"})[0], "installed_portal"
@@ -254,9 +241,7 @@ class InstalledPortalsAreVerifiedTests(unittest.TestCase):
     """
 
     def test_every_installed_portal_has_a_discoverable_host(self):
-        skills = installed_portal_skills()
-        self.assertTrue(skills, "no *-search skill with a cli/src tree under .agents/skills/")
-        for skill in skills:
+        for skill in installed_portal_skills():
             with self.subTest(portal=skill.name):
                 self.assertTrue(
                     portal_hosts(skill),
@@ -278,12 +263,6 @@ class InstalledPortalsAreVerifiedTests(unittest.TestCase):
                     self.assertFalse(host.startswith("www."), host)
                     self.assertRegex(host, r"^[a-z0-9.-]+\.[a-z]{2,}$")
 
-    def test_enabled_flag_reads_like_scrape(self):
-        # /scrape: "a missing key means enabled". Both shipped states occur in the tree.
-        states = {skill.name: portal_enabled(skill) for skill in installed_portal_skills()}
-        self.assertTrue(any(states.values()), f"no enabled portal among {states}")
-        self.assertIsInstance(portal_enabled(SKILLS_DIR / "does-not-exist-search"), bool)
-
     def test_classifier_fails_closed_on_look_alikes_and_unverified_hosts(self):
         suspicious = [
             "https://evil-greenhouse.io/job/1",
@@ -304,9 +283,7 @@ class InstalledPortalsAreVerifiedTests(unittest.TestCase):
 
     def test_resolve_portal_skill_maps_all_installed_portal_hosts(self):
         """Every installed portal skill must resolve URLs for each host it queries (#535)."""
-        skills = installed_portal_skills()
-        self.assertGreater(len(skills), 0, "must discover installed portal skills")
-        for skill in skills:
+        for skill in installed_portal_skills():
             hosts = portal_hosts(skill)
             self.assertGreater(len(hosts), 0, f"{skill.name} must declare at least one host")
             for host in hosts:
@@ -326,6 +303,53 @@ class InstalledPortalsAreVerifiedTests(unittest.TestCase):
         for url in unrelated:
             with self.subTest(url=url):
                 self.assertIsNone(resolve_portal_skill(url))
+
+
+class CopiedPortalDiscoveryTests(unittest.TestCase):
+    """A portal copied into .agents/skills/ from community-portals is discovered
+    from its own CLI source. Upstream ships no portal, so the tree-wide tests
+    above only bite in a fork; this fixture keeps discovery itself covered."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.skills = Path(directory.name)
+        self.board = self.add_portal("board-search", 'const BASE_URL = "https://www.board.test";\n')
+        self.add_portal(
+            "quiet-search",
+            'const API = "https://api.quiet.test/v1";\nconst SCHEMA = "https://schema.org";\n',
+            "---\nname: quiet-search\nenabled: false\n---\n",
+        )
+        (self.skills / "notes-search").mkdir()
+
+    def add_portal(self, name: str, source: str, skill_md: str | None = None) -> Path:
+        skill = self.skills / name
+        (skill / "cli" / "src").mkdir(parents=True)
+        (skill / "cli" / "src" / "cli.ts").write_text(source, encoding="utf-8")
+        if skill_md is not None:
+            (skill / "SKILL.md").write_text(skill_md, encoding="utf-8")
+        return skill
+
+    def test_only_skills_with_a_cli_source_tree_are_portals(self):
+        self.assertEqual([d.name for d in installed_portal_skills(self.skills)], ["board-search", "quiet-search"])
+
+    def test_hosts_come_from_cli_source_without_www_or_vocabularies(self):
+        self.assertEqual(discover_installed_portal_hosts(self.skills), {"board.test", "api.quiet.test"})
+
+    def test_apex_and_subdomains_classify_and_resolve(self):
+        hosts = discover_installed_portal_hosts(self.skills)
+        for url in ("https://board.test/job/1", "https://www.board.test/job/1", "https://dk.board.test/job/1"):
+            with self.subTest(url=url):
+                self.assertEqual(classify_posting_host(url, hosts)[0], "installed_portal")
+                self.assertEqual(resolve_portal_skill(url, self.skills), self.board)
+        self.assertEqual(classify_posting_host("https://evil-board.test/job/1", hosts)[0], "unverified")
+        self.assertIsNone(resolve_portal_skill("https://evil-board.test/job/1", self.skills))
+
+    def test_enabled_flag_reads_like_scrape(self):
+        # /scrape: "a missing key means enabled". A disabled portal is still installed.
+        self.assertTrue(portal_enabled(self.board))
+        self.assertFalse(portal_enabled(self.skills / "quiet-search"))
+        self.assertTrue(portal_enabled(self.skills / "does-not-exist-search"))
 
 
 class WebResearchEscalationOrderTests(unittest.TestCase):
