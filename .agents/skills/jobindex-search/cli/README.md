@@ -172,9 +172,14 @@ bun run src/cli.ts detail h1647303 --format plain
 
 **Field notes:**
 
-Jobindex serves detail pages in two shapes, and field availability differs:
-a **jobindex-native** page (recognisable by its `jd-*` facts blocks) carries
-company, location, an ISO deadline, employment type and hours; an **external
+Jobindex serves detail pages in three shapes, and field availability differs:
+the current **`jobtext-jobad`** layout (every ad checked on 2026-11-08) carries
+the company in a sidebar card (the header's "Virksomhed" item is the fallback),
+location in the header, employment type, hours and the deadline in the sidebar
+cards, and the ad text in a body section (read as `description`, so site
+navigation and the cookie banner never are); the older **jobindex-native** page (recognisable by its `jd-*`
+facts blocks) carries company, location, an ISO deadline, employment type and
+hours; an **external
 ATS passthrough** (the employer's hosted ad, e.g. hr-manager/Talentech, served
 through jobindex) has no reliable company anchor, so `company` is `null` there
 rather than the ATS brand, and location/deadline come from the ad's own
@@ -185,8 +190,8 @@ widgets when present.
   ATS, not the posting).
 - `deadline` — `YYYY-MM-DD` or `null`; Danish long dates ("13. september
   2026") and `DD-MM-YYYY` widget dates are converted.
-- `employmentType` / `hours` — from the native facts blocks; `null` on
-  passthrough pages.
+- `employmentType` / `hours` — from the `jobtext-jobad` sidebar or the native
+  facts blocks; `null` on passthrough pages and when the ad omits the row.
 - `companyUrl` — currently always `null`; no page shape carries a usable
   company link.
 - `applyUrl` — the Jobindex redirect link (`/c?t=...`) when present; `null`
