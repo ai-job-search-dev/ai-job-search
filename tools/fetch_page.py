@@ -29,8 +29,9 @@ Usage:
 
 Prints `HTTP <code> size=<bytes> saved=<path>` and exits 0 whatever the HTTP
 status - the status is information for the escalation order, not a failure.
-With --text, also prints the tag-stripped page text (script/style/noscript/svg
-and comments removed, entities unescaped, whitespace folded), capped at
+With --text, also prints the tag-stripped page text (script/style/noscript/svg/
+template and comments removed, including when the closer is missing, entities
+unescaped, whitespace folded), capped at
 --max-chars (default 6000), after a `--- text ---` line. A saved body that is
 not valid UTF-8 is decoded by the charset the page declares (page_decode.py).
 
@@ -168,7 +169,12 @@ def fetch_with_urllib(url: str, out: Path, timeout: float) -> tuple[int, str | N
     if encoding == "gzip":
         body = gzip.decompress(body)
     elif encoding == "deflate":
-        body = zlib.decompress(body, -zlib.MAX_WBITS)
+        try:
+            # HTTP deflate carries a zlib wrapper (RFC 9110 section 8.4.1.2).
+            body = zlib.decompress(body)
+        except zlib.error:
+            # Keep compatibility with servers that send legacy raw DEFLATE.
+            body = zlib.decompress(body, -zlib.MAX_WBITS)
     if len(body) > MAX_BYTES:
         raise RuntimeError(f"response exceeds {MAX_BYTES} bytes after decompression")
     out.write_bytes(body)
@@ -176,11 +182,20 @@ def fetch_with_urllib(url: str, out: Path, timeout: float) -> tuple[int, str | N
 
 
 def strip_tags(markup: str, limit: int) -> str:
-    """Plain text from HTML: drop script/style/noscript/svg and comments, strip
+    """Plain text from HTML: drop script/style/noscript/svg/template and comments, strip
     tags, unescape entities, fold whitespace. Modern sites embed copy inside
-    JSON blobs, so stray attribute fragments around real text are normal."""
-    text = re.sub(r"(?is)<(script|style|noscript|svg)[^>]*>.*?</\1>", " ", markup)
-    text = re.sub(r"(?s)<!--.*?-->", " ", text)
+    JSON blobs, so stray attribute fragments around real text are normal.
+
+    A missing closer hides through the end of the input, as a browser does and
+    as posting_guard.py does. Otherwise a page cut off inside <script>, or a
+    <template> block, is printed into the agent's context by --text.
+    """
+    text = re.sub(r"(?s)<!--.*?(?:-->|\Z)", " ", markup)
+    text = re.sub(
+        r"(?is)<(script|style|noscript|svg|template)\b[^>]*>.*?(?:</\1\s*>|\Z)",
+        " ",
+        text,
+    )
     text = html.unescape(re.sub(r"(?s)<[^>]+>", " ", text))
     text = re.sub(r"[ \t\xa0]+", " ", text)
     text = re.sub(r"\n\s*\n+", "\n", text).strip()
@@ -193,11 +208,27 @@ def _default_out(url: str) -> Path:
 
 
 def _inside_repo(path: Path) -> bool:
-    try:
-        path.resolve().relative_to(ROOT)
-    except ValueError:
-        return False
-    return True
+    # Compare by identity, not by spelling: on a case-insensitive filesystem
+    # (macOS and Windows defaults) `/users/x/repo/notes.md` resolves to a
+    # string that is not under ROOT yet lands in the repo. Walk up to the
+    # nearest existing ancestor - the target itself is usually not there yet -
+    # and ask the OS whether any ancestor is the repo root.
+    candidate = path.expanduser()
+    if not candidate.is_absolute():
+        candidate = Path.cwd() / candidate
+    probe = candidate
+    while not probe.exists():
+        parent = probe.parent
+        if parent == probe:
+            return False
+        probe = parent
+    for ancestor in (probe, *probe.parents):
+        try:
+            if os.path.samefile(ancestor, ROOT):
+                return True
+        except OSError:
+            return False
+    return False
 
 
 def _force_utf8_output() -> None:

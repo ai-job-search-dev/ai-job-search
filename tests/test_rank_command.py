@@ -63,6 +63,19 @@ class RankCommandSpec(unittest.TestCase):
         self.assertIn("guard", step5, "Step 5 must surface a flagged posting")
         self.assertIn("⚠", step5)
 
+    def test_step2_hands_the_scorer_the_key_it_must_return(self):
+        # Step 2's JSON contract requires `key`, the seen_jobs.json key, in every
+        # result, and rank_state apply rejects anything else ("no such key").
+        # The key is a company+title slug from job_key.py, so an agent given
+        # only title, company and URL cannot produce it: the dispatch sentence
+        # must pass it and the agent definition must echo it back.
+        step2 = _sections(COMMAND.read_text(encoding="utf-8"))["Step 2: Batch-Fetch and Score"]
+        dispatch = step2[: step2.index("Each agent returns a JSON array")]
+        self.assertIn("`key`", dispatch, "the job list handed to the scorer must carry the key")
+        self.assertIn("candidates", dispatch, "the key comes from Step 1's candidates output")
+        scorer = (REPO / ".claude" / "agents" / "posting-scorer.md").read_text(encoding="utf-8")
+        self.assertRegex(scorer, r"`key`.*(echo|cop)", "the scorer must be told to return the key unchanged")
+
     def test_step1_empty_candidates_still_sweeps_and_reports(self):
         """No new jobs must not bypass expiry maintenance of ranked jobs."""
         step1 = _sections(COMMAND.read_text(encoding="utf-8"))["Step 1: Load State"]

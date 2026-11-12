@@ -307,7 +307,15 @@ Upstream keeps improving the methodology files your fork has personalized, so pl
 
 **Prefer releases over raw `master`.** Tagged [releases](../../releases) are weekly checkpoints of `master` that passed CI, each listing the PRs it contains on its release page ([CHANGELOG.md](CHANGELOG.md) covers releases up to 1.7.4). Updating to a tag pulls a stable, documented state instead of whatever `master` happens to be mid-review. Fetch tags with `git fetch upstream --tags` and merge a release (for example `git merge v1.0.0`) when you want stability; pull `master` directly only when you specifically want the latest unreleased changes. The steps below apply either way - substitute the release tag for `upstream/master` where you see it.
 
-1. **Commit your personalization - but know where those commits land.** `/setup` edits CLAUDE.md and the profile skill files in place; those edits are *yours*, and committing them is what lets updates merge cleanly. But a GitHub **fork of this repo is public** - forks of public repositories cannot be made private - so anything you commit *and push to a fork* is visible to anyone. If you want your profile in a remote at all, don't push it to a fork: create a **private** repository, push there, and add this repo as the `upstream` remote (`git remote add upstream https://github.com/ai-job-search-dev/ai-job-search.git`) to keep receiving updates. Committing locally without pushing is also fine. The genuinely sensitive files (tracker, salary data, `documents/`, application archives) are gitignored and never enter git either way. An uncommitted working tree is the most common reason `git pull` refuses to merge at all (`Your local changes ... would be overwritten`).
+1. **Commit your personalization - but know where those commits land.** `/setup` edits CLAUDE.md and the profile skill files in place; those edits are *yours*, and committing them is what lets updates merge cleanly. But a GitHub **fork of this repo is public** - forks of public repositories cannot be made private - so anything you commit *and push to a fork* is visible to anyone. If you want your profile in a remote at all, don't push it to a fork: use a **private** repository with this repo as the `upstream` remote, so you keep receiving updates (commands below). Committing locally without pushing is also fine. The genuinely sensitive files (tracker, salary data, `documents/`, application archives) are gitignored and never enter git either way. An uncommitted working tree is the most common reason `git pull` refuses to merge at all (`Your local changes ... would be overwritten`).
+
+   To create the private repository from a clone whose `origin` is still this repo:
+   ```bash
+   git remote rename origin upstream
+   gh repo create ai-job-search --private --source=. --remote=origin --push
+   gh repo set-default <your-github-username>/ai-job-search
+   ```
+   If you already forked, your clone has an `upstream` remote and `origin` is the public fork: replace the first line with `git remote remove origin`, and pick a different repository name, because the fork already uses `ai-job-search`.
 2. **Preview what changed before pulling:**
    ```bash
    git remote add upstream https://github.com/ai-job-search-dev/ai-job-search.git   # first time only, if you cloned your own fork
@@ -326,6 +334,17 @@ Upstream keeps improving the methodology files your fork has personalized, so pl
 
      Forks also inherit a `.github/workflows/upstream-watch.yml` that runs this weekly and writes the result into a single rolling issue (it no-ops on the upstream template itself, and stays disabled on a fork until you enable Actions).
 3. **Merge normally.** `git merge upstream/master` (or `git pull`) three-way-merges upstream's edits around your personalization; because methodology edits rarely touch the lines `/setup` filled in, most updates land cleanly. A conflict in a personalized file is a *feature*, not a failure — it means upstream changed methodology in a section you customized, and the version marker plus its changelog commit tell you why. Resolve by keeping your data and adopting the methodology change around it.
+
+### Tracking your own directory without editing `security_guards.py`
+
+If your fork keeps a tracked placeholder under a personal-data ignore rule (for example a `leads/` folder with a `.gitkeep`), `tools/security_guards.py` rejects the `!leads/.gitkeep` negation because it is not in `ALLOWED_IGNORE_NEGATIONS`. Editing that set works, but every upstream change near it then conflicts on merge. Instead, list the negation in `.github/security-guards-local.txt`:
+
+```text
+# fork-only tracked placeholders
+!leads/.gitkeep
+```
+
+One negation per line; blank lines and `#` comments are ignored. The file can only *extend* the allowlist: any other line (a plain ignore rule, say) fails the guard, and a negation not listed here or in `ALLOWED_IGNORE_NEGATIONS` still fails. If the file is absent nothing changes. The upstream template never ships it, and the guard fails if it appears there (CI decides which side it is on from `GITHUB_REPOSITORY`).
 
 ## Troubleshooting
 

@@ -49,6 +49,8 @@ Invoke this skill when the user wants to:
 bun run .agents/skills/jobnet-search/cli/src/cli.ts search [flags]
 ```
 
+Query syntax: phrase quoting not honoured; no OR.
+
 Key flags:
 - `--search-string <text>` — keyword search, e.g. `sygeplejerske`, `ingeniør`, `pædagog`
 - `--region <region>` — `HovedstadenOgBornholm`, `Midtjylland`, `Syddanmark`, `OevrigeSjaelland`, `Nordjylland`

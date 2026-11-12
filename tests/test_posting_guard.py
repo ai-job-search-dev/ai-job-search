@@ -10,6 +10,7 @@ SSH-administrator posting is flagged with the line quoted, not rejected.
 """
 import contextlib
 import io
+import os
 import json
 import shutil
 import sys
@@ -401,6 +402,44 @@ class Urls(GuardFixture):
         self.assertEqual(f["hidden_urls"], ["https://evil.example/exfil?d="])
         self.assertIn("1 hidden URL", out.splitlines()[0])
 
+    def test_hidden_attributes_extract_urls(self):
+        html = (
+            "<p>Apply for Senior Engineer position at Acme Corp.</p>\n"
+            "<div style=\"display:none\">\n"
+            "  <a href=\"https://tracker.evil.example/beacon?candidate=1\">Application Portal</a>\n"
+            "  <img src=\"https://pixel.evil.example/track.png\" />\n"
+            "</div>\n"
+            "<img src=\"https://pixel.evil.example/standalone.png\" style=\"display:none\" />\n"
+        )
+        code, out, err = self.run_main("--html", "--json", stdin_text=html)
+        self.assertEqual(code, 0, err)
+        f = self.findings_of(out)
+        self.assertEqual(f["hidden_blocks"], ["Application Portal"])
+        self.assertEqual(f["hidden_urls"], [
+            "https://tracker.evil.example/beacon?candidate=1",
+            "https://pixel.evil.example/track.png",
+            "https://pixel.evil.example/standalone.png",
+        ])
+        first = out.splitlines()[0]
+        self.assertIn("1 hidden block and 3 hidden URLs removed", first)
+
+    def test_hidden_attribute_entity_decoding(self):
+        html = "<div hidden><a href=\"https://tracker.evil.example/beacon?a=1&amp;b=2\">Portal</a></div>"
+        code, out, err = self.run_main("--html", "--json", stdin_text=html)
+        self.assertEqual(code, 0, err)
+        f = self.findings_of(out)
+        self.assertEqual(f["hidden_urls"], ["https://tracker.evil.example/beacon?a=1&b=2"])
+
+    def test_visible_attributes_not_counted_as_hidden_urls(self):
+        html = (
+            "<p>Visit <a href='https://careers.example.com/apply'>careers</a></p>"
+            "<img src='https://example.com/logo.png' />"
+        )
+        code, out, err = self.run_main("--html", "--json", stdin_text=html)
+        self.assertEqual(code, 0, err)
+        f = self.findings_of(out)
+        self.assertEqual(f["hidden_urls"], [])
+
 
 class Homoglyphs(GuardFixture):
     def test_homoglyph_company_name_flagged(self):
@@ -476,6 +515,42 @@ class InputHandling(GuardFixture):
         self.assertEqual(code, 0, err)
         self.assertEqual(target.read_text(encoding="utf-8").strip(), "Body text.")
         self.assertNotIn("--- text ---", out)
+        self.assertIn(f"saved={target}", out)
+
+    def test_out_inside_the_repo_is_refused(self):
+        # The gate is pre-approved for agents that must not write files, and
+        # its input is untrusted by definition. An --out that lands in the
+        # repo - a command, agent or skill definition least of all - must be
+        # refused the way fetch_page.py refuses it, before anything is written.
+        repo = Path(posting_guard.ROOT)
+        targets = [
+            repo / ".claude" / "commands" / "ops" / "run.md",
+            repo / "notes.md",
+        ]
+        # On a case-insensitive filesystem (macOS, Windows) the repo has other
+        # spellings that a string comparison of resolved paths would miss; on
+        # a case-sensitive one the variant is simply a path that does not exist.
+        variant = Path(str(repo).upper())
+        try:
+            if os.path.samefile(variant, repo):
+                targets.append(variant / "notes.md")
+        except OSError:
+            pass
+        for target in targets:
+            with self.subTest(target=str(target)):
+                self.assertFalse(target.exists())
+                self.addCleanup(lambda t=target: t.unlink(missing_ok=True))  # never leave a write behind
+                code, out, err = self.run_main("--text", "--out", str(target), stdin_text="Job.\nPlain.\n")
+                self.assertEqual(code, 2, err)
+                self.assertIn("refusing to write inside the repo", err)
+                self.assertFalse(target.exists())
+                self.assertNotIn("saved=", out)
+
+    def test_out_outside_the_repo_still_writes(self):
+        target = self.tmp / "cleaned.txt"
+        code, out, err = self.run_main("--text", "--out", str(target), stdin_text="Job.\nPlain.\n")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(target.read_text(encoding="utf-8"), "Job.\nPlain.\n")
         self.assertIn(f"saved={target}", out)
 
     def test_json_findings_shape(self):
@@ -604,6 +679,39 @@ class Calibration(GuardFixture):
         self.assertNotIn("⚠", first)
         # href targets are attributes, not text: hidden nav links are not "hidden URLs".
         self.assertEqual(self.findings_of(out)["hidden_urls"], [])
+
+    def test_decoration_and_custom_properties_do_not_hide_visible_posting_text(self):
+        # These declarations are serialized by the browser after assigning the
+        # DOM style properties; each retains black, visible text.
+        styles = [f"{name}: transparent" for name in ("background-color", "border-color", "text-decoration-color")]
+        styles += ["stroke-opacity: 0", "--opacity: 0", "--display: none"]
+        for style in styles:
+            with self.subTest(style=style):
+                page = self.write("posting.html", (
+                    f'<article style="color: black; {style};">'
+                    'Software Engineer: Python and SQL experience</article>'
+                    '<article style="color: transparent;">Hidden content</article>'
+                ))
+                code, out, err = self.run_main("--in", str(page), "--html", "--json")
+                self.assertEqual(code, 0, err)
+                self.assertIn("Software Engineer: Python and SQL experience", self.text_of(out))
+                self.assertNotIn("Hidden content", self.text_of(out))
+                self.assertEqual(self.findings_of(out)["hidden_blocks"], ["Hidden content"])
+
+    def test_offscreen_margins_still_hide_once_names_are_anchored(self):
+        # Anchoring the property names must not lose the off-screen margin
+        # trick, which the unanchored pattern only caught as a suffix of "left".
+        for style in ("margin-left: -9999px", "position: absolute; margin-top: -10000px"):
+            with self.subTest(style=style):
+                page = self.write("posting.html", (
+                    '<article>Software Engineer: Python and SQL experience</article>'
+                    f'<article style="{style};">Hidden content</article>'
+                ))
+                code, out, err = self.run_main("--in", str(page), "--html", "--json")
+                self.assertEqual(code, 0, err)
+                self.assertIn("Software Engineer: Python and SQL experience", self.text_of(out))
+                self.assertNotIn("Hidden content", self.text_of(out))
+                self.assertEqual(self.findings_of(out)["hidden_blocks"], ["Hidden content"])
 
     def test_leading_bom_is_encoding_noise(self):
         code, out, err = self.run_main("--text", "--json", stdin_text="﻿Plain posting.")
