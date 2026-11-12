@@ -32,7 +32,7 @@ Invoke this skill when the user wants to:
 
 - Search for job listings in Denmark (by keyword, location, category, or job type)
 - Browse available jobs in a specific Danish city, municipality, zip code, or region
-- Filter jobs by employment type (full-time, part-time, student job, apprentice, etc.)
+- Filter jobs by employment type (full-time, part-time); for fleksjob, student jobs, apprenticeships and internships use `--text` (e.g. `--text elevplads`)
 - Look up the full details of a specific job posting including description and deadline
 - List all job categories with current live job counts
 - Resolve a job search term into a job title ID or category ID for precise filtering
@@ -56,7 +56,7 @@ Key flags:
 - `--zip <code>` — zip code, e.g. `5000`, `8000`, `2100`
 - `--region <name>` — landsdel (`locations` category `region`), e.g. `Sjælland`, `Østjylland`, `Fyn`
 - `--administrative-region <name>` — one of the five regions (`locations` category `administrativeRegion`), e.g. `Region Midtjylland`
-- `--job-type <types>` — comma-separated: `fuldtid`, `deltid`, `fleksjob`, `elev`, `studiejob`, `praktik`
+- `--job-type <types>` — comma-separated filters still listed by the settings API: `fuldtid`, `deltid`, `fleksjob`, `elev`, `studiejob`, `praktik`. No live ad carries `fleksjob`, `elev`, `studiejob`, or `praktik`; use `--text` for those (e.g. `--text elevplads`).
 - `--page <n>` — page number (30 items per page, server-enforced)
 - `--limit <n>` — cap total results returned by CLI
 - `--format json|table|plain`
@@ -167,7 +167,7 @@ bun run .agents/skills/jobdanmark-search/cli/src/cli.ts search \
 ```bash
 bun run .agents/skills/jobdanmark-search/cli/src/cli.ts search \
   --municipality "Aarhus" \
-  --job-type studiejob \
+  --text studiejob \
   --format table
 ```
 
@@ -203,7 +203,7 @@ bun run .agents/skills/jobdanmark-search/cli/src/cli.ts search \
 
 ```bash
 bun run .agents/skills/jobdanmark-search/cli/src/cli.ts search \
-  --job-type elev \
+  --text elevplads \
   --page 1 \
   --format table
 ```
@@ -229,4 +229,4 @@ All errors are written to **stderr** as `{ "error": "...", "code": "..." }` and 
 - The `detail` command fetches the HTML job page and parses embedded JSON-LD when available, with a rendered-HTML fallback for pages that omit structured data. It does not use a separate JSON API.
 - `slug` in search results is extracted from the API's relative `url` field (the path after `/job/`); it is also emitted as `id`, the portal-contract name every search CLI shares.
 - `applicationDeadline` in search results can be `null` (no deadline set).
-- Job type values for filters: `fuldtid`, `deltid`, `fleksjob`, `elev`, `studiejob`, `praktik`.
+- The settings API still lists `fuldtid`, `deltid`, `fleksjob`, `elev`, `studiejob` and `praktik`. No live ad carries `fleksjob`, `elev`, `studiejob`, or `praktik`. Use `--text` for those.
