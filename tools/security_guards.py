@@ -67,9 +67,9 @@ ALLOWED_PERMISSIONS = {
     "Skill(job-application-assistant)",
     # No portal CLI ships here (they live in ai-job-search-dev/community-portals),
     # and no blanket Bash(bun run:*), which pre-approved `bun run <any file>`.
-    # A portal a fork copies in or adds with /add-portal needs its own
-    # `Bash(bun run .agents/skills/<name>/cli/src/cli.ts:*)` entry here and in
-    # .claude/settings.json - that review step is the point.
+    # A fork's portal is pre-approved only inside its own skill (_own_cli_grant);
+    # for /scrape, /apply and /rank it adds `Bash(bun run .agents/skills/<name>/cli/src/cli.ts:*)`
+    # here and in .claude/settings.json, per /add-portal.
     "Bash(python salary_lookup.py:*)",
     "Bash(python3 salary_lookup.py:*)",
     "Bash(python tools/rank_state.py:*)",

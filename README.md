@@ -115,7 +115,7 @@ cd ai-job-search
 
 AI Job Search ships no job-board CLIs; without one, `/scrape` searches with WebSearch. Pick your boards in [community-portals](https://github.com/ai-job-search-dev/community-portals) (`portals/<country>/`, or `portals/global/` for LinkedIn and multi-market boards), and ask your agent, swapping in your board's folder:
 
-> Copy https://github.com/ai-job-search-dev/community-portals/tree/main/portals/dk/jobindex-search into `.agents/skills/`, show me what it does, then run `python3 tools/install_portal_clis.py`.
+> Copy https://github.com/ai-job-search-dev/community-portals/tree/main/portals/dk/jobindex-search into `.agents/skills/` and show me its code and what it does. Once I confirm, run `python3 tools/install_portal_clis.py` (Windows: `python tools\install_portal_clis.py`).
 
 `/setup` prints this prompt for the boards you name.
 
@@ -303,7 +303,7 @@ Language is the one deal-breaker type with dedicated, structured handling: `/set
 
 **Copying a portal skill in** is the intended way to get a job board: find it in [community-portals](https://github.com/ai-job-search-dev/community-portals) (or in a fork from the [community index](https://github.com/ai-job-search-dev/ai-job-search/discussions/78)) and copy the one folder into your own `.agents/skills/`. Before you run it:
 
-- **Read the code.** All of it - these CLIs run on your machine against your career data, and once you pre-approve one in `.claude/settings.json` it runs without asking. Check that the only network calls go to the job board it claims to search, that `package.json` has no `dependencies` and no lifecycle scripts (`postinstall` etc.), and that nothing reads or writes outside its own folder.
+- **Read the code.** All of it - these CLIs run on your machine against your career data, and its skill's own `allowed-tools` lets it run without asking while that skill runs; once you add its grant (see `/add-portal`'s pre-approval step), `/scrape`, `/apply` and `/rank` run it without asking too. Check that the only network calls go to the job board it claims to search, that `package.json` has no `dependencies` and no lifecycle scripts (`postinstall` etc.), and that nothing reads or writes outside its own folder.
 - **Run its tests offline** (`bun test` in the skill's `cli/` directory) - a well-built skill's tests pass with no network access.
 - Check the `enabled:` flag and the skill's own ToS notes.
 

@@ -192,7 +192,7 @@ Or manually: fork on GitHub, then clone your fork.
 ## 3. Add job portals and install their CLI dependencies
 AI Job Search ships no job-board CLIs. Portal skills live in [community-portals](https://github.com/ai-job-search-dev/community-portals), one folder per board under `portals/<country>/` (LinkedIn and multi-market boards under `portals/global/`). For each board you want, ask your agent, swapping in its folder:
 
-> Copy https://github.com/ai-job-search-dev/community-portals/tree/main/portals/dk/jobindex-search into `.agents/skills/`, show me what it does, then run `python3 tools/install_portal_clis.py`.
+> Copy https://github.com/ai-job-search-dev/community-portals/tree/main/portals/dk/jobindex-search into `.agents/skills/` and show me its code and what it does. Once I confirm, run `python3 tools/install_portal_clis.py` (Windows: `python tools\install_portal_clis.py`).
 
 `/setup` prints this prompt for the boards you name. To reinstall later, run from the repository root:
 
@@ -348,7 +348,7 @@ Make sure Bun is installed and you ran `python3 tools/install_portal_clis.py` af
 The cover letter template expects fonts in `cover_letters/OpenFonts/fonts/`. Make sure this directory exists and contains the Lato and Raleway font files.
 
 ### Stale `.claude/settings.local.json` from an older clone
-Shared Claude Code permissions now live in `.claude/settings.json`: an `allow` list scoped to the exact commands the workflow runs (the `tools/` scripts and `salary_lookup.py`; a portal CLI you copy in is added by path), an `ask` list that always prompts before the permission-defining files are edited or `git push` runs, and a `deny` list that blocks upload-shaped shell and reads of credential files in every mode. `SECURITY.md` has the full table. Earlier versions of this repo committed a broader `.claude/settings.local.json` that pre-approved `Bash(curl:*)`, `Bash(python:*)` and `Bash(bun:*)`. If you cloned before that change, git leaves the old file behind in your working copy, and its permissions still apply on top of `settings.json`. Delete it (or trim it to your own personal overrides):
+Shared Claude Code permissions now live in `.claude/settings.json`: an `allow` list scoped to the exact commands the workflow runs (the `tools/` scripts and `salary_lookup.py`; a portal CLI you copy in is pre-approved only inside its own skill, so `/scrape`, `/apply` and `/rank` prompt for it until you add its entry here by path, as `/add-portal` describes), an `ask` list that always prompts before the permission-defining files are edited or `git push` runs, and a `deny` list that blocks upload-shaped shell and reads of credential files in every mode. `SECURITY.md` has the full table. Earlier versions of this repo committed a broader `.claude/settings.local.json` that pre-approved `Bash(curl:*)`, `Bash(python:*)` and `Bash(bun:*)`. If you cloned before that change, git leaves the old file behind in your working copy, and its permissions still apply on top of `settings.json`. Delete it (or trim it to your own personal overrides):
 
 ```bash
 rm .claude/settings.local.json
