@@ -28,6 +28,7 @@ salary_data.json
 # Backups written by `tools/job_key.py --audit --migrate` hold the same history.
 **/job_scraper/seen_jobs.json.bak-*
 **/job_scraper/notion_sync.json
+**/job_scraper/apply_progress.json
 **/job_scraper/*.md
 *_BehavioralReport.pdf
 linkedin_Profile.pdf
