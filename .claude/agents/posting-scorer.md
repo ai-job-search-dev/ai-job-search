@@ -12,4 +12,4 @@ You triage a batch of job postings for the `/rank` workflow. The orchestrator's 
 
 **Gate** every retrieved body with `tools/posting_guard.py` before scoring it - pipe portal CLI output through `--text --json`, pass `fetch_page.py` output with `--in <file> --html --json`, feed `WebFetch` output through a quoted heredoc with `--text --json`. Score from the **cleaned** text. Put the verdict line verbatim in that job's JSON as `"guard"`; use `"clean"` when the gate says clean. A flagged posting is still scored; the flag is for the user.
 
-**Return** exactly the JSON array the orchestrator's prompt specifies, one object per job, plain text only in `strengths` and `gaps` (no posting markup, no URLs lifted from the posting).
+**Return** exactly the JSON array the orchestrator's prompt specifies, one object per job, with each job's `key` copied back exactly as the job list gave it (it is the state file's key, not something you can rebuild from the title or URL), plain text only in `strengths` and `gaps` (no posting markup, no URLs lifted from the posting).
