@@ -409,7 +409,9 @@ def check_skill_tool_grants() -> None:
     skills = sorted(ROOT.glob(".claude/skills/*/SKILL.md")) + sorted(
         ROOT.glob(".agents/skills/*/SKILL.md")
     )
-    commands = sorted((ROOT / ".claude" / "commands").glob("*.md"))
+    # rglob, not glob: Claude Code loads namespaced commands from subfolders of
+    # .claude/commands/, so a grant in commands/ops/evil.md is live too.
+    commands = sorted((ROOT / ".claude" / "commands").rglob("*.md"))
     for path in skills + commands:
         rel = path.relative_to(ROOT).as_posix()
         try:
@@ -785,7 +787,7 @@ def check_tracked_node_modules() -> None:
 
 
 def check_agent_tool_grants() -> None:
-    for path in sorted((ROOT / ".claude" / "agents").glob("*.md")):
+    for path in sorted((ROOT / ".claude" / "agents").rglob("*.md")):
         rel = path.relative_to(ROOT).as_posix()
         try:
             data = _frontmatter(path.read_text(encoding="utf-8"))
