@@ -127,6 +127,7 @@ After creating or updating a CV or cover letter, re-read the generated file and 
 - [ ] No LaTeX syntax errors (balanced braces, correct commands)
 - [ ] No spelling or grammar errors
 - [ ] Agentic coding / AI tooling references mention **Claude Code** by name
+- [ ] Echo traps checked per `10-echo-traps.md`: no posting voice words or 5+ word phrases copied from the posting left unflagged
 - [ ] Cover letter is addressed to the correct person (or "Dear Hiring Manager" if unknown)
 - [ ] Cover letter fits approximately one page
 - [ ] CV section headings (`\section{...}`) and the References boilerplate line match the CV's language, not left as the English template defaults (see `05-cv-templates.md`)
