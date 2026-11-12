@@ -78,6 +78,29 @@ class UpstreamCheckerRepoFixture(unittest.TestCase):
         )
 
 
+class NonUtf8LocalFileTests(UpstreamCheckerRepoFixture):
+    def setUp(self):
+        super().setUp()
+        self.add_remote("upstream", TEMPLATE_URL)
+        self.materialize_remote_ref("upstream")
+
+    def test_non_utf8_local_file_is_a_finding_not_a_traceback(self):
+        # A personalized profile saved in cp1252 (an é in a name) ended the
+        # comparison with a UnicodeDecodeError traceback before any file was
+        # reported; the other files were never compared.
+        rel = FRAMEWORK_FILES[0]
+        (self.root / rel).write_bytes((FRONTMATTER + "Café\n").encode("cp1252"))
+
+        result = self.run_checker()
+
+        # Configuration errors are reported and warned about, not exit 1 - the
+        # same contract a missing local file already has.
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(f"Local file is not valid UTF-8 (byte 36): {rel}", result.stdout)
+        self.assertIn("[WARNING] Framework check incomplete", result.stdout)
+        self.assertNotIn("Traceback", result.stderr)
+
+
 class ForkWithoutUpstreamRemoteTests(UpstreamCheckerRepoFixture):
     def setUp(self):
         super().setUp()
