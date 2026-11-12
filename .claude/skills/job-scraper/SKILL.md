@@ -55,6 +55,8 @@ Read `search-queries.md` (this directory) for the search strategy. By default, r
 
 #### 1a. Check bun availability
 
+First check for installed portals: if none exists (see **No portal installed** in 1b), take that path regardless of bun and skip this check. Otherwise:
+
 ```bash
 bun --version
 ```
