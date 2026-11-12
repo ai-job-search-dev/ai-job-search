@@ -24,7 +24,7 @@ Rules implemented (RFC 9309), deliberately on the cautious side:
     on the first hop and on every redirect
 
 Usage:  python3 tools/robots_check.py <url>
-Exit 0 = the retry may proceed. Exit 1 = do not retry; go to escalation step 3.
+Exit 0 = the retry may proceed. Exit 1 = do not retry; go to escalation step 4.
 """
 
 import re, subprocess, sys
@@ -205,10 +205,10 @@ def gate(url):
             body = text; break
         last = 'HTTP %d' % code
     if body is None:
-        return 1, 'UNCONFIRMED (%s) - do not retry, go to step 3' % last
+        return 1, 'UNCONFIRMED (%s) - do not retry, go to step 4' % last
     for a in ('Claude-User', '*'):
         if not allowed(body, a, path):
-            return 1, f'DISALLOWED for {a} - do not retry, go to step 3'
+            return 1, f'DISALLOWED for {a} - do not retry, go to step 4'
     return 0, 'ALLOWED - robots.txt permits this path'
 
 def _force_utf8_output() -> None:
