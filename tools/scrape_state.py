@@ -29,14 +29,23 @@ def read_jobs(path: Path) -> list:
 
 
 def identity(job: dict) -> tuple[str, tuple[str, str]]:
-    for field in ("title", "company", "url"):
+    for field in ("title", "url"):
         if not isinstance(job.get(field), str) or not job[field].strip():
             raise ValueError(f"job needs a non-empty {field}")
+    # The portal contract (add-portal.md) says a missing value is null, never
+    # omitted, and freehire, linkedin and jobindex all emit `company: null`
+    # for a posting whose employer the board does not name. That is a real
+    # posting, not a portal data error: identity is the URL plus the
+    # (company, title) pair with an empty company half, and job_key's own
+    # fallback ("unknown-company") keys it on store.
+    company = job.get("company")
+    if company is not None and not isinstance(company, str):
+        raise ValueError("job has a non-string company")
     url = job["url"].strip()
     parsed = urlsplit(url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise ValueError(f"job has an invalid posting URL: {url}")
-    return url.rstrip("/"), (norm(job["company"]), norm(job["title"]))
+    return url.rstrip("/"), (norm(company), norm(job["title"]))
 
 
 def select(jobs: list, seen: dict, tracker: set, *, strict: bool = False) -> tuple[list[dict], dict]:
