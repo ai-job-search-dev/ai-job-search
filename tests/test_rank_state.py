@@ -455,6 +455,25 @@ class Apply(RankStateCase):
         self.assertEqual(self.read_state()["a"]["status"], "expired")
         self.assertEqual([r["key"] for r in out["expired"]], ["a"])
 
+    def test_a_key_listed_twice_gets_one_treatment(self):
+        # Overlapping scorer batches return the same key twice. Both were
+        # applied: the report listed the job as unreachable and as ranked,
+        # and the stored state was whichever ran last. The first result now
+        # stands and the repeat is reported as an error.
+        self.write_state({"a": entry()})
+        out = self.run_tool("apply", "--results", self.results([
+            {"key": "a", "status": "unreachable", "fetch_error": "HTTP 403"},
+            self._scored(),
+        ]), expect=1)
+        treated = [r["key"] for arr in ("ranked", "vetoed", "expired", "unreachable", "gave_up") for r in out[arr]]
+        self.assertEqual(treated, ["a"], "one key, one row across the report")
+        self.assertEqual([e["key"] for e in out["errors"]], ["a"])
+        self.assertIn("more than once", out["errors"][0]["error"])
+        self.assertEqual([r["key"] for r in out["unreachable"]], ["a"], "the first result stands")
+        stored = self.read_state()["a"]
+        self.assertEqual(stored["status"], "unreachable", "the repeat never overwrites the first result")
+        self.assertNotIn("rank_score", stored)
+
     def test_null_deadline_does_not_erase_a_stored_one(self):
         """Absence is not a correction: a fetch that degraded to a listing page
         returns no deadline, and blanking the stored date would also put the

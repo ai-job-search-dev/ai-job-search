@@ -326,12 +326,22 @@ def cmd_apply(args) -> int:
         sys.exit("results file must be a JSON array of scoring objects")
 
     rows, expired, unreachable, gave_up, errors = [], [], [], [], []
+    applied = set()
     for result in results:
         if not isinstance(result, dict):
             errors.append({"key": None, "error": "result is not an object"})
             continue
         key = result.get("key")
         entry = seen.get(key) if isinstance(key, str) else None
+        # Two scorer batches that overlap return the same key twice. Applying
+        # both gave one job two treatments in one report (listed as both
+        # unreachable and ranked, say), with the stored state set by whichever
+        # came last. The first result for a key stands; a repeat is an error.
+        if entry is not None and key in applied:
+            errors.append({"key": key, "error": "key appears more than once in the results; the first result was applied"})
+            continue
+        if entry is not None:
+            applied.add(key)
         if entry is None:
             errors.append({"key": key, "error": "no such key in seen_jobs.json"})
             continue
