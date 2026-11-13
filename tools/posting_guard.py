@@ -131,13 +131,14 @@ VARIATION_RUN = re.compile("[︀-️\U000E0100-\U000E01EF]{2,}")
 
 HIDDEN_STYLE = re.compile(
     r"(?:^|;)\s*(?:display\s*:\s*none"
-    r"|visibility\s*:\s*hidden"
-    r"|opacity\s*:\s*0(?![.\d]*[1-9])"
-    r"|font-size\s*:\s*0(?:\.0+)?(?:px|pt|em|rem|%)?(?![\d.])"
+    r"|visibility\s*:\s*(?:hidden|collapse)"
+    r"|opacity\s*:\s*0(?:\.0(?:0\d*)?)?(?![\d.])"
+    r"|font-size\s*:\s*(?:0(?:\.0+)?(?:px|pt|em|rem|%)?|[012](?:\.\d+)?px)(?![\w.%])"
+    r"|transform\s*:\s*scale(?:[XYZ]|3d)?\(\s*0(?:\.0+)?(?![.\d])"
     r"|color\s*:\s*transparent"
     r"|clip\s*:\s*rect\(\s*0"
-    r"|clip-path\s*:\s*inset\(\s*100%"
-    r"|(?:(?:margin-)?(?:left|top)|text-indent)\s*:\s*-\d{4,}px)",
+    r"|clip-path\s*:\s*inset\(\s*(?:100|[5-9]\d)(?:\.\d+)?%"
+    r"|(?:(?:margin-)?(?:left|top)|text-indent)\s*:\s*-(?:99\d+|\d{4,})(?:px|em|rem))",
     re.I,
 )
 PRESTRIP = re.compile(r"<!DOCTYPE[^>]*>|<\?[^>]*\?>", re.I)
