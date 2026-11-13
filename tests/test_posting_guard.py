@@ -152,6 +152,61 @@ class HiddenContent(GuardFixture):
         self.assertIn("Faded but visible.", self.text_of(out))
         self.assertEqual(self.findings_of(out)["hidden_blocks"], [])
 
+    def test_css_invisibility_tricks_are_removed_and_reported(self):
+        html = (
+            "<html><body><p>Visible job spec.</p>"
+            "<span style='font-size: 1px'>secret-tiny-font</span>"
+            "<div style='visibility: collapse'>secret-collapsed</div>"
+            "<div style='transform: scale(0)'>secret-scaled-zero</div>"
+            "<div style='clip-path: inset(50%)'>secret-clipped-inset</div>"
+            "<div style='left: -999px'>secret-offscreen-left</div>"
+            "<div style='text-indent: -9999em'>secret-offscreen-indent</div>"
+            "<div style='opacity: 0.001'>secret-near-zero-opacity</div>"
+            "</body></html>"
+        )
+        code, out, err = self.run_main("--html", "--json", stdin_text=html)
+        self.assertEqual(code, 0, err)
+        text = self.text_of(out)
+        self.assertIn("Visible job spec.", text)
+        for secret in (
+            "secret-tiny-font",
+            "secret-collapsed",
+            "secret-scaled-zero",
+            "secret-clipped-inset",
+            "secret-offscreen-left",
+            "secret-offscreen-indent",
+            "secret-near-zero-opacity",
+        ):
+            self.assertNotIn(secret, text)
+        f = self.findings_of(out)
+        self.assertEqual(len(f["hidden_blocks"]), 7)
+
+    def test_legitimate_styles_are_not_hidden(self):
+        html = (
+            "<html><body>"
+            "<p style='font-size: 1em'>Standard em text.</p>"
+            "<p style='font-size: 1rem'>Standard rem text.</p>"
+            "<p style='font-size: 14px'>Standard 14px text.</p>"
+            "<p style='font-size: 100%'>Standard percentage text.</p>"
+            "<p style='margin-left: -15px'>Slight margin adjustment.</p>"
+            "<p style='transform: scale(1)'>Full scale text.</p>"
+            "</body></html>"
+        )
+        code, out, err = self.run_main("--html", "--json", stdin_text=html)
+        self.assertEqual(code, 0, err)
+        text = self.text_of(out)
+        for expected in (
+            "Standard em text.",
+            "Standard rem text.",
+            "Standard 14px text.",
+            "Standard percentage text.",
+            "Slight margin adjustment.",
+            "Full scale text.",
+        ):
+            self.assertIn(expected, text)
+        f = self.findings_of(out)
+        self.assertEqual(f["hidden_blocks"], [])
+
 
 class InvisibleCharacters(GuardFixture):
     def test_zero_width_laced_instruction_is_normalised_and_flagged(self):
