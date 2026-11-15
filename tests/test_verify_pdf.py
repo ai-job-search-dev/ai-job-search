@@ -389,6 +389,14 @@ class DumpTargetTests(unittest.TestCase):
         mock_verify.assert_not_called()
         self.assertFalse(target.parent.exists(), "the CLI must not create the parent directory")
 
+    @patch("tools.verify_pdf.verify_pdf")
+    def test_cli_rejects_negative_min_chars_before_extraction(self, mock_verify):
+        with patch("sys.stderr") as stderr:
+            code = main(["cv/main_example.pdf", "--min-chars", "-1"])
+        self.assertEqual(code, 1)
+        self.assertIn("--min-chars must be zero or greater", "".join(c.args[0] for c in stderr.write.call_args_list))
+        mock_verify.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

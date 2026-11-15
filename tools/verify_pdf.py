@@ -371,6 +371,9 @@ def _force_utf8_output() -> None:
 def main(argv=None):
     _force_utf8_output()
     args = build_parser().parse_args(argv)
+    if args.min_chars < 0:
+        print("Error: --min-chars must be zero or greater", file=sys.stderr)
+        return 1
     if args.dump_text is not None:
         reason = check_dump_target(args.dump_text)
         if reason:
