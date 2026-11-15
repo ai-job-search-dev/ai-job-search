@@ -131,6 +131,8 @@ def main() -> int:
         fm = parse_frontmatter(path)
         if "framework_version" not in fm:
             errors.append(f"{rel_path}: missing 'framework_version' in frontmatter")
+        elif not re.fullmatch(r"\d+\.\d+\.\d+", fm["framework_version"]):
+            errors.append(f"{rel_path}: invalid 'framework_version' in frontmatter")
             
     # 2. Check for missing version bumps in modified files
     base_commit = get_base_commit()

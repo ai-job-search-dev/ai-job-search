@@ -126,6 +126,15 @@ class FrameworkVersionGateTests(CheckerRepoFixture):
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("missing 'framework_version'", result.stdout)
 
+    def test_invalid_version_marker_fails(self):
+        self.framework_file.write_text(
+            FRONTMATTER.replace("1.0.0", "invalid") + BODY,
+            encoding="utf-8",
+        )
+        result = self.run_checker()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("invalid 'framework_version'", result.stdout)
+
 class WindowsGitPathTests(unittest.TestCase):
     def test_diff_and_show_use_posix_paths_for_windows_checkout(self):
         import importlib.util
