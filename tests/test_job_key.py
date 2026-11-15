@@ -276,6 +276,13 @@ class AuditCLI(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("deloitte_junior-cybersecurity-analyst-(ot/iot)", report["malformed_keys"])
 
+    def test_empty_legacy_key_segment_is_malformed(self):
+        key = "acme_soc-analyst_"
+        report, code = self.run_audit({key: {"company": "Acme", "title": "SOC Analyst"}})
+        self.assertEqual(code, 1)
+        self.assertIn(key, report["malformed_keys"])
+        self.assertNotIn(key, report["legacy_three_part_keys"])
+
     def test_duplicate_url_exits_nonzero(self):
         report, code = self.run_audit(
             {

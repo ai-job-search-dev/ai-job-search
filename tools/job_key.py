@@ -210,7 +210,7 @@ def is_legacy_shape(key: str) -> bool:
     stays a decision rather than an automatic rename.
     """
     return bool(key) and key.count("_") > 1 and all(
-        re.fullmatch(r"[a-z0-9][a-z0-9-]*", part) for part in key.split("_") if part
+        re.fullmatch(r"[a-z0-9][a-z0-9-]*", part) for part in key.split("_")
     )
 
 
