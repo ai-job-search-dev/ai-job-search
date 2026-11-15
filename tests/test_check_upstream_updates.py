@@ -241,6 +241,13 @@ class IncompleteComparisonTests(UpstreamCheckerRepoFixture):
         self.assertIn("[WARNING] Framework check incomplete", result.stdout)
         self.assertNotIn("[OK]", result.stdout)
 
+    def test_invalid_local_version_does_not_report_up_to_date(self):
+        (self.root / "AGENTS.md").write_text(FRONTMATTER.replace("1.0.0", "invalid"), encoding="utf-8")
+        result = self.run_checker()
+        self.assertIn("invalid 'framework_version'", result.stdout)
+        self.assertIn("[WARNING] Framework check incomplete", result.stdout)
+        self.assertNotIn("[OK]", result.stdout)
+
     def test_missing_upstream_marker_does_not_report_all_files_up_to_date(self):
         agents = self.root / "AGENTS.md"
         agents.write_text("# Upstream guidelines without a version marker\n", encoding="utf-8")

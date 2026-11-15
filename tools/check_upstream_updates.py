@@ -162,6 +162,12 @@ def main() -> int:
         if not upstream_ver:
             errors.append(f"Upstream file {rel_path} is missing 'framework_version' in frontmatter.")
             continue
+        if not re.fullmatch(r"v?\d+\.\d+\.\d+", local_ver):
+            errors.append(f"Local file {rel_path} has invalid 'framework_version': {local_ver}")
+            continue
+        if not re.fullmatch(r"v?\d+\.\d+\.\d+", upstream_ver):
+            errors.append(f"Upstream file {rel_path} has invalid 'framework_version': {upstream_ver}")
+            continue
             
         if parse_semver(upstream_ver) > parse_semver(local_ver):
             updates_available.append({
