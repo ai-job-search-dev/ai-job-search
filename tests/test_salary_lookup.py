@@ -327,7 +327,7 @@ class ValidateDataShapeTests(ValidateDataTests):
                 {"company": "Acme", "categories": {"eng": {"count": "many"}}}
             ]
         }
-        self.assert_invalid_data(data, "count must be a number")
+        self.assert_invalid_data(data, "count must be a finite number")
 
     def test_duplicate_company_name_is_warning(self):
         data = {
@@ -351,6 +351,53 @@ class ValidateDataShapeTests(ValidateDataTests):
         errors, warnings = collect_validation_issues(data)
         self.assertEqual(errors, [])
         self.assertEqual(warnings, [])
+
+    # --validate already refuses a bool or non-finite metadata.index_baseline.
+    # The count/index checks used a bare isinstance(value, (int, float)), so the
+    # same two values slipped into salary data: bool is an int subclass, and
+    # float("inf")/float("nan") are floats. --validate blesses them, then --json
+    # emits the invalid JSON constants Infinity/NaN and format_entry renders
+    # "inf", "+inf%" or "True" as if they were real salary figures.
+    def test_bool_category_count_is_rejected(self):
+        data = {"companies": [{"company": "Acme", "categories": {"eng": {"count": True}}}]}
+        self.assert_invalid_data(data, "count must be a finite number")
+
+    def test_bool_category_index_is_rejected(self):
+        data = {"companies": [{"company": "Acme", "categories": {"eng": {"index": False}}}]}
+        self.assert_invalid_data(data, "index must be a finite number or string")
+
+    def test_nonfinite_category_count_is_rejected(self):
+        data = {"companies": [{"company": "Acme", "categories": {"eng": {"count": float("nan")}}}]}
+        self.assert_invalid_data(data, "count must be a finite number")
+
+    def test_nonfinite_category_index_is_rejected(self):
+        data = {"companies": [{"company": "Acme", "categories": {"eng": {"index": float("inf")}}}]}
+        self.assert_invalid_data(data, "index must be a finite number or string")
+
+    def test_string_index_and_finite_numbers_stay_valid(self):
+        # The privacy-suppression text index ("private") is a legitimate string,
+        # and ordinary finite numbers must not be rejected by the tightened rule.
+        data = {
+            "companies": [
+                {"company": "Acme", "categories": {
+                    "eng": {"count": 5, "index": 108.5},
+                    "small_team": {"count": 3, "index": "private"},
+                }}
+            ]
+        }
+        self.assertEqual(collect_validation_issues(data), ([], []))
+
+    def test_huge_int_category_value_is_rejected_without_a_traceback(self):
+        # math.isfinite(10**400) raises OverflowError; a bare int is legal in
+        # JSON, so the validator must report it, not crash.
+        data = {"companies": [{"company": "Acme", "categories": {"eng": {"count": 10 ** 400}}}]}
+        self.assert_invalid_data(data, "count must be a finite number")
+
+    def test_huge_int_baseline_is_still_rejected(self):
+        # The metadata baseline already tolerated this case; the shared helper
+        # must keep that guard intact.
+        data = {"metadata": {"index_baseline": 10 ** 400}, "companies": []}
+        self.assert_invalid_data(data, "'metadata.index_baseline' must be a finite number")
 
 
 class ValidateFlagTests(unittest.TestCase):

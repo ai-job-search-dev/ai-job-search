@@ -53,6 +53,22 @@ def fail_data_error(message):
     sys.exit(1)
 
 
+def _finite_number(value):
+    """A genuine finite number: not a bool, not inf/NaN, not an int too large to float.
+
+    bool is an int subclass and inf/NaN are floats, so isinstance(value,
+    (int, float)) alone lets all three through. math.isfinite raises
+    OverflowError on an int larger than a float can hold (legal in JSON), so
+    that is not a number this validator can accept either.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
 def collect_validation_issues(data):
     """Return (errors, warnings) for the salary data shape.
 
@@ -73,11 +89,7 @@ def collect_validation_issues(data):
         errors.append("'metadata' must be an object when provided")
     elif isinstance(metadata, dict):
         baseline = metadata.get("index_baseline", 100)
-        try:
-            finite_baseline = math.isfinite(baseline)
-        except (TypeError, OverflowError):
-            finite_baseline = False
-        if isinstance(baseline, bool) or not finite_baseline:
+        if not _finite_number(baseline):
             errors.append("'metadata.index_baseline' must be a finite number")
         if not isinstance(metadata.get("index_label", "Index"), str):
             errors.append("'metadata.index_label' must be a string")
@@ -122,16 +134,25 @@ def collect_validation_issues(data):
                     )
                     continue
                 count = cat_data.get("count")
-                if count is not None and not isinstance(count, (int, float)):
+                # Hold count/index to the same finite-number rule as the
+                # metadata baseline: bool, inf and NaN used to pass a bare
+                # isinstance check, so --validate blessed data that --json emits
+                # as the invalid constants Infinity/NaN and the CLI renders as
+                # "inf"/"+inf%"/"True".
+                if count is not None and not _finite_number(count):
                     errors.append(
                         f"companies[{index}].categories.{cat_label}.count must be a "
-                        f"number (got {type(count).__name__})"
+                        f"finite number"
                     )
                 index_val = cat_data.get("index")
-                if index_val is not None and not isinstance(index_val, (int, float, str)):
+                # A string index ("private", the privacy-suppression marker) is
+                # legitimate; only numeric ones need the finite-number guard.
+                if index_val is not None and not (
+                    isinstance(index_val, str) or _finite_number(index_val)
+                ):
                     errors.append(
                         f"companies[{index}].categories.{cat_label}.index must be a "
-                        f"number or string (got {type(index_val).__name__})"
+                        f"finite number or string"
                     )
 
     return errors, warnings
