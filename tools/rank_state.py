@@ -561,6 +561,8 @@ def main() -> int:
     app.set_defaults(func=cmd_apply)
 
     args = ap.parse_args()
+    if args.command == "candidates" and args.limit < 0:
+        ap.error("--limit must be zero or greater")
     return args.func(args)
 
 

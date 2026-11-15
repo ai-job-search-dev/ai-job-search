@@ -64,6 +64,15 @@ class RankStateCase(unittest.TestCase):
 
 
 class Candidates(RankStateCase):
+    def test_negative_limit_is_rejected(self):
+        self.write_state({"a": entry()})
+        proc = subprocess.run(
+            [sys.executable, str(TOOL), "candidates", "--state", str(self.state), "--limit", "-1"],
+            capture_output=True, text=True,
+        )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("--limit must be zero or greater", proc.stderr)
+
     def test_selects_only_new_entries_and_projects_a_compact_row(self):
         self.write_state(
             {
