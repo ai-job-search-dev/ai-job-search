@@ -1,0 +1,103 @@
+%% Template: inter-classic - single-column resume (Latin Modern Sans, US Letter, black text, grey section rules)
+%% Compile with lualatex (fontspec + Latin Modern Sans from TeX Live).
+
+\documentclass[10pt,letterpaper]{article}
+
+% ---------- page & fonts ----------
+\usepackage[left=0.55in,right=0.55in,top=0.45in,bottom=0.5in]{geometry}
+\usepackage{fontspec}
+\setmainfont{Latin Modern Sans}   % same sans font as the moderncv version: lighter, more compact
+\usepackage{xcolor}
+\definecolor{cvblue}{rgb}{0.22,0.45,0.70}   % moderncv "blue" accent (color1)
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{needspace}
+\usepackage[colorlinks=true,urlcolor=cvblue,linkcolor=cvblue]{hyperref}
+\hypersetup{pdftitle={[YOUR_NAME] - Resume}, pdfauthor={[YOUR_NAME]}}
+
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+\linespread{1.0}
+\frenchspacing                       % single space after full stops
+\hyphenpenalty=10000 \exhyphenpenalty=10000  % no word-splitting hyphens
+\sloppy
+\clubpenalty=10000 \widowpenalty=10000  % never leave one line of a bullet alone on a page
+
+% ---------- section headings: bold, thin grey rule below ----------
+\titleformat{\section}{\fontsize{11}{13}\selectfont\bfseries\color{cvblue}}{}{0pt}{}[\vspace{1.5pt}{\color{cvblue!70}\titlerule[0.5pt]}]
+\titlespacing*{\section}{0pt}{8pt}{3pt}
+
+% ---------- bullets: tight, hanging "•" ----------
+\setlist[itemize]{label={\color{cvblue}$\bullet$}, leftmargin=0.85em, labelsep=0.3em,
+  itemsep=0pt, parsep=0pt, topsep=1pt, partopsep=0pt}
+
+% ---------- entry macros ----------
+% \company{Name}                      bold company line
+% \role{Title}{Location}{Dates}       bold-italic title | italic location · bold dates
+% \edu{School}{Dates}{Degree}{Place}
+\newcommand{\company}[1]{\needspace{4\baselineskip}\vspace{4pt}{\bfseries #1}\par}
+\newcommand{\role}[3]{\needspace{3\baselineskip}{\bfseries\itshape #1}\hfill{\itshape #2}~~·~~\textbf{#3}\par}
+\newcommand{\subrole}[3]{\vspace{2pt}\role{#1}{#2}{#3}}
+\newcommand{\edu}[4]{\textbf{#1}\hfill\textbf{#2}\par{\itshape #3}\hfill{\itshape #4}\par}
+\newcommand{\sep}{~~|~~}
+
+\begin{document}
+
+% ---------- header (name uppercase, regular weight; contact line small, pipe-separated, links underlined) ----------
+\begin{center}
+  {\fontsize{26}{30}\selectfont\color{cvblue} [YOUR_NAME_UPPERCASE]}\par
+  \vspace{4pt}
+  {\fontsize{8.5}{11}\selectfont
+  [YOUR_ADDRESS]\sep [YOUR_PHONE]\sep
+  \href{mailto:[YOUR_EMAIL]}{\underline{[YOUR_EMAIL]}}\sep
+  \href{[YOUR_LINKEDIN_URL]}{\underline{[YOUR_LINKEDIN_URL]}}\par
+  \href{[YOUR_GITHUB_URL]}{\underline{[YOUR_GITHUB_URL]}}\sep
+  \href{[YOUR_BLOG_URL]}{\underline{[YOUR_BLOG_URL]}}\par}
+\end{center}
+\vspace{-6pt}
+
+\section*{Summary}
+[SUMMARY_PARAGRAPH]
+
+\section*{Core Competencies}
+\begin{itemize}
+  \item \textbf{[COMPETENCY_AREA]}: [EVIDENCE_AND_SKILLS]
+\end{itemize}
+
+\section*{Work Experience}
+
+\company{[COMPANY_1]}
+\role{[TITLE_1]}{[LOCATION_1]}{[START] - [END]}
+\begin{itemize}
+  \item [BULLET]
+  \item [BULLET]
+\end{itemize}
+
+% Earlier role at the same company: no repeated company line
+\subrole{[TITLE_1B]}{[LOCATION_1B]}{[START] - [END]}
+\begin{itemize}
+  \item [BULLET]
+\end{itemize}
+
+\company{[COMPANY_2]}
+\role{[TITLE_2]}{[LOCATION_2]}{[START] - [END]}
+\begin{itemize}
+  \item [BULLET]
+\end{itemize}
+
+\section*{Skills}
+{\raggedright
+\begin{itemize}
+  \item \textbf{[CATEGORY]}: [SKILLS]
+\end{itemize}\par}
+
+\section*{Education}
+\edu{[UNIVERSITY]}{[START] - [END]}{[DEGREE]}{[CITY, COUNTRY]}
+
+\section*{Certifications}
+\begin{itemize}
+  \item [CERTIFICATION]: [ISSUER]
+\end{itemize}
+
+\end{document}

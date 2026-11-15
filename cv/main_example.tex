@@ -1,8 +1,7 @@
-%% Example CV - [YOUR_NAME]
+%% Example CV - Vikas Kumar
 %% Comprehensive overview of all competencies, experience, and achievements.
 %% Use as a master reference when tailoring role-specific CVs.
 %%
-%% SETUP: Run /setup to populate this with your actual information.
 %% Compile with: lualatex main_example.tex
 %% (pdflatex often fails on modern MiKTeX with fontawesome5 font-expansion errors.)
 
@@ -40,7 +39,7 @@
     linkcolor=blue,
     filecolor=magenta,
     urlcolor=blue,
-    pdftitle={[YOUR_NAME] - CV},
+    pdftitle={Vikas Kumar - CV},
     % Keep pdfpagemode=UseNone: this block runs after moderncv's own
     % \AtEndPreamble (moderncv.cls sets pdfpagemode there), so a FullScreen
     % value here would win and open every CV in fullscreen presentation mode.
@@ -50,24 +49,24 @@
 \usepackage{import}
 
 % personal data
-\name{[First]}{[Last]}
-% If you have no address to list, DELETE this whole line. \address{}{}{} fails
-% with "There's no line here to end" on every moderncv version.
-\address{[Your Address, City, Country]}{}{}
-\phone[mobile]{[+XX XXXXXXXXXX]}
-\email{[your.email@example.com]}
-\extrainfo{\href{[https://linkedin.com/in/your-profile]}{LinkedIn}, \href{[https://github.com/your-username]}{GitHub}}
+\name{Vikas}{Kumar}
+\address{Bachupally, Hyderabad, Telangana 500090, India}{}{}
+\phone[mobile]{+91 9137724770}
+\email{vikas.mca.jnu@gmail.com}
+\extrainfo{\href{https://linkedin.com/in/logsv/}{LinkedIn}, \href{https://github.com/logsv}{GitHub}, \href{https://logsv.medium.com/}{Blog}}
 
 \begin{document}
 
 \makecvtitle
+\vspace{-1.6\baselineskip} % close the default gap between the contact block and the first section
 
 % ============================================================
-%     PROFILE STATEMENT
+%     SUMMARY (profile statement)
 % ============================================================
 
-\vspace{6pt}
-\small{[Write a 3-5 line profile statement tailored to the role you're applying for. Focus on what makes you uniquely qualified. Example: "Data scientist with a PhD in [field] and X years of industry experience. Combines deep domain expertise in [domain] with strong applied machine learning and Python development skills. Experienced in developing end-to-end ML pipelines, from data ingestion to stakeholder-facing dashboards."]}
+\section{Summary}
+\vspace{1pt}
+{Engineering Manager with 12+ years of experience building large-scale commerce and payment systems, backend services, and AI/LLM products. Led teams of up to 20 engineers, driving technical execution, improving team productivity, and delivering business impact, including a 40\% increase in checkout conversion. Strong in backend architecture, high-traffic systems, event-driven microservices, LLM evaluation workflows, and agentic AI systems.}
 
 % ============================================================
 %     CORE COMPETENCIES
@@ -77,15 +76,15 @@
 \vspace{1pt}
 \begin{itemize}
 
-\item \textbf{[Skill Category 1]}: [Specific skills, frameworks, tools. Be concrete.]
+\item \textbf{Engineering Leadership}: Led teams of up to 20 engineers across commerce and AI; 60\% productivity gain and 40\% shorter release cycles at Fynd.
 
-\item \textbf{[Skill Category 2]}: [Specific skills, frameworks, tools.]
+\item \textbf{Backend \& Distributed Systems}: Python, Node.js, FastAPI, Go; microservices, Kafka, Temporal, event-driven architecture; 2M+ RPM at 99.95\% availability.
 
-\item \textbf{[Skill Category 3]}: [Specific skills, frameworks, tools.]
+\item \textbf{Payments \& Commerce}: Cart, checkout, promotions, payment-as-a-service, partner SDKs, 40+ payment gateways, GDPR and SOC2 readiness.
 
-\item \textbf{[Skill Category 4]}: [Domain expertise, methods, approaches.]
+\item \textbf{AI/LLM Engineering}: LLM and AI agent evaluation (SWE-bench, RLHF, Amazon T-Bench), LangGraph, RAG, MCP, OpenAI, Vertex AI, LangSmith.
 
-\item \textbf{[Skill Category 5]}: [Tools, platforms, software.]
+\item \textbf{Data \& Cloud}: PostgreSQL, MySQL, Redis, MongoDB, Elasticsearch, pgvector; BigQuery, CDC, Dataflow; AWS, GCP, Kubernetes, Docker, Terraform; Prometheus, Grafana, Sentry, Jaeger, ELK.
 
 \end{itemize}
 
@@ -97,32 +96,67 @@
 \vspace{3pt}
 \begin{itemize}
 
-% --- Most Recent Role ---
-\item{\cventry{[YYYY-Present]}{[Job Title]}{[Company]}{[City, Country]}{}{\vspace{1pt}
+\item{\cventry{Oct 2025 - Present}{Engineering Manager-2}{Turing}{Hyderabad, India (Remote)}{}{\vspace{1pt}
 \begin{itemize}
-    \item {[Achievement or responsibility 1 - be specific, use numbers where possible]}
-    \item {[Achievement or responsibility 2]}
-    \item {[Achievement or responsibility 3]}
-    \item {[Achievement or responsibility 4]}
+    \item {Lead a team of up to 20 members on LLM and AI agent evaluation for Amazon T-Bench, owning the team's execution and evaluation quality.}
+    \item {Led RLHF trainer teams on SWE-bench and coding evaluation projects for Anthropic and Meta models, contributing to 1,500+ datasets and evaluations.}
+    \item {Drove dataset creation and AutoQA workflow improvements by translating evaluation quality gaps and operational bottlenecks into actionable engineering requirements.}
+    \item {Partnered with platform and tooling teams on Evals and Rubric Validator workflows, contributing to a 30\% improvement in dataset review throughput.}
 \end{itemize}}}
 
 \vspace{3pt}
 
-% --- Previous Role ---
-\item{\cventry{[YYYY-YYYY]}{[Job Title]}{[Company]}{[City, Country]}{}{\vspace{1pt}
+\item{\cventry{Oct 2022 - Sep 2025}{Engineering Manager}{Fynd (Shopsense Retail Technologies Ltd.)}{Mumbai, India}{}{\vspace{1pt}
 \begin{itemize}
-    \item {[Achievement or responsibility 1]}
-    \item {[Achievement or responsibility 2]}
-    \item {[Achievement or responsibility 3]}
+    \item {Led a 19-engineer Cart and Payments team across StoreOS, Fynd, and Jio Platform, driving a 40\% increase in checkout conversion.}
+    \item {Architected and built a payment extension ecosystem using FastAPI and Node.js, with SDKs for partner developers enabling sellers to install 40+ payment gateways.}
+    \item {Led 5 engineers across ML, backend, and data to build Gauze.md from scratch, developing cardiovascular AI with LLM and RAG workflows and ECG/ECHO analysis.}
+    \item {Drove an agentic commerce copilot using LLMs and LangGraph with commerce APIs, automating \textasciitilde{}75\% of support workflows.}
+    \item {Delivered multi-cart, split checkout, global payments, and promotions platforms, supporting 25\% transaction growth.}
+    \item {Closed GDPR and SOC2 gaps with Security across healthcare and payments platforms, ensuring audit readiness.}
+    \item {Improved team productivity by 60\% and reduced release cycle time by 40\% through team scaling and faster delivery.}
+\end{itemize}}}
+
+\item[]{\cventry{Oct 2021 - Oct 2022}{Software Development Engineer-3}{}{}{}{\vspace{1pt}
+\begin{itemize}
+    \item {Led design and development of Cart and Payments services using Python (FastAPI) and Node.js, supporting payment mode prioritisation, payment links, and coupons.}
+    \item {Architected cart and payment systems achieving 99.95\% availability and handling 2M+ RPM at 75ms p95 latency.}
+    \item {Drove architecture of Cart and Payments data platforms using CDC and BigQuery for analytics at scale.}
+    \item {Built an audit trail with Node.js and Kafka, reducing debugging time by 75\% and supporting compliance reporting.}
+\end{itemize}}}
+
+\item[]{\cventry{Apr 2018 - Oct 2021}{Senior Platform Engineer}{}{}{}{\vspace{1pt}
+\begin{itemize}
+    \item {Built a payment-as-a-service platform using Python, PostgreSQL, and AWS, enabling configurable payment gateways and payment modes at 100+ TPS.}
+    \item {Refactored monolithic order and payment systems into microservices, handling 1M+ RPM in load tests and sales.}
+    \item {Standardised API contracts with Swagger and SDK generation, cutting integration time by 60\%.}
+    \item {Improved Cart and Payments reliability, raising test coverage to 85\% and fixing 70\% of vulnerabilities.}
+    \item {Established observability across Cart and Payments with metrics, logs, and alerts, reducing MTTD by 70\%.}
 \end{itemize}}}
 
 \vspace{3pt}
 
-% --- Earlier Role ---
-\item{\cventry{[YYYY-YYYY]}{[Job Title]}{[Company]}{[City, Country]}{}{\vspace{1pt}
+\item{\cventry{May 2016 - Apr 2018}{Technology Developer}{Byond eTravel \& Entertainment Pvt. Ltd}{Bangalore, India}{}{\vspace{1pt}
 \begin{itemize}
-    \item {[Achievement or responsibility 1]}
-    \item {[Achievement or responsibility 2]}
+    \item {Built travel booking systems with Django, PostgreSQL, and Elasticsearch, streamlining search and booking.}
+    \item {Developed CMS tools and analytics dashboards using Django and JavaScript, reducing manual work by 70\%.}
+    \item {Developed a customer support chatbot using Google Dialogflow, automating 50\% of customer inquiries.}
+\end{itemize}}}
+
+\vspace{3pt}
+
+\item{\cventry{Apr 2015 - Apr 2016}{Software Engineer}{RedMonsterGames}{Bangalore, India}{}{\vspace{1pt}
+\begin{itemize}
+    \item {Built real-time game features using Go and AWS, improving gameplay stability and player engagement.}
+    \item {Developed analytics dashboards and improved system reliability through database optimisation and monitoring.}
+\end{itemize}}}
+
+\vspace{3pt}
+
+\item{\cventry{Nov 2014 - Mar 2015}{Software Engineer}{ShopClues}{Gurgaon, India}{}{\vspace{1pt}
+\begin{itemize}
+    \item {Developed logistics and order management features for e-commerce workflows, improving operational efficiency.}
+    \item {Optimised backend services and database queries to improve performance and reduce order-panel latency.}
 \end{itemize}}}
 
 \end{itemize}
@@ -135,16 +169,20 @@
 \vspace{1pt}
 \begin{itemize}
 
-\item{\cventry{[YYYY-YYYY]}{[Degree] in [Field]}{[Institution]}{[City, Country]}{}{\vspace{1pt}
-Thesis: ``[Thesis Title].'' [Brief description of research focus.]
-}}
+\item{\cventry{2011-2014}{Master of Computer Applications (MCA), Computer Science}{Jawaharlal Nehru University}{New Delhi, India}{}{}}
 
-\vspace{3pt}
+\end{itemize}
 
-\item{\cventry{[YYYY-YYYY]}{[Degree] in [Field]}{[Institution]}{[City, Country]}{}{\vspace{1pt}
-[Brief description or key topics.]
-}}
+% ============================================================
+%     CERTIFICATIONS
+% ============================================================
 
+\section{Certifications}
+\vspace{1pt}
+\begin{itemize}
+\item AI Engineer for Developers: DataCamp.com
+\item Generative AI for Everyone: DeepLearning.ai
+\item AWS Cloud (CLF-C02) \& AWS Boto in Python: DataCamp.com
 \end{itemize}
 
 % ============================================================
@@ -154,27 +192,18 @@ Thesis: ``[Thesis Title].'' [Brief description of research focus.]
 \section{Languages}
 \vspace{1pt}
 \begin{itemize}
-\item {[Language 1] (native), [Language 2] (fluent), [Language 3] (intermediate).}
+\item {English (full professional proficiency), Hindi (native).}
 \end{itemize}
 
 % ============================================================
-%     PUBLICATIONS (optional)
-% ============================================================
-
-\section{Publications}
-\vspace{1pt}
-\begin{itemize}
-\item {[Author(s)] ([Year]). [Title]. [Journal/Conference]. \href{[DOI_URL]}{DOI link}}
-\end{itemize}
-
-% ============================================================
-%     HONORS AND AWARDS (optional)
+%     HONORS AND AWARDS
 % ============================================================
 
 \section{Honors and Awards}
 \vspace{1pt}
 \begin{itemize}
-\item{\textbf{[Award Name]} -- [Event/Organization] ([Year]).}
+\item{\textbf{Fynd Star} -- Fynd (2020).}
+\item{\textbf{Fynd Freshie} -- Fynd Annual Awards (2018).}
 \end{itemize}
 
 % ============================================================

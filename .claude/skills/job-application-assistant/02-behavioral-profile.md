@@ -4,51 +4,51 @@ framework_version: 1.0.0
 
 # Behavioral Profile
 
-<!-- SETUP: This file is populated by running /setup -->
-<!-- You can use results from PI, DISC, Myers-Briggs, StrengthsFinder, or a self-assessment -->
+<!-- Populated by /setup Path A. No formal assessment provided: drives below are self-reported (setup answers, Nov 2026) plus inference from LinkedIn About. -->
 
 ## Overview
-[YOUR_NAME]'s behavioral assessment identifies them as a **[PROFILE_TYPE]** pattern. [1-2 SENTENCE_SUMMARY].
+Vikas Kumar describes himself as a **hands-on builder-leader**: equally interested in people and technical leadership, motivated by building products, scaling systems and taking large ownership of complex problems. *[Self-reported - no formal assessment]*
 
 ## Core Behavioral Drives
 
 | Drive | Level | Meaning |
 |-------|-------|---------|
-| [DRIVE_1] | [LEVEL] | [DESCRIPTION] |
-| [DRIVE_2] | [LEVEL] | [DESCRIPTION] |
-| [DRIVE_3] | [LEVEL] | [DESCRIPTION] |
-| [DRIVE_4] | [LEVEL] | [DESCRIPTION] |
+| Ownership | High | Wants larger scope and end-to-end accountability for outcomes |
+| Building | High | Energized by building products from scratch and scaling them |
+| Technical depth | High | Wants to stay hands-on with architecture and backend problems while leading |
+| People leadership | High | Interested in developing teams, not only in technical work |
 
 ## Strongest Behaviors
-- **[BEHAVIOR_1]:** [DESCRIPTION]
-- **[BEHAVIOR_2]:** [DESCRIPTION]
-- **[BEHAVIOR_3]:** [DESCRIPTION]
+- **Turns ambiguity into systems:** Converts ambiguous product requirements into scalable, reliable systems. *[Inferred from LinkedIn About - review before relying on this]*
+- **Team builder:** Develops high-performing engineering teams (led up to 20 engineers; 60% productivity gain at Fynd). *[Inferred from LinkedIn About - review before relying on this]*
+- **Impact-oriented:** Frames engineering work around measurable business outcomes (conversion, transaction growth, automation rate). *[Inferred from LinkedIn About - review before relying on this]*
 
 ## How You Work Best
-- [ENVIRONMENT_PREFERENCE_1]
-- [ENVIRONMENT_PREFERENCE_2]
-- [ENVIRONMENT_PREFERENCE_3]
+- Solving complex technical challenges. *[Inferred from LinkedIn About - review before relying on this]*
+- Roles combining technical strategy, system architecture, product delivery and engineering excellence. *[Inferred from LinkedIn About - review before relying on this]*
 
 ## Growth Areas (frame positively in applications)
-- **[AREA_1]:** [HOW_TO_FRAME_IT_POSITIVELY]
-- **[AREA_2]:** [HOW_TO_FRAME_IT_POSITIVELY]
+- **Not yet provided.** Ask the candidate before relying on this section. *[TODO]*
 
 ## Mapping to Job Posting Language
 
 When a job posting mentions these keywords, it's a **strong behavioral fit**:
-- [KEYWORD_OR_PHRASE_THAT_MATCHES_YOUR_STYLE]
-- [ANOTHER_KEYWORD]
+- "hands-on", "player-coach", "lead by example", "technical leadership"
+- "0 to 1", "build from scratch", "greenfield", "founding team"
+- "ownership", "end-to-end", "autonomy", "high impact"
+- "scale", "high-traffic", "distributed systems", "complex problems"
 
 When a job posting mentions these, flag as **potential friction** (not deal-breaker):
-- [KEYWORD_OR_PHRASE_THAT_MIGHT_CLASH]
-- [ANOTHER_KEYWORD]
+- "pure people management", "no coding expected", "administrative" (conflicts with hands-on preference)
+- "maintenance", "keep the lights on", "support-only" with no product building
+- heavily process-driven roles with narrow scope or little ownership
 
 ## Management Style Preferences
-- [WHAT_MANAGEMENT_STYLE_WORKS_FOR_YOU]
-- [WHAT_DOESN'T_WORK]
+- Works best with autonomy and clear ownership of outcomes. *[Inferred from setup answers - review before relying on this]*
+- Likely friction: micromanagement or narrow scope that blocks ownership. *[Inferred - review before relying on this]*
 
 ## Using This in Applications
-- **Cover letters:** [HOW_TO_WEAVE_IN_BEHAVIORAL_STRENGTHS]
-- **CV:** [WHAT_TO_EMPHASIZE]
-- **Interviews:** [WHAT_STAR_EXAMPLES_TO_USE]
-- **Don't overstate:** [WHAT_NOT_TO_CLAIM]
+- **Cover letters:** Show hands-on leadership through concrete examples (architected 2M+ RPM systems while leading a 19-engineer team; built Gauze.md from scratch).
+- **CV:** Pair every leadership claim with a technical outcome and a business metric (conversion, transaction growth, automation rate).
+- **Interviews:** Use the 40% checkout conversion, 2M+ RPM scaling, Gauze.md and agentic copilot stories from `07-interview-prep.md`.
+- **Don't overstate:** Do not claim frontend, React, mobile (Android/iOS) or Java skills - the candidate is backend-only with very basic React. Do not claim ML research or model-training depth; AI work is applied (LLM/RAG products, agent evaluation, agentic workflows).

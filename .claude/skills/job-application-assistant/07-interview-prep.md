@@ -39,6 +39,108 @@ Keep answers to 1-2 minutes. Be specific. End with what you learned or would do 
 
 <!-- Add more STAR examples as needed. Aim for 4-6 covering different competencies. -->
 
+## STAR Candidates (Complete Manually)
+
+### 40% checkout conversion increase
+**Source:** CV / LinkedIn - Engineering Manager, Fynd
+**What happened:** Led a 19-engineer Cart and Payments team across StoreOS, Fynd and Jio Platform, driving a 40% increase in checkout conversion.
+**Why it matters:** Business impact, leading large teams, prioritisation, cross-platform delivery.
+**S/T/A/R stub:**
+- Situation:
+- Task:
+- Action:
+- Result:
+
+### Scaling cart and payments to 2M+ RPM
+**Source:** CV / LinkedIn - Software Development Engineer-3, Fynd
+**What happened:** Architected cart and payment systems achieving 99.95% availability and 2M+ RPM at 75ms p95 latency.
+**Why it matters:** System design, scalability, reliability, high-traffic architecture.
+**S/T/A/R stub:**
+- Situation:
+- Task:
+- Action:
+- Result:
+
+### Building Gauze.md from scratch
+**Source:** CV / LinkedIn - Engineering Manager, Fynd
+**What happened:** Led 5 engineers across ML, backend and data to build cardiovascular AI with LLM/RAG workflows and ECG/ECHO analysis.
+**Why it matters:** 0-to-1 product delivery, leading cross-functional teams, applied AI, healthcare compliance.
+**S/T/A/R stub:**
+- Situation:
+- Task:
+- Action:
+- Result:
+
+### Agentic commerce copilot
+**Source:** CV / LinkedIn - Engineering Manager, Fynd
+**What happened:** Drove a commerce copilot using LLMs and LangGraph with commerce APIs, automating ~75% of support workflows.
+**Why it matters:** Agentic AI systems, automation, translating AI into business value.
+**S/T/A/R stub:**
+- Situation:
+- Task:
+- Action:
+- Result:
+
+### 30% dataset review throughput improvement
+**Source:** CV / LinkedIn - Engineering Manager-2, Turing
+**What happened:** Partnered with platform and tooling teams on Evals and Rubric Validator workflows, raising dataset review throughput by 30%.
+**Why it matters:** LLM evaluation, cross-team influence, process improvement, quality at scale.
+**S/T/A/R stub:**
+- Situation:
+- Task:
+- Action:
+- Result:
+
+### Monolith to microservices
+**Source:** CV / LinkedIn - Senior Platform Engineer, Fynd
+**What happened:** Refactored monolithic order and payment systems into microservices handling 1M+ RPM in load tests and sales.
+**Why it matters:** Technical migration, risk management, architecture decisions.
+**S/T/A/R stub:**
+- Situation:
+- Task:
+- Action:
+- Result:
+
+### 60% team productivity gain, 40% faster releases
+**Source:** CV / LinkedIn - Engineering Manager, Fynd
+**What happened:** Improved team productivity by 60% and reduced release cycle time by 40% through team scaling and faster delivery.
+**Why it matters:** Team scaling, process improvement, delivery management, managing performance.
+**S/T/A/R stub:**
+- Situation:
+- Task:
+- Action:
+- Result:
+
+### Payment extension ecosystem (40+ gateways)
+**Source:** CV / LinkedIn - Engineering Manager, Fynd
+**What happened:** Architected and built a payment extension ecosystem using FastAPI and Node.js, with SDKs for partner developers enabling sellers to install 40+ payment gateways.
+**Why it matters:** Platform thinking, developer/partner experience, extensibility, architecture decisions.
+**S/T/A/R stub:**
+- Situation:
+- Task:
+- Action:
+- Result:
+
+### Closing GDPR and SOC2 gaps
+**Source:** CV / LinkedIn - Engineering Manager, Fynd
+**What happened:** Closed GDPR and SOC2 gaps with Security across healthcare and payments platforms, ensuring audit readiness.
+**Why it matters:** Cross-functional collaboration, risk and compliance, balancing delivery with security.
+**S/T/A/R stub:**
+- Situation:
+- Task:
+- Action:
+- Result:
+
+### Observability rollout (70% lower MTTD)
+**Source:** CV / LinkedIn - Senior Platform Engineer, Fynd
+**What happened:** Established observability across Cart and Payments with metrics, logs, and alerts, reducing mean time to detect by 70%.
+**Why it matters:** Operational excellence, reliability, incident management, on-call culture.
+**S/T/A/R stub:**
+- Situation:
+- Task:
+- Action:
+- Result:
+
 ## Common Tough Questions
 
 ### "Why did you leave [previous company]?"

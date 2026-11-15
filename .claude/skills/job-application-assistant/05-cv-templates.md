@@ -4,7 +4,22 @@ framework_version: 1.4.8
 
 # CV Templates and Tailoring Guide
 
-<!-- SETUP: Profile statements and section ordering are personalized by running /setup -->
+<!-- BEGIN ACTIVE-TEMPLATE (managed by /add-template - do not edit by hand) -->
+> **Active template override: `inter-classic`**
+>
+> A custom template is active. Where this block conflicts with the stock guidance below, this block wins. Structural advice below (tailoring, page-budget, cutting rules) still applies.
+>
+> - **Template skeleton:** `templates/cv/inter-classic/template.tex` — use this as the structural reference instead of the stock template
+> - **Manifest:** `templates/cv/inter-classic/TEMPLATE.md` — read this for style rules and known pitfalls before drafting
+> - **Source extension:** `.tex`
+> - **Compile command:** `rm -f <file>.pdf && mkdir -p build && lualatex -interaction=nonstopmode -output-directory=build <file>.tex && lualatex -interaction=nonstopmode -output-directory=build <file>.tex && mv build/<file>.pdf ./` (not the command named in the stock guidance below — `/apply`'s compile step must use this instead). Run it from the output directory. It redirects to `build/`, so the log is in `build/`, and `/apply`'s Step 5e cleanup must delete that `build/` folder too
+> - **Fonts:** Latin Modern Sans from TeX Live — no bundled font files
+> - **Page limit:** exactly 2 page(s)
+> - **Output file:** `cv/main_<company>_<role>.tex`; the template needs no extra class/package/font files
+<!-- END ACTIVE-TEMPLATE -->
+
+
+<!-- Personalized by /setup Path A (Nov 2026) -->
 
 ## Template: LaTeX moderncv (Banking Style)
 
@@ -59,7 +74,7 @@ Expected output: `Output written on main_<company>_<role>.pdf (2 pages, ...)`. A
     linkcolor=blue,
     filecolor=magenta,
     urlcolor=blue,
-    pdftitle={[YOUR_NAME] - CV},
+    pdftitle={Vikas Kumar - CV},
     % Keep pdfpagemode=UseNone: this block runs after moderncv's own
     % \AtEndPreamble (moderncv.cls sets pdfpagemode there), so a FullScreen
     % value here would win and open every CV in fullscreen presentation mode.
@@ -69,27 +84,47 @@ Expected output: `Output written on main_<company>_<role>.pdf (2 pages, ...)`. A
 \usepackage{import}
 
 % Personal data
-\name{[FIRST_NAME]}{[LAST_NAME]}
+\name{Vikas}{Kumar}
 % If you have no address to list, DELETE this whole line. \address{}{}{} fails
 % with "There's no line here to end" on every moderncv version.
-\address{[YOUR_ADDRESS]}{}{}
-\phone[mobile]{[YOUR_PHONE]}
-\email{[YOUR_EMAIL]}
-\extrainfo{\href{[YOUR_LINKEDIN_URL]}{LinkedIn}, \href{[YOUR_GITHUB_URL]}{GitHub}}
+\address{Bachupally, Hyderabad, Telangana 500090, India}{}{}
+\phone[mobile]{+91 9137724770}
+\email{vikas.mca.jnu@gmail.com}
+\extrainfo{\href{https://linkedin.com/in/logsv/}{LinkedIn}, \href{https://github.com/logsv}{GitHub}}
 
 \begin{document}
 \makecvtitle
+\vspace{-1.6\baselineskip} % close the default gap between the contact block and the first section
 
-% 1. Profile statement (1-3 sentences, tailored per role)
+% 1. \section{Summary} with the profile statement (3-4 lines, tailored per role, normal font size - never \small)
 % 2. Skills section
 % 3. Education section
 % 4. Professional Experience section
 % 5. Selected Publications (if applicable)
 % 6. Honors and Awards (if applicable)
 % 7. References
+% (India roles: omit Languages, Honors and Awards, References - see "Market-Specific Sections")
 
 \end{document}
 ```
+
+### Several roles at the same company
+
+Show the company once. The first (most recent) role is a normal entry; each earlier role at the same employer is a sub-role with an **empty company and location** and an empty item label, so banking style skips the company line and the bullet marker:
+
+```latex
+\item{\cventry{Oct 2022 - Sep 2025}{Engineering Manager}{Fynd (Shopsense Retail Technologies Ltd.)}{Mumbai, India}{}{...}}
+\vspace{3pt}
+\item[]{\cventry{Oct 2021 - Oct 2022}{Software Development Engineer-3}{}{}{}{...}}
+\vspace{3pt}
+\item[]{\cventry{Apr 2018 - Oct 2021}{Senior Platform Engineer}{}{}{}{...}}
+```
+
+Each role stays its own block, so page breaks still work. Freed lines can leave page 2 short - restore relevant bullets if it ends more than a third empty.
+
+### Gap below the contact block
+
+moderncv's banking `\makecvtitle` leaves roughly twice the normal section spacing (about 50pt) between the contact lines and the first `\section`. Keep the `\vspace{-1.6\baselineskip}` line directly after `\makecvtitle` so the Summary heading sits at normal section distance. Remove it only if a custom title block is used.
 
 ### Color overrides
 
@@ -128,7 +163,7 @@ Section headings such as `\section{Core Competencies}`, `Professional Experience
 ## Section-by-Section Tailoring
 
 ### Profile Statement / Elevator Pitch (Best Practice)
-This is the most important section to customize. It appears right after `\makecvtitle`.
+This is the most important section to customize. It appears right after `\makecvtitle`, **under its own `\section{Summary}` heading** (a CV without a heading over the opening paragraph looks unfinished, and ATS parsers use the heading to find the summary).
 
 Write 5-7 lines that function as an "elevator pitch": a concise, compelling introduction explaining why you're qualified for *this specific role*. Focus on what the employer gains from hiring you.
 
@@ -137,11 +172,11 @@ When the role sits outside your home domain, **lead with the domain-transfer arg
 **Create 2-3 profile statement templates for your main role types:**
 
 <!-- SETUP: These are populated based on your background -->
-**For [YOUR_PRIMARY_ROLE_TYPE] roles:**
-> [YOUR_PROFILE_STATEMENT_TEMPLATE_1]
+**For Engineering Manager (backend / payments / AI) roles:**
+> Engineering Manager with 12+ years of experience building large-scale commerce and payment systems, backend services, and AI/LLM products. Led teams of up to 20 engineers, driving technical execution, improving team productivity, and delivering business impact, including a 40% increase in checkout conversion. Strong in backend architecture, high-traffic systems, event-driven microservices, LLM evaluation workflows, and agentic AI systems.
 
-**For [YOUR_SECONDARY_ROLE_TYPE] roles:**
-> [YOUR_PROFILE_STATEMENT_TEMPLATE_2]
+**For Applied AI / LLM engineering leadership roles:**
+> Engineering leader with 12+ years in backend and distributed systems, now focused on applied AI. Currently leading a 20-engineer team delivering LLM and AI agent evaluation programs (SWE-bench, RLHF, Amazon T-Bench) at Turing; previously built an agentic commerce copilot with LangGraph automating ~75% of support workflows and led a 0-to-1 cardiovascular AI product using LLM/RAG workflows at Fynd.
 
 Statements labeled *[Used for: <company>_<role>]* were extracted from archived application drafts by `/setup` Path A. They are **phrasing references, never fact sources**: when drafting from one, every factual claim still comes from `01-candidate-profile.md` - a past tailored draft does not vouch for its own accuracy.
 
@@ -358,6 +393,12 @@ Cut the lowest-total-score line first, regardless of which section it sits in.
 - Do not mechanically cut from the bottom of a static section list without checking relevance. "Cut the oldest role first" is wrong if that role is literally about the skill the posting asks for.
 - Do not cut the one concrete example the cover letter leans on. Relevance is measured against the cover letter you wrote, not just the job posting — interviewers will have read both.
 - Do not cut to fit if the fit is borderline (2.02 pages). Prefer `\enlargethispage{2-3\baselineskip}` on a late section for near-misses; reserve content cuts for genuine overflow (content on page 3 that is more than a single trailing section).
+
+## Market-Specific Sections (candidate preference)
+
+- **India roles:** omit the **Languages**, **Honors and Awards** and **References** sections. English and Hindi are assumed in the Indian market, and the space goes to experience instead.
+- **Roles outside India** (Germany, Luxembourg, elsewhere): **keep the Languages section** (English full professional proficiency, Hindi native) - abroad it answers the language question recruiters screen on first. Honors and Awards and References stay optional there.
+- When removing these sections leaves page 2 more than a third empty, restore the most posting-relevant bullets cut earlier rather than leaving the page short.
 
 ## Recommended Section Order
 

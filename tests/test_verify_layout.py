@@ -60,6 +60,17 @@ class TestFooterBand(unittest.TestCase):
         """SILENT FAILURE: \\enlargethispage pushing body text over the footer."""
         self.assertTrue(Page(A4_HEIGHT, [line(50), line(780), line(800)]).footer_crowded)
 
+    def test_footerless_template_declares_a_narrower_band(self):
+        """A full page whose text area runs to a 36pt bottom margin is not a collision."""
+        lines = [line(50), line(770), line(784), line(798)]
+        self.assertTrue(Page(A4_HEIGHT, lines).footer_crowded)  # default 90pt band misreads it
+        narrow = Page(A4_HEIGHT, lines, footer_band=36.0)
+        self.assertFalse(narrow.footer_crowded)
+        self.assertEqual(round(narrow.bottom_space), 34)  # measured to y808, not y760
+
+    def test_narrow_band_still_catches_a_real_spill(self):
+        self.assertTrue(Page(A4_HEIGHT, [line(50), line(810), line(822)], footer_band=36.0).footer_crowded)
+
 
 class TestHeadingAndIndentDetection(unittest.TestCase):
     def setUp(self):
@@ -99,6 +110,16 @@ class TestOrphans(unittest.TestCase):
         m1 = Page(A4_HEIGHT, [line(50), line(700, left=50.0, text="●")])
         m2 = Page(A4_HEIGHT, [line(60, left=70.0, text="continued item text here")])
         self.assertTrue(any("lone list marker" in m for m in find_orphans([m1, m2])))
+
+    def test_math_bullet_set_4pt_below_its_text_is_not_a_split_bullet(self):
+        """inter-classic's $\\bullet$ sits 4pt below its line; a whole last item is not split."""
+        t1 = Page(A4_HEIGHT, [
+            line(50),
+            Line(top=744.5, bottom=759.0, left=48.1, height=14.5, text="Drove architecture of data platforms"),
+            Line(top=748.5, bottom=757.9, left=40.1, height=9.4, text="•"),
+        ])
+        t2 = Page(A4_HEIGHT, [line(60, left=48.1, text="• Built an audit trail")])
+        self.assertFalse(any("lone list marker" in m for m in find_orphans([t1, t2])))
 
     def test_clean_break_reports_nothing(self):
         r1 = Page(A4_HEIGHT, [line(50), line(700, left=50.0)])

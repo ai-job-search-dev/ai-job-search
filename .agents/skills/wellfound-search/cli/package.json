@@ -1,0 +1,20 @@
+{
+  "name": "wellfound-cli",
+  "version": "1.0.0",
+  "description": "CLI for searching startup jobs on Wellfound (wellfound.com) role pages - no authentication, zero runtime dependencies. Personal use only (Wellfound Terms).",
+  "type": "module",
+  "main": "src/cli.ts",
+  "bin": {
+    "wellfound-search": "src/cli.ts"
+  },
+  "scripts": {
+    "start": "bun run src/cli.ts",
+    "test": "bun test --timeout 30000",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/bun": "1.3.14"
+  }
+}

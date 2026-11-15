@@ -1,10 +1,7 @@
-# Job Application Assistant for [YOUR_NAME]
-
-<!-- SETUP: This file is populated by running /setup -->
-<!-- After running /setup, all [PLACEHOLDER] tokens will be replaced with your actual information -->
+# Job Application Assistant for Vikas Kumar
 
 ## Role
-This repo is a job application workspace. Claude acts as a career advisor and application assistant for [YOUR_NAME], helping with:
+This repo is a job application workspace. Claude acts as a career advisor and application assistant for Vikas Kumar, helping with:
 1. **Job fit evaluation** - Assess job postings against your profile (skills, experience, behavioral traits)
 2. **CV tailoring** - Adapt existing CV templates (LaTeX/moderncv) to target specific roles
 3. **Cover letter writing** - Draft targeted cover letters using existing templates (LaTeX)
@@ -13,79 +10,87 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 
 ## Candidate Profile
 
-<!-- This section is auto-populated by /setup. You can also fill it in manually. -->
-
 ### Identity
-- **Name:** [YOUR_NAME]
-- **Location:** [YOUR_CITY], [YOUR_COUNTRY] ([YOUR_COMMUTE_CONSTRAINTS])
+- **Name:** Vikas Kumar
+- **Location:** Hyderabad, India (open to relocation anywhere in India and abroad - exploring Luxembourg and Germany; also open to remote and hybrid)
+- **Contact:** +91 9137724770 | vikas.mca.jnu@gmail.com | https://linkedin.com/in/logsv/ | https://github.com/logsv | https://logsv.medium.com/
 - **Languages:**
   | Language | Level |
   |----------|-------|
-  | [LANGUAGE] | [LEVEL] |
-  <!-- Every language you work in professionally, with your level (CEFR, "native," "professional
-  working proficiency," whatever your CV/LinkedIn use - no need to force it into one scale). An
-  undeclared language is a hard deal-breaker if a posting requires it; a declared language at a
-  lower level than a posting wants is flagged for your own judgment, not auto-rejected. See
-  04-job-evaluation.md's Language Gate. -->
-- **CV language:** [YOUR_CV_LANGUAGE] <!-- English unless your market expects otherwise; /setup asks -->
+  | English | Full professional proficiency |
+  | Hindi | Native or bilingual |
+- **CV language:** English
 
-- **Status:** [YOUR_EMPLOYMENT_STATUS]
-- **LinkedIn headline:** "[YOUR_LINKEDIN_HEADLINE]"
+- **Status:** Employed - Engineering Manager-2 at Turing (since Oct 2025)
+- **Compensation:** Current CTC 60 LPA (INR); expected CTC at least 70 LPA (INR, India). For roles abroad, compare on net take-home and cost of living, not a direct conversion.
+- **LinkedIn headline:** "Engineering Manager | Backend & Distributed Systems | Applied AI & Agentic Systems | Payments at Scale (2M+ RPM) | Ex-Fynd, Ex-ShopClues"
 
 ### Education
-<!-- List your degrees, most recent first -->
-- **[DEGREE_LEVEL] in [FIELD]** ([YEAR_START]-[YEAR_END]) - [INSTITUTION]
-  - Thesis: "[THESIS_TITLE]"
-  - Topics: [KEY_TOPICS]
+- **Master of Computer Applications (MCA), Computer Science** (2011-2014) - Jawaharlal Nehru University, New Delhi
 
 ### Professional Experience
-<!-- List your roles, most recent first -->
-- **[JOB_TITLE]** ([START_DATE] - [END_DATE]) - **[COMPANY]** ([LOCATION])
-  - [KEY_RESPONSIBILITY_1]
-  - [KEY_RESPONSIBILITY_2]
-  - [KEY_ACHIEVEMENT]
+- **Engineering Manager-2** (Oct 2025 - Present) - **Turing** (Hyderabad, Remote)
+  - Leads a team of up to 20 on LLM and AI agent evaluation for Amazon T-Bench (team lead only: a senior engineering manager and a strategic lead own overall project direction); collaborates with tooling teams
+  - Leads RLHF trainer teams on SWE-bench and coding evaluation projects for Anthropic and Meta models (1,500+ datasets and evaluations)
+  - Evals and Rubric Validator workflow improvements: 30% higher dataset review throughput
+- **Engineering Manager** (Oct 2022 - Sep 2025) - **Fynd (Shopsense Retail Technologies Ltd.)** (Mumbai)
+  - Led a 19-engineer Cart and Payments team across StoreOS, Fynd and Jio Platform: 40% increase in checkout conversion, 25% transaction growth
+  - Built a payment extension ecosystem (FastAPI, Node.js, partner SDKs) with 40+ payment gateways
+  - Led 5 engineers building Gauze.md (cardiovascular AI, LLM/RAG, ECG/ECHO) from scratch; drove an agentic commerce copilot (LangGraph) automating ~75% of support workflows
+  - 60% team productivity gain, 40% shorter release cycles; closed GDPR and SOC2 gaps
+- **Software Development Engineer-3** (Oct 2021 - Oct 2022) - **Fynd** (Mumbai)
+  - Architected cart and payment systems at 99.95% availability, 2M+ RPM, 75ms p95; CDC + BigQuery data platform; Kafka audit trail
+- **Senior Platform Engineer** (Apr 2018 - Oct 2021) - **Fynd** (Mumbai)
+  - Payment-as-a-service platform (Python, PostgreSQL, AWS); monolith-to-microservices (1M+ RPM); observability (70% lower MTTD)
+- **Technology Developer** (May 2016 - Apr 2018) - **Byond eTravel & Entertainment** (Bangalore) - Django/PostgreSQL/Elasticsearch travel booking, Dialogflow chatbot
+- **Software Engineer** (Apr 2015 - Apr 2016) - **RedMonsterGames** (Bangalore) - real-time game features in Go on AWS
+- **Software Engineer** (Nov 2014 - Mar 2015) - **ShopClues** (Gurgaon) - e-commerce logistics and order management
 
 ### Technical Skills
-- **Primary:** [YOUR_PRIMARY_SKILLS]
-- **Secondary:** [YOUR_SECONDARY_SKILLS]
-- **Domain:** [YOUR_DOMAIN_EXPERTISE]
-- **Software:** [YOUR_TOOLS_AND_SOFTWARE]
+- **Primary:** Python, Node.js, FastAPI, Go; microservices, Kafka, event-driven architecture; high-traffic payments and commerce systems; LLM evaluation, AI agents, LangGraph, RAG
+- **Secondary:** Django, Express, GraphQL, Temporal; PostgreSQL, MySQL, Redis, MongoDB, Elasticsearch, pgvector; BigQuery, CDC, Dataflow
+- **Domain:** Payments, checkout and commerce platforms; LLM/agent evaluation (SWE-bench, RLHF); healthcare AI; GDPR/SOC2 compliance; engineering leadership (teams up to 20)
+- **Not a fit:** frontend (only very basic React.js), Android, iOS/mobile, Java/Kotlin. Heavily backend-focused engineer and leader.
+- **Software:** AWS, GCP, Kubernetes, Docker, Terraform; Prometheus, Grafana, New Relic, Sentry, Jaeger, ELK; OpenAI, Vertex AI, LangSmith, MCP
 
 ### Certifications
-<!-- List relevant certifications with dates -->
-- **[CERTIFICATION_NAME]** - [HOURS]h - completed [DATE]
+- AI Engineer for Developers (DataCamp); AWS Cloud Practitioner CLF-C02 (DataCamp); AWS Boto in Python (DataCamp); Generative AI for Everyone (DeepLearning.AI); RAG with LangChain; Multi-Agent Systems with LangGraph; Python
 
 ### Publications
-<!-- List peer-reviewed publications, if any -->
-- [AUTHOR_LIST] ([YEAR]). [TITLE]. [JOURNAL].
+- None. Writes technical blog posts at https://logsv.medium.com/
 
 ### Awards
-<!-- List relevant awards, hackathons, competitions -->
-- [AWARD_NAME] - [EVENT] ([YEAR])
+- Fynd Star - Fynd (2020)
+- Fynd Freshie - Fynd Annual Awards (2018)
 
 ### Behavioral Profile
-<!-- Your behavioral assessment results (PI, DISC, Myers-Briggs, or self-assessment) -->
-- **[TRAIT_1]** - [DESCRIPTION]
-- **[TRAIT_2]** - [DESCRIPTION]
-- **Strengths:** [YOUR_STRENGTHS]
-- **Growth areas:** [YOUR_GROWTH_AREAS]
-- **Thrives in:** [YOUR_IDEAL_ENVIRONMENT]
+- **Hands-on leader** - wants to lead teams while staying close to architecture and code
+- **Builder and owner** - likes building products from scratch, scaling them, and taking larger ownership
+- **Strengths:** complex backend and distributed systems problems, turning ambiguous requirements into scalable systems, growing high-performing teams, tying engineering to business metrics
+- **Growth areas:** not yet provided
+- **Thrives in:** product companies where the leader owns both people and technical outcomes
 
 ### What Excites You
-<!-- What motivates you professionally -->
-- [PASSION_1]
-- [PASSION_2]
+- Building and scaling products: AI/agentic systems, backend platforms, payments
+- Solving complex technical problems with large ownership, as a hands-on people-and-technical leader
 
 ### Target Sectors
-<!-- Industries and companies you're targeting -->
-- [SECTOR_1]: [EXAMPLE_COMPANIES]
-- [SECTOR_2]: [EXAMPLE_COMPANIES]
+- AI / agentic products: AI-native startups, AI labs, AI platform teams
+- Fintech and payments, commerce / e-commerce, health-tech, gaming, travel-tech
+- Any company matching the profile; no fixed company list
+
+### Target Roles
+- Engineering Manager / Senior Engineering Manager, Head / Director of Engineering
+- Staff / Principal Engineer (backend, payments, platform, AI)
+- Abroad (Germany, Luxembourg): Staff/Principal Backend Engineer (Payments) and Engineering Manager - Payments/Platform/AI lead
 
 ### Deal-breakers
-<!-- Hard constraints on job search. Language requirements are handled separately and
-automatically from your Languages table above - don't duplicate them here. -->
-- [DEALBREAKER_1]
-- [DEALBREAKER_2]
+- Roles that require a language not listed above (e.g. German or French as a job condition)
+- Roles abroad that require EU citizenship or existing work rights with no visa sponsorship
+- Soft negative (flag, not reject): pure people-management roles with no technical ownership
+- Soft negative (flag, not reject): Java/Spring Boot/Kotlin-centric roles - not a target stack
+- Soft negative (flag, not reject): full-stack, frontend or mobile (Android/iOS) roles, and EM roles whose team or requirements are frontend/mobile-heavy - backend only
+- India roles with a stated compensation below 70 LPA (flag; do not reject postings that list no salary)
 
 ## Repo Structure
 - `cv/` - LaTeX CV variants (moderncv template, banking style)

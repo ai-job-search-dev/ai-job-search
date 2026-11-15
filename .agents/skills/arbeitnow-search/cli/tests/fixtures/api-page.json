@@ -1,0 +1,61 @@
+{
+ "data": [
+  {
+   "slug": "senior-backend-engineer-berlin-433276",
+   "company_name": "bunch",
+   "title": "(Senior) Backend Engineer (f/m/d)",
+   "description": "<p style=\"min-height:1.5em\"><a target=\"_blank\" rel=\"noopener noreferrer nofollow\" href=\"https://www.bunch.capital/\"><u>bunch</u></a> is building the backbone of private markets. We are enabling next-g",
+   "remote": false,
+   "url": "https://www.arbeitnow.com/jobs/companies/bunch/senior-backend-engineer-berlin-433276",
+   "tags": [
+    "Tech"
+   ],
+   "job_types": [
+    "Full Time"
+   ],
+   "location": "Berlin",
+   "created_at": 1794390012
+  },
+  {
+   "slug": "staff-backend-engineer-cardiff-238252",
+   "company_name": "Monzo",
+   "title": "Staff Backend Engineer",
+   "description": "&lt;div class=&quot;content-intro&quot;&gt;&lt;p&gt;&lt;strong&gt;&lt;em&gt;🚀 We’re on a mission to make money work for everyone.&lt;/em&gt;&lt;/strong&gt;&lt;/p&gt;\n&lt;p&gt;We’re waving goodbye to t",
+   "remote": false,
+   "url": "https://www.arbeitnow.co.uk/jobs/companies/monzo/staff-backend-engineer-cardiff-238252",
+   "tags": [
+    "Engineering"
+   ],
+   "job_types": [],
+   "location": "Cardiff",
+   "created_at": 1794390914
+  },
+  {
+   "slug": "projektleiter-schlusselfertigbau-furth-404260",
+   "company_name": "P&P Group",
+   "title": "Projektleiter Schlüsselfertigbau (m/w/d)",
+   "description": "<p>Die P&P Group ist operativer Immobilieninvestor und Investorenplattform mit Standorten in Fürth und London. Mit ausgezeichneter Technikexpertise und über 30-jähriger Historie realisieren wir anspru",
+   "remote": false,
+   "url": "https://www.arbeitnow.com/jobs/companies/pp-group/projektleiter-schlusselfertigbau-furth-404260",
+   "tags": [
+    "Project Management"
+   ],
+   "job_types": [
+    "Unbefristeter arbeitsvertrag",
+    "teamleitung"
+   ],
+   "location": "Fürth",
+   "created_at": 1794394878
+  }
+ ],
+ "links": {
+  "first": "https://www.arbeitnow.com/api/job-board-api?page=1",
+  "last": null,
+  "prev": null,
+  "next": "https://www.arbeitnow.com/api/job-board-api?page=2"
+ },
+ "meta": {
+  "current_page": 1,
+  "per_page": 300
+ }
+}

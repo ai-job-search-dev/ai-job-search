@@ -121,3 +121,4 @@ company_research/*.json
 
 # Brainstorm mockups (superpowers visual companion) - never ship
 .superpowers/
+**/job_scraper/job_notes.json

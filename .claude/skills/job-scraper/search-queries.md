@@ -1,6 +1,6 @@
 # Search Queries for Job Scraper
 
-<!-- SETUP: Customize these queries based on your skills, target roles, and location -->
+<!-- Personalized by /setup (Nov 2026) for Vikas Kumar -->
 
 ## Installed portal CLIs (primary for `/scrape`)
 
@@ -12,108 +12,141 @@ The `site:` query templates in this file are the **WebSearch fallback** — for 
 
 ## Search Sites
 
-Primary (your market's job boards - scaffold one with `/add-portal`):
-- **[YOUR_JOB_BOARD]** - your market's largest general job board
-- **linkedin.com/jobs** - LinkedIn job listings (filter: [YOUR_COUNTRY] / [YOUR_CITY]); also covered by `linkedin-search` CLI
-- **[YOUR_INDUSTRY_JOB_BOARD]** - a niche/industry board for your field (optional)
-- **[YOUR_ADDITIONAL_JOB_BOARD]** - another major board for your market (optional)
+Primary:
+- **linkedin.com/jobs** - covered by the `linkedin-search` CLI. Run each plain term against every location in the Location Filter below (India cities, `Remote`, `Germany`, `Luxembourg`).
+- **freehire** - covered by the `freehire-search` CLI.
+- **Wellfound** - `wellfound-search` CLI (personal use only). Role-page search: use role names (`engineering manager`, `staff engineer`, `backend engineer`) with `-l bangalore|mumbai|pune|delhi|berlin` or `--remote`.
+- **Y Combinator** - `ycombinator-jobs-search` CLI (personal use only). Use `-l india|remote|berlin` with `-q manager|staff|principal|backend`; keep results whose `visa` is `Will sponsor` or whose location names India/Germany.
+- **Berlin Startup Jobs** - `berlinstartupjobs-search` CLI. Berlin only; use the plain terms below as `-q`.
+- **Arbeitnow** - `arbeitnow-search` CLI (free public API, Germany + some UK). No server-side keyword search: pass a plain term as `-q` with `--visa` for sponsoring employers and `--pages 3`; many postings require German (Language Gate).
+- Not available as CLIs: Naukri (robots.txt blocks Claude user agents), StepStone and jobs.lu (bot protection), Instahyre (Cloudflare challenge), Cutshort and germantechjobs.de (login wall), Work at a Startup (public page is the same YC feed `ycombinator-jobs-search` covers; search needs a YC login), Hirist/iimjobs (no public search API identified). Use the WebSearch fallback for these.
+- Danish portal demos (Jobindex, Jobbank, Jobdanmark, Jobnet) are installed but **disabled**: not this candidate's market.
+- WebSearch-only boards: Germany germantechjobs.de, stepstone.de; Luxembourg jobs.lu, moovijob.com; India naukri.com, instahyre.com, cutshort.io.
 
 Secondary (company career pages via Google):
-- Direct Google searches with `site:` filters for known target companies
+- Direct Google searches with `site:` filters (e.g. `site:jobs.lever.co`, `site:boards.greenhouse.io`, `site:jobs.ashbyhq.com`) - many AI startups and fintechs post only there.
 
 ## Query Categories
 
-Queries are grouped by priority. Write **each category in every language from your Languages table** (see Language scope above). Combine each query with your location terms (e.g. your city, region, or metro area) where the site supports it.
+Queries are grouped by priority. Languages: English only (the candidate works in English and Hindi; Indian, Berlin-tech and Luxembourg international postings are written in English). Combine each query with location terms where the site supports it.
 
-Each priority has two kinds of block. **Plain terms** blocks are what the portal CLIs consume: one term per line, one CLI call per term, no `OR`, no `site:` prefix, and no location (the CLI's location flag, or the city in `--query` where that portal's SKILL.md says so, carries it). Quote a multi-word phrase only if the portal's `Query syntax:` line says quoting is honoured. **WebSearch-only** blocks are Google syntax (`site:`, quotes, `OR`) for the fallback path and are never passed to a CLI.
+Each priority has two kinds of block. **Plain terms** blocks are what the portal CLIs consume: one term per line, one CLI call per term, no `OR`, no `site:` prefix, and no location (the CLI's location flag carries it). Quote a multi-word phrase only if the portal's `Query syntax:` line says quoting is honoured. **WebSearch-only** blocks are Google syntax (`site:`, quotes, `OR`) for the fallback path and are never passed to a CLI.
 
-**Organize by function, not job title.** The same underlying work carries different titles across companies and markets (a "Data Scientist" role at one employer may be posted as "Insights Analyst" or "Data Consultant" at another). Name each priority category after the function it covers, and list several plausible job titles as query variants within that category rather than betting an entire priority tier on one exact title string.
+**Organize by function, not job title.**
 
-### Priority 1: [YOUR_PRIMARY_ROLE_TYPE]
+### Priority 1: Hands-on Engineering Leadership (backend / platform / AI)
 
-These match your strongest and most desired career direction.
+The strongest and most desired direction: leading engineering teams while staying technical.
 
 #### Plain terms (portal CLIs)
 
 ```
-[YOUR_PRIMARY_JOB_TITLE_1]
-[YOUR_PRIMARY_JOB_TITLE_2]
-[YOUR_KEY_SKILL]
+Engineering Manager
+Senior Engineering Manager
+Engineering Manager Backend
+Engineering Manager Payments
+Engineering Manager AI
+Head of Engineering
+Director of Engineering
 ```
 
 #### WebSearch-only (`site:` fallback)
 
 ```
-site:[YOUR_JOB_BOARD] "[YOUR_PRIMARY_JOB_TITLE_1]" [YOUR_CITY]
-site:[YOUR_JOB_BOARD] "[YOUR_PRIMARY_JOB_TITLE_2]" [YOUR_CITY]
-site:[YOUR_JOB_BOARD] "[YOUR_KEY_SKILL]" [YOUR_CITY]
-site:linkedin.com/jobs "[YOUR_PRIMARY_JOB_TITLE_1]" [YOUR_COUNTRY]
+site:naukri.com "Engineering Manager" backend (Hyderabad OR Bangalore OR Pune OR Gurgaon OR Mumbai)
+site:instahyre.com "Engineering Manager" (Hyderabad OR Bangalore)
+site:wellfound.com "Engineering Manager" India
+site:linkedin.com/jobs "Engineering Manager" payments India
+site:jobs.lever.co OR site:boards.greenhouse.io OR site:jobs.ashbyhq.com "Engineering Manager" (Berlin OR Munich OR Luxembourg) visa sponsorship
 ```
 
-### Priority 2: [YOUR_DOMAIN_EXPERTISE]
+### Priority 2: Staff / Principal Engineering (backend, payments, platform)
 
-These match your domain expertise.
+Senior individual-contributor track; the strongest card for roles abroad (visa sponsorship more common).
 
 #### Plain terms (portal CLIs)
 
 ```
-[YOUR_DOMAIN_KEYWORD_1]
-[YOUR_DOMAIN_KEYWORD_2]
+Staff Engineer
+Principal Engineer
+Staff Backend Engineer
+Principal Backend Engineer
+Staff Software Engineer Payments
+Principal Software Engineer
+Software Architect
 ```
 
 #### WebSearch-only (`site:` fallback)
 
 ```
-site:[YOUR_JOB_BOARD] [YOUR_DOMAIN_KEYWORD_1] [YOUR_CITY] OR [YOUR_REGION]
-site:[YOUR_JOB_BOARD] [YOUR_DOMAIN_KEYWORD_2] [YOUR_COUNTRY]
-site:linkedin.com/jobs [YOUR_DOMAIN_KEYWORD_1] [YOUR_CITY] [YOUR_COUNTRY]
+site:naukri.com ("Staff Engineer" OR "Principal Engineer") backend (Hyderabad OR Bangalore OR Pune)
+site:linkedin.com/jobs "Staff Backend Engineer" (Berlin OR Munich) Germany
+site:berlinstartupjobs.com "Staff Engineer" OR "Principal Engineer" backend
+site:jobs.lu ("Senior Backend Engineer" OR "Staff Engineer" OR "Lead Engineer") payments
+site:germantechjobs.de "Staff" backend Python OR Go OR Node.js
 ```
 
-### Priority 3: [YOUR_ADJACENT_ROLE_TYPE]
+### Priority 3: Domain - Payments, Fintech, Commerce, Applied AI
 
-Adjacent roles you could pivot into.
+Domain expertise searches; catch roles whose titles vary (Tech Lead, Lead Engineer, Architect).
 
 #### Plain terms (portal CLIs)
 
 ```
-[YOUR_ADJACENT_TITLE_1]
-[YOUR_ADJACENT_TITLE_2]
+payments engineering lead
+checkout platform
+fintech backend lead
+LLM platform engineering
+AI agents engineering lead
+LLM evaluation
+agentic AI
 ```
 
 #### WebSearch-only (`site:` fallback)
 
 ```
-site:[YOUR_JOB_BOARD] "[YOUR_ADJACENT_TITLE_1]" [YOUR_KEY_SKILL] [YOUR_CITY]
-site:[YOUR_JOB_BOARD] "[YOUR_ADJACENT_TITLE_2]" [YOUR_KEY_SKILL] [YOUR_CITY]
+site:linkedin.com/jobs "payments" ("Engineering Manager" OR "Staff Engineer") (India OR Germany OR Luxembourg)
+site:jobs.ashbyhq.com ("LLM" OR "AI agents" OR "evaluation") ("Engineering Manager" OR "Staff Engineer")
+site:wellfound.com "agentic" OR "LLM" "Engineering Manager" India
+site:moovijob.com payments engineer Luxembourg
 ```
 
-### Priority 4: Broader Technical / Consulting
+### Priority 4: Adjacent and Broader (wider net)
 
-Wider net for general technical roles.
+Adjacent roles and sectors: health-tech, gaming, travel-tech; AI evaluation program leadership.
 
 #### Plain terms (portal CLIs)
 
 ```
-[YOUR_KEY_SKILL] developer
-technical consultant
+Technical Program Manager AI
+Engineering Lead
+Tech Lead backend
+Engineering Manager healthtech
+Engineering Manager gaming
+Backend Architect
 ```
 
 #### WebSearch-only (`site:` fallback)
 
 ```
-site:[YOUR_JOB_BOARD] [YOUR_KEY_SKILL] developer [YOUR_CITY]
-site:linkedin.com/jobs "[YOUR_KEY_SKILL] developer" [YOUR_CITY]
-site:[YOUR_JOB_BOARD] "technical consultant" [YOUR_DOMAIN] [YOUR_CITY]
+site:naukri.com ("Engineering Manager" OR "Tech Lead") (healthtech OR gaming OR travel) (Hyderabad OR Bangalore OR Gurgaon)
+site:linkedin.com/jobs "Technical Program Manager" (LLM OR "AI evaluation")
+site:linkedin.com/jobs "Engineering Lead" backend Remote India
 ```
 
 ## Location Filter
 
-When evaluating results, verify the job location is within reasonable commute distance from your home. Define acceptable areas:
-- [YOUR_CITY] and surrounding areas
-- [ACCEPTABLE_AREA_1]
-- [ACCEPTABLE_AREA_2]
-- [BORDERLINE_AREA] (borderline - ~X min by transit)
-- [TOO_FAR_AREA] (too far)
+The candidate is based in Hyderabad and is open to remote, hybrid, onsite and relocation. Locations to pass to the CLIs and how to judge results:
+- **Ideal:** Hyderabad (any work mode); Remote (India-based or global remote)
+- **Acceptable:** Bangalore / Bengaluru, Pune, Gurgaon / Gurugram, Mumbai, any other Indian city (relocation OK); Germany (Berlin, Munich, Hamburg, Frankfurt) and Luxembourg **when visa sponsorship / relocation support is offered or not ruled out**
+- **Borderline:** other countries abroad (flag for discussion); German or Luxembourg roles silent on sponsorship (proceed, mark unverified per the Eligibility Gate)
+- **Too far / exclude:** roles abroad requiring EU citizenship or existing local work rights; roles requiring German, French or Luxembourgish as a job condition (Language Gate)
+
+## Stack Filter
+
+The candidate does not target Java roles. When assessing fit (Step 3), a posting whose core requirement is Java, Spring Boot, Kotlin or the JVM ecosystem is **Low** fit, even when the domain (payments, fintech) matches; name the Java requirement in its highlights. Postings that list Java only as a nice-to-have, or say Java experience is not required, are judged normally.
+
+The candidate is backend-only (very basic React.js, no Android/iOS/frontend). Full-stack, frontend and mobile roles are **Low** fit. An EM/lead role whose team or core requirements are mainly frontend or mobile is **Low**; a mixed team where backend is the core stays as assessed, with the frontend/mobile part named in its highlights.
 
 ## Language Filter
 

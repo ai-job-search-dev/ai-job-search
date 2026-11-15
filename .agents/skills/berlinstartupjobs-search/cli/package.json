@@ -1,0 +1,20 @@
+{
+  "name": "berlinstartupjobs-cli",
+  "version": "1.0.0",
+  "description": "CLI for searching jobs on Berlin Startup Jobs (berlinstartupjobs.com) via its public WordPress REST API - no authentication, zero runtime dependencies.",
+  "type": "module",
+  "main": "src/cli.ts",
+  "bin": {
+    "berlinstartupjobs-search": "src/cli.ts"
+  },
+  "scripts": {
+    "start": "bun run src/cli.ts",
+    "test": "bun test --timeout 30000",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/bun": "1.3.14"
+  }
+}

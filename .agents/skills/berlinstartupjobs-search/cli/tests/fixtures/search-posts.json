@@ -1,0 +1,143 @@
+[
+ {
+  "id": 453406,
+  "date": "2026-11-02T15:16:36",
+  "link": "https://berlinstartupjobs.com/engineering/tech-lead-m-f-d-superchat/",
+  "title": {
+   "rendered": "Tech Lead (m/f/d) // Superchat"
+  },
+  "excerpt": {
+   "rendered": "<p>At Superchat, we&#8217;re rebuilding how businesses talk to their customers. The phone call, the contact form, the support ticket: all of it is being replaced by messaging and AI. We&#8217;re building the platform that runs underneath. Founded in 2020, Superchat has become the platform of choice "
+  },
+  "_embedded": {
+   "wp:term": [
+    [
+     {
+      "taxonomy": "category",
+      "name": "IT / Software Development"
+     }
+    ],
+    [],
+    [
+     {
+      "taxonomy": "job_company",
+      "name": "Superchat"
+     }
+    ],
+    [
+     {
+      "taxonomy": "job_location",
+      "name": "Berlin, Germany"
+     }
+    ],
+    [
+     {
+      "taxonomy": "job_plan",
+      "name": "Featured Job Post"
+     }
+    ]
+   ]
+  }
+ },
+ {
+  "id": 453360,
+  "date": "2026-10-29T16:09:57",
+  "link": "https://berlinstartupjobs.com/product-management/senior-product-manager-all-genders-generalmind/",
+  "title": {
+   "rendered": "Senior Product Manager (all genders) // GeneralMind"
+  },
+  "excerpt": {
+   "rendered": "<p>About GeneralMind GeneralMind builds AI Systems of Action for complex enterprise workflows. We deploy AI employees that automate messy operational handovers across supply chains &#8211; processing orders, validating invoices, coordinating suppliers, and handling exceptions directly on top of ente"
+  },
+  "_embedded": {
+   "wp:term": [
+    [
+     {
+      "taxonomy": "category",
+      "name": "Product Management"
+     }
+    ],
+    [],
+    [
+     {
+      "taxonomy": "job_company",
+      "name": "GeneralMind"
+     }
+    ],
+    [
+     {
+      "taxonomy": "job_location",
+      "name": "Berlin, Germany"
+     }
+    ],
+    [
+     {
+      "taxonomy": "job_plan",
+      "name": "Standard Job Post"
+     }
+    ]
+   ]
+  }
+ },
+ {
+  "id": 452842,
+  "date": "2026-09-08T13:41:25",
+  "link": "https://berlinstartupjobs.com/sales/founding-solutions-architect-zelara/",
+  "title": {
+   "rendered": "Founding Solutions Architect // Zelara"
+  },
+  "excerpt": {
+   "rendered": "<p>About Zelara: Most CRM marketing still blasts generic messages at scale and calls it &#8220;personalization.&#8221; Our founders experienced this firsthand in senior roles at HelloFresh, Salesforce, Uber, and others. Backed by top-tier VCs, they decided to build a better way. Zelara is an agentic"
+  },
+  "_embedded": {
+   "wp:term": [
+    [
+     {
+      "taxonomy": "category",
+      "name": "Sales"
+     }
+    ],
+    [
+     {
+      "taxonomy": "post_tag",
+      "name": "CRM"
+     },
+     {
+      "taxonomy": "post_tag",
+      "name": "Lifecycle Marketing"
+     },
+     {
+      "taxonomy": "post_tag",
+      "name": "marketing automation"
+     },
+     {
+      "taxonomy": "post_tag",
+      "name": "solutions architect"
+     },
+     {
+      "taxonomy": "post_tag",
+      "name": "Solutions Engineer"
+     }
+    ],
+    [
+     {
+      "taxonomy": "job_company",
+      "name": "Zelara"
+     }
+    ],
+    [
+     {
+      "taxonomy": "job_location",
+      "name": "Berlin, Germany"
+     }
+    ],
+    [
+     {
+      "taxonomy": "job_plan",
+      "name": "Standard Job Post"
+     }
+    ]
+   ]
+  }
+ }
+]

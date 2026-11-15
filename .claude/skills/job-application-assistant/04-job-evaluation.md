@@ -4,7 +4,7 @@ framework_version: 1.2.7
 
 # Job Evaluation Framework
 
-<!-- SETUP: Skill match areas and career goals are personalized by running /setup -->
+<!-- Personalized by /setup Path A (Nov 2026) -->
 
 ## Eligibility Gate — run before scoring
 
@@ -60,9 +60,9 @@ How well do the required/preferred skills align with the candidate's capabilitie
 | 40-59 | Partial match, significant upskilling needed |
 | 0-39 | Fundamental mismatch |
 
-**Strong match areas:** [YOUR_PRIMARY_SKILLS]
-**Moderate match areas:** [YOUR_SECONDARY_SKILLS]
-**Weak match areas:** [SKILLS_YOU_LACK]
+**Strong match areas:** Python, Node.js, FastAPI, Go; microservices, Kafka, event-driven architecture; payments, cart and checkout systems; high-traffic distributed systems (2M+ RPM, 99.95%); LLM/agent evaluation, AI agents, LangGraph, RAG; AWS/GCP; engineering leadership (teams up to 20)
+**Moderate match areas:** Django, GraphQL, Temporal; Kubernetes, Terraform; data engineering (BigQuery, CDC, Dataflow); observability stacks; healthcare AI; compliance (GDPR, SOC2)
+**Weak match areas:** Java / Spring Boot / Kotlin (not a target stack: a role whose core requirement is Java/JVM is a weak technical match - score it in the 40-59 band unless the posting says Java is optional), Frontend (only very basic React.js; no real frontend experience), Android/iOS/mobile (none), full-stack roles (a posting that needs real frontend or mobile ownership is a weak technical match - 40-59 band; an EM role whose team is mainly frontend/mobile, or that requires frontend/mobile technical depth, also scores in that band; an EM role with a mixed team where backend is the core is judged normally but the frontend/mobile part is listed as a gap), ML research and model training/fine-tuning at scale, Scala/Spark big-data, Rust/C++ systems programming, embedded
 
 ### 2. Experience Match (0-100)
 Does work history align with what they're looking for? Match on the function and nature of the work performed, not the literal job title - a "Data Consultant" and a "Data Scientist" role can be functionally identical.
@@ -74,9 +74,9 @@ Does work history align with what they're looking for? Match on the function and
 | 40-59 | Adjacent experience, would need to make the case |
 | 0-39 | Unrelated experience |
 
-**Strong:** [YOUR_DIRECT_EXPERIENCE_DOMAINS]
-**Moderate:** [YOUR_ADJACENT_EXPERIENCE]
-**Entry-level:** [ROLES_WITH_LIMITED_EXPERIENCE]
+**Strong:** Engineering Manager for backend / payments / commerce / AI teams; Staff/Principal-level backend architecture for high-traffic commerce and payments; LLM and AI agent evaluation programs
+**Moderate:** Head/Director of Engineering (has led up to ~20 engineers, not multi-team orgs of 50+); AI/ML platform; health-tech; travel-tech; gaming backend
+**Entry-level:** ML research scientist, frontend/mobile leadership, data science
 
 ### 3. Behavioral/Culture Fit (0-100)
 Does the role and company culture match the behavioral profile?
@@ -93,7 +93,7 @@ Does the role and company culture match the behavioral profile?
 ### 4. Location & Logistics (Pass/Fail + Notes)
 - Within commute range: PASS
 - Remote with occasional office: PASS
-- Requires relocation: FAIL (deal-breaker)
+- Requires relocation: PASS within India (open to any city); PASS for Germany or Luxembourg **if visa sponsorship is available**; FLAG other countries (discuss with user)
 - Frequent international travel: FLAG (discuss with user)
 
 ### 5. Career Alignment & Motivation (0-100)
@@ -107,19 +107,19 @@ Does this role advance career goals and contain tasks that energize?
 | 0-39 | Dead end or backwards step |
 
 **Career goals:**
-- [YOUR_CAREER_GOAL_1]
-- [YOUR_CAREER_GOAL_2]
-- [YOUR_CAREER_GOAL_3]
+- Hands-on technical leadership: Engineering Manager / Senior EM / Head of Engineering, or Staff / Principal Engineer
+- Building and scaling products in AI/agentic systems, payments/fintech, commerce, health-tech or gaming
+- Larger ownership and scope; explore international roles (Germany, Luxembourg)
 
 **Motivation filter:** Evaluate not just whether you *can* do the tasks, but whether the tasks will *energize* you. Consider:
-- Tasks that energize: [YOUR_ENERGIZING_TASKS]
-- Tasks that drain: [YOUR_DRAINING_TASKS]
+- Tasks that energize: building products, scaling systems, backend development, solving complex technical problems, owning outcomes end to end, developing people
+- Tasks that drain: *[inferred, review]* pure administration or people management with no technical involvement; maintenance-only work with no product building
 - Non-task factors: leadership style, department culture, company values, degree of autonomy
 
 **Life situation alignment:** Consider personal constraints:
-- **Security**: [YOUR_FINANCIAL_SITUATION_CONTEXT]
-- **Flexibility**: [YOUR_SCHEDULE_CONSTRAINTS]
-- **Professional development**: [YOUR_GROWTH_PRIORITIES]
+- **Security**: Currently employed (Turing), so can be selective. Current CTC 60 LPA (INR); expected CTC **at least 70 LPA (INR)** for India roles. If a posting's stated range tops out below 70 LPA, FLAG it as below expectations (not an automatic reject). Most postings list no salary: do not penalise silence. For Germany/Luxembourg, judge on net take-home and cost of living rather than a straight INR conversion.
+- **Flexibility**: Open to remote, hybrid or onsite; relocation within India or abroad
+- **Professional development**: Larger ownership, hands-on leadership, applied AI / agentic systems
 
 ### 6. Salary Benchmark (Optional)
 

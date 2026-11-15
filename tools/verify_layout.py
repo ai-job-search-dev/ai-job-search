@@ -41,11 +41,15 @@ each line's TEXT starts, after any list marker merged into it, not by its left e
 The thresholds below are calibrated for the stock moderncv (`cv/`) and cover.cls
 (`cover_letters/`) geometry. A template registered via `/add-template` may need them
 retuned - an article-class page number sitting outside the 90pt footer band, for
-instance, is read as body text and turns the space above it into a phantom hole.
+instance, is read as body text and turns the space above it into a phantom hole. The
+reverse also happens: a footer-less template whose text area runs into the bottom 90pt
+reads as a footer collision on every full page. Such a template declares its real band
+in its TEMPLATE.md and the check runs with `--footer-band <pt>`.
 
 Usage:
     python tools/verify_layout.py cv/main_acme_ml_engineer.pdf
     python tools/verify_layout.py cover_letters/cover_acme_ml_engineer.pdf
+    python tools/verify_layout.py --footer-band 36 cv/main_acme_ml_engineer.pdf
 
 Exit codes: 0 clean, 1 layout problem, 2 bad invocation or no usable extractor.
 
@@ -95,9 +99,10 @@ LIST_MARKERS = frozenset("\u2022\u2023\u25aa\u25cf\u00b7")
 # Lines whose tops are this close are parts of one printed line. pdftotext -bbox output
 # is grouped by rounded yMin, which splits a printed line wherever words in another
 # font sit a fraction of a point off and a .5 boundary falls between them (a bold word
-# 0.2pt off; a list marker set 1.3pt below its item's first line on the stock CV).
-# Consecutive printed lines are ~12pt apart.
-SAME_PRINTED_LINE_PT = 3.0
+# 0.2pt off; a list marker set 1.3pt below its item's first line on the stock CV, and a
+# math-mode $\bullet$ marker 4.0pt below on the inter-classic template).
+# Consecutive printed lines are ~12pt apart, so 5pt stays well under half a line.
+SAME_PRINTED_LINE_PT = 5.0
 
 # A list sets its text in by a label's width: 11-25pt past the margin on the stock CV
 # and cover letter. A line whose text starts further in than this is set right or
@@ -132,13 +137,14 @@ class Line:
 
 
 class Page:
-    def __init__(self, height: float, lines: list[Line]):
+    def __init__(self, height: float, lines: list[Line], footer_band: float = FOOTER_BAND_PT):
         self.height = height
         self.lines = sorted(lines, key=lambda l: l.top)
+        self.footer_band = footer_band
 
     @property
     def body(self) -> list[Line]:
-        cutoff = self.height - FOOTER_BAND_PT
+        cutoff = self.height - self.footer_band
         return [l for l in self.lines if l.top < cutoff]
 
     @property
@@ -161,7 +167,7 @@ class Page:
     @property
     def footer_crowded(self) -> bool:
         """One line in the bottom band is a page number; two means body text spilled in."""
-        band = self.height - FOOTER_BAND_PT
+        band = self.height - self.footer_band
         return len({round(l.top, 1) for l in self.lines if l.top >= band}) > 1
 
     def is_indented(self, line: Line) -> bool:
@@ -225,7 +231,7 @@ def find_pdftotext() -> str | None:
     return candidates[0]
 
 
-def parse_pdf(path: Path) -> list[Page]:
+def parse_pdf(path: Path, footer_band: float = FOOTER_BAND_PT) -> list[Page]:
     binary = find_pdftotext()
     if not binary:
         raise RuntimeError("pdftotext (Poppler) not found; install poppler-utils")
@@ -275,7 +281,7 @@ def parse_pdf(path: Path) -> list[Page]:
             )
             for words in buckets.values()
         ]
-        pages.append(Page(float(h), lines))
+        pages.append(Page(float(h), lines, footer_band))
     return pages
 
 
@@ -443,16 +449,27 @@ def main() -> int:
     _force_utf8_output()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("pdf", nargs="?", type=Path)
+    ap.add_argument(
+        "--footer-band",
+        type=float,
+        default=FOOTER_BAND_PT,
+        metavar="PT",
+        help=f"height of the bottom band reserved for a footer (default {FOOTER_BAND_PT:g}pt, "
+        "calibrated for stock moderncv/cover.cls); a custom template declares its own "
+        "value in its TEMPLATE.md",
+    )
     args = ap.parse_args()
 
     if not args.pdf:
         ap.error("pdf is required")
+    if args.footer_band < 0:
+        ap.error("--footer-band must be >= 0")
     if not args.pdf.exists():
         print(f"error: {args.pdf} not found", file=sys.stderr)
         return 2
 
     try:
-        pages = parse_pdf(args.pdf)
+        pages = parse_pdf(args.pdf, args.footer_band)
     except RuntimeError as exc:
         print(f"skipped: {exc}", file=sys.stderr)
         return 2
