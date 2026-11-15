@@ -1,0 +1,122 @@
+{
+  "_comment": "Apify Store actors per job board. input: the actor's INPUT, with {query} {location} {country} {limit} placeholders ({limit} becomes a number; a placeholder with no value drops its key). defaults fill placeholders the CLI flags leave empty. fields: candidate output paths per contract field, first non-empty wins. Input/output names differ per actor and change over time: confirm against the actor's Input and Output tabs on apify.com, then run one search with -n 3 before relying on a board.",
+  "boards": {
+    "indeed": {
+      "enabled": true,
+      "actor": "misceres/indeed-scraper",
+      "url": "https://apify.com/misceres/indeed-scraper",
+      "_verified": "Checked 2026-11-16. Input schema: position, country (enum incl. IN, DE, LU), location, maxItemsPerSearch, parseCompanyDetails, saveOnlyUniqueItems. Pricing: pay-per-event, $0.006 per listing on the free tier (20 listings = $0.12). Output confirmed by a 3-listing run (engineering manager, IN, Bengaluru): positionName, company, location, url (in.indeed.com/viewjob?jk=), id, postingDateParsed (ISO; postedAt was null), salary (often null), jobType (array), isExpired, externalApplyLink, description, descriptionHTML.",
+      "input": {
+        "position": "{query}",
+        "country": "{country}",
+        "location": "{location}",
+        "maxItemsPerSearch": "{limit}",
+        "parseCompanyDetails": false,
+        "saveOnlyUniqueItems": true
+      },
+      "defaults": {
+        "country": "IN"
+      },
+      "fields": {
+        "id": [
+          "id"
+        ],
+        "title": [
+          "positionName"
+        ],
+        "company": [
+          "company"
+        ],
+        "location": [
+          "location"
+        ],
+        "date": [
+          "postingDateParsed",
+          "postedAt"
+        ],
+        "url": [
+          "url"
+        ],
+        "description": [
+          "description",
+          "descriptionHTML"
+        ],
+        "salary": [
+          "salary"
+        ],
+        "jobType": [
+          "jobType"
+        ],
+        "applyUrl": [
+          "externalApplyLink"
+        ],
+        "isExpired": [
+          "isExpired"
+        ]
+      }
+    },
+    "naukri": {
+      "enabled": false,
+      "_disabled_reason": "naukri.com's robots.txt disallows Claude user agents (search-queries.md). Running a third-party scraper there routes around a site that said no, which this workspace's robots rule (09-web-research.md) does not do. Enable only as your own informed choice.",
+      "actor": "rowsmith/naukri-jobs-scraper",
+      "url": "https://apify.com/rowsmith/naukri-jobs-scraper",
+      "input": {
+        "keyword": "{query}",
+        "location": "{location}",
+        "maxItems": "{limit}"
+      },
+      "defaults": {},
+      "fields": {
+        "id": [
+          "jobId",
+          "id"
+        ],
+        "title": [
+          "title",
+          "jobTitle",
+          "designation"
+        ],
+        "company": [
+          "companyName",
+          "company"
+        ],
+        "location": [
+          "location",
+          "locations",
+          "placeholders.location"
+        ],
+        "date": [
+          "postedDate",
+          "createdDate",
+          "datePosted",
+          "footerPlaceholderLabel"
+        ],
+        "url": [
+          "jdURL",
+          "jobUrl",
+          "url",
+          "link"
+        ],
+        "description": [
+          "jobDescription",
+          "description"
+        ],
+        "salary": [
+          "salary",
+          "placeholders.salary"
+        ],
+        "jobType": [
+          "jobType",
+          "employmentType"
+        ],
+        "applyUrl": [
+          "applyRedirectUrl",
+          "applyUrl"
+        ],
+        "isExpired": [
+          "isExpired"
+        ]
+      }
+    }
+  }
+}
