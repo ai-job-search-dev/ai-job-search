@@ -42,6 +42,11 @@ class LegacyCharsets(unittest.TestCase):
         text = page("<p>Инженер данных</p>", '<meta charset="windows-1251">')
         self.assertIn("Инженер данных", decode_page(text.encode("cp1251")))
 
+    def test_data_charset_does_not_override_real_charset(self):
+        text = page("<p>Инженер данных</p>",
+                    '<meta data-charset="windows-1252"><meta charset="windows-1251">')
+        self.assertIn("Инженер данных", decode_page(text.encode("cp1251")))
+
     def test_utf16_byte_order_mark(self):
         text = page("<p>Ingeniør</p>")
         self.assertIn("Ingeniør", decode_page(text.encode("utf-16")))

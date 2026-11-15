@@ -18,7 +18,7 @@ a codec such as UTF-7.
 import re
 
 PRESCAN_BYTES = 1024
-META_CHARSET = re.compile(rb"<meta\b[^>]*?charset\s*=\s*[\"']?\s*([A-Za-z0-9._:-]+)", re.I)
+META_CHARSET = re.compile(rb"<meta\b[^>]*?(?<![-\w])charset\s*=\s*[\"']?\s*([A-Za-z0-9._:-]+)", re.I)
 
 _CODECS = {
     "cp949": ("euc-kr", "cp949", "windows-949", "ks_c_5601-1987", "ks_c_5601-1989",
