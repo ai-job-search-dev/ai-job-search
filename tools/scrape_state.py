@@ -19,7 +19,7 @@ from rank_state import STATE, TRACKER, _force_utf8_output, load_state, norm, sav
 def read_jobs(path: Path) -> list:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise ValueError(f"cannot read {path}: {exc}") from exc
     if isinstance(data, dict):
         data = data.get("results")

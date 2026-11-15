@@ -31,6 +31,11 @@ class ScrapeStateTests(unittest.TestCase):
             self.assertEqual(scrape_state.run(args), 0)
         return json.loads(output.getvalue())
 
+    def test_invalid_utf8_results_get_a_read_error(self):
+        self.results.write_bytes(b"\xff")
+        with self.assertRaisesRegex(ValueError, "cannot read"):
+            scrape_state.read_jobs(self.results)
+
     def test_candidates_excludes_history_tracker_and_repeated_hits_before_detail(self):
         old = {f"old_{i}": {"title": f"Old {i}", "company": "Archive", "url": f"https://jobs.test/{i}"} for i in range(1000)}
         old["legacy_key"] = {"title": "Engineer", "company": "Acme", "url": "https://jobs.test/old"}
