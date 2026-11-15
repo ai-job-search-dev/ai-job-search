@@ -43,7 +43,7 @@ def identity(job: dict) -> tuple[str, tuple[str, str]]:
         raise ValueError("job has a non-string company")
     url = job["url"].strip()
     parsed = urlsplit(url)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
         raise ValueError(f"job has an invalid posting URL: {url}")
     return url.rstrip("/"), (norm(company), norm(job["title"]))
 

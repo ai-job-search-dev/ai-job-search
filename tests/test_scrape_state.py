@@ -54,6 +54,13 @@ class ScrapeStateTests(unittest.TestCase):
         self.assertEqual(out["selected"], [valid])
         self.assertEqual([item["index"] for item in out["invalid"]], [1, 2])
 
+    def test_candidates_reject_url_with_credentials_but_no_host(self):
+        valid = {"title": "Builder", "company": "Fresh", "url": "https://jobs.test/fresh"}
+        invalid = {"title": "Engineer", "company": "Acme", "url": "https://user@/job"}
+        out = self.run_tool("candidates", [invalid, valid])
+        self.assertEqual(out["selected"], [valid])
+        self.assertEqual(out["invalid"][0]["index"], 0)
+
     def test_unnamed_employer_is_a_posting_not_a_malformed_hit(self):
         # The portal contract (add-portal.md) says a missing value is null,
         # never omitted, and freehire, linkedin and jobindex all emit
