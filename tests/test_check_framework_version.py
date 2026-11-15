@@ -96,6 +96,15 @@ class FrameworkVersionGateTests(CheckerRepoFixture):
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_lower_version_does_not_count_as_a_bump(self):
+        self.framework_file.write_text(
+            FRONTMATTER.replace("1.0.0", "0.9.9") + BODY + "\nChanged guidance.\n",
+            encoding="utf-8",
+        )
+        result = self.run_checker()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("modified without bumping", result.stdout)
+
     def test_same_version_reformatted_does_not_count_as_a_bump(self):
         for marker in ['framework_version: "1.0.0"', "framework_version:  1.0.0"]:
             with self.subTest(marker=marker):

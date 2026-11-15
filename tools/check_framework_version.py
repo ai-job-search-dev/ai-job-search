@@ -79,6 +79,11 @@ def parse_frontmatter_text(text: str) -> dict:
             data[k.strip()] = v.strip().strip('"').strip("'")
     return data
 
+def version_tuple(value: str | None) -> tuple[int, int, int] | None:
+    if not value or not re.fullmatch(r"\d+\.\d+\.\d+", value):
+        return None
+    return tuple(map(int, value.split(".")))
+
 def has_non_trivial_changes(file_path: Path, base_commit: str) -> bool:
     # Get diff of the file from base_commit to HEAD
     rel_path = file_path.relative_to(ROOT).as_posix()
@@ -113,10 +118,9 @@ def has_non_trivial_changes(file_path: Path, base_commit: str) -> bool:
     # whitespace can change while the parsed marker stays the same.
     if version_changed:
         rc, base_text, _ = run_git(["show", f"{base_commit}:{rel_path}"])
-        if rc != 0 or (
-            parse_frontmatter_text(base_text).get("framework_version")
-            != parse_frontmatter(file_path).get("framework_version")
-        ):
+        old = version_tuple(parse_frontmatter_text(base_text).get("framework_version"))
+        new = version_tuple(parse_frontmatter(file_path).get("framework_version"))
+        if new is not None and (rc != 0 or old is None or new > old):
             return False
         
     # If there are meaningful changes but the version was not changed
