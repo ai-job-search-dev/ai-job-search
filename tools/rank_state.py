@@ -125,6 +125,8 @@ def parse_timestamp(value) -> datetime | None:
 
 def parse_now(value: str) -> datetime:
     """--now: an ISO 8601 date-time; a naive value is taken as UTC."""
+    if len(value.strip()) <= 10:
+        raise argparse.ArgumentTypeError("--now needs a date and time")
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     return parsed.astimezone(timezone.utc) if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 

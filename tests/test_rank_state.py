@@ -64,6 +64,15 @@ class RankStateCase(unittest.TestCase):
 
 
 class Candidates(RankStateCase):
+    def test_now_rejects_date_without_time(self):
+        self.write_state({"a": entry()})
+        proc = subprocess.run(
+            [sys.executable, str(TOOL), "candidates", "--state", str(self.state), "--now", TODAY],
+            capture_output=True, text=True,
+        )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("--now needs a date and time", proc.stderr)
+
     def test_selects_only_new_entries_and_projects_a_compact_row(self):
         self.write_state(
             {
