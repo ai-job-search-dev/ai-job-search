@@ -318,7 +318,7 @@ def cmd_apply(args) -> int:
     now = args.now
     try:
         results = json.loads(Path(args.results).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         sys.exit(f"cannot read results file {args.results}: {exc}")
     if isinstance(results, dict):
         results = results.get("results", [])

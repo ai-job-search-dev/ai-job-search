@@ -281,6 +281,19 @@ class Sweep(RankStateCase):
 
 
 class Apply(RankStateCase):
+    def test_invalid_utf8_results_are_reported_without_writing(self):
+        self.write_state({"a": entry()})
+        results = self.tmp / "results.json"
+        results.write_bytes(b"\xff")
+        proc = subprocess.run(
+            [sys.executable, str(TOOL), "apply", "--state", str(self.state), "--results", str(results)],
+            capture_output=True, text=True,
+        )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("cannot read results file", proc.stderr)
+        self.assertNotIn("Traceback", proc.stderr)
+        self.assertEqual(self.read_state()["a"]["status"], "new")
+
     def results(self, payload):
         path = self.tmp / "results.json"
         path.write_text(json.dumps(payload), encoding="utf-8")
