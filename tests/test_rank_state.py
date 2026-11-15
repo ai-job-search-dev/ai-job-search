@@ -64,6 +64,16 @@ class RankStateCase(unittest.TestCase):
 
 
 class Candidates(RankStateCase):
+    def test_invalid_utf8_state_is_reported_without_traceback(self):
+        self.state.write_bytes(b"\xff")
+        proc = subprocess.run(
+            [sys.executable, str(TOOL), "candidates", "--state", str(self.state)],
+            capture_output=True, text=True,
+        )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("is not UTF-8 text", proc.stderr)
+        self.assertNotIn("Traceback", proc.stderr)
+
     def test_selects_only_new_entries_and_projects_a_compact_row(self):
         self.write_state(
             {

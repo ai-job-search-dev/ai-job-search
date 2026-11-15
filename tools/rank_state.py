@@ -87,6 +87,8 @@ def load_state(path: Path) -> tuple[dict, dict]:
         sys.exit(f"{path} not found - run /scrape first")
     try:
         doc = json.loads(path.read_text(encoding="utf-8"))
+    except UnicodeError as exc:
+        sys.exit(f"{path} is not UTF-8 text: {exc}")
     except json.JSONDecodeError as exc:
         sys.exit(f"{path} is not valid JSON: {exc}")
     seen = doc.get("seen") if isinstance(doc, dict) and "seen" in doc else doc
