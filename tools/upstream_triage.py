@@ -234,6 +234,7 @@ def main() -> int:
         lines.append("| Commit | Subject | Relevant files it touches |")
         lines.append("|---|---|---|")
         for short, sha, subj, present in review:
+            subj = subj.replace("|", r"\|")
             shown = ", ".join(f"`{p}`" for p in present[:4]) or "_(new/shared paths)_"
             if len(present) > 4:
                 shown += f" +{len(present) - 4} more"
@@ -261,6 +262,7 @@ def main() -> int:
         lines.append("| Commit | Subject | Why |")
         lines.append("|---|---|---|")
         for short, sha, subj, why in skip:
+            subj = subj.replace("|", r"\|")
             lines.append(f"| {commit_cell(short, sha, slug)} | {subj} | {why} |")
     else:
         lines.append("")

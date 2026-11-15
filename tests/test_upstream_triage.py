@@ -70,6 +70,16 @@ class UpToDateTests(TriageRepoFixture):
 
 
 class RelevanceFilterTests(TriageRepoFixture):
+    def test_commit_subject_pipe_does_not_split_report_table(self):
+        self.write("kept.py", "print('changed')\n")
+        self.commit("fix: parse A | B")
+        self.set_upstream_to_head()
+        git(self.root, "reset", "--hard", "HEAD~1")
+
+        result = self.run_triage()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(r"fix: parse A \| B", result.stdout)
+
     def test_commit_touching_only_removed_files_is_skipped(self):
         # Both start with the portal; upstream edits it while the fork drops it.
         self.write("portals/removed_portal.py", "x = 1\n")
