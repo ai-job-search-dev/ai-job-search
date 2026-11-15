@@ -360,6 +360,12 @@ class Fetching(FetchPageFixture):
         self.assertLessEqual(len(text), 7)
         self.assertTrue(text)
 
+    def test_negative_max_chars_is_rejected_before_fetch(self):
+        code, out, err = self.run_main(f"{self.base}/ok.html", "--text", "--max-chars", "-1")
+        self.assertEqual(code, 2)
+        self.assertIn("--max-chars must be zero or greater", err)
+        self.assertEqual(self.gate_calls, [])
+
     def test_default_out_lands_in_temp_not_repo(self):
         code, out, err = self.run_main(f"{self.base}/ok.html")
         self.assertEqual(code, 0, err)

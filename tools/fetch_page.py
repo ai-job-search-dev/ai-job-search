@@ -256,6 +256,9 @@ def main(argv=None) -> int:
     parser.add_argument("--text", action="store_true", help="also print the tag-stripped text")
     parser.add_argument("--max-chars", type=int, default=6000, help="cap for --text (default 6000)")
     args = parser.parse_args(argv)
+    if args.max_chars < 0:
+        print("fetch_page: --max-chars must be zero or greater", file=sys.stderr)
+        return 2
 
     scheme = urlsplit(args.url).scheme.lower()
     if scheme not in ("http", "https"):
