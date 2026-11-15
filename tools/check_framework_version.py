@@ -67,13 +67,13 @@ def parse_frontmatter(path: Path) -> dict:
 def parse_frontmatter_text(text: str) -> dict:
     if not text.startswith("---\n"):
         return {}
-    end = text.find("\n---", 4)
-    if end == -1:
+    closing = re.search(r"(?m)^---[ \t]*$", text[4:])
+    if closing is None:
         return {}
     
     # Simple parser for YAML/frontmatter
     data = {}
-    for line in text[4:end].splitlines():
+    for line in text[4:4 + closing.start()].splitlines():
         if ":" in line:
             k, v = line.split(":", 1)
             data[k.strip()] = v.strip().strip('"').strip("'")
