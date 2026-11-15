@@ -156,6 +156,12 @@ class FetchPageFixture(unittest.TestCase):
 
 
 class SchemeAndPathGuards(FetchPageFixture):
+    def test_malformed_url_is_a_usage_error(self):
+        code, out, err = self.run_main("http://[")
+        self.assertEqual(code, 2)
+        self.assertIn("invalid URL", err)
+        self.assertEqual(self.gate_calls, [])
+
     def test_rejects_non_http_scheme(self):
         code, out, err = self.run_main("file:///etc/passwd", "--out", str(self.out))
         self.assertEqual(code, 2)

@@ -257,7 +257,11 @@ def main(argv=None) -> int:
     parser.add_argument("--max-chars", type=int, default=6000, help="cap for --text (default 6000)")
     args = parser.parse_args(argv)
 
-    scheme = urlsplit(args.url).scheme.lower()
+    try:
+        scheme = urlsplit(args.url).scheme.lower()
+    except ValueError as exc:
+        print(f"fetch_page: invalid URL: {exc}", file=sys.stderr)
+        return 2
     if scheme not in ("http", "https"):
         print(f"fetch_page: only http(s) URLs are fetched, got scheme {scheme!r}", file=sys.stderr)
         return 2
