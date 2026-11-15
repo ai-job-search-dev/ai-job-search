@@ -252,6 +252,20 @@ class CanonicalAndLegacyShape(unittest.TestCase):
 
 
 class AuditCLI(unittest.TestCase):
+    def test_invalid_utf8_state_is_reported_not_a_traceback(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "seen.json"
+            path.write_bytes(b"\xff")
+            proc = subprocess.run(
+                [sys.executable, str(TOOL), "--audit", str(path)],
+                capture_output=True, text=True, encoding="utf-8",
+            )
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("cannot read", proc.stderr)
+        self.assertNotIn("Traceback", proc.stderr)
+
     def run_audit(self, seen: dict) -> tuple[dict, int]:
         import tempfile
 

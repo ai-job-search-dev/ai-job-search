@@ -218,7 +218,7 @@ def _load_seen(path: Path):
     """Return (document, seen) or print the reason and return None."""
     try:
         doc = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         print(f"cannot read {path}: {exc}", file=sys.stderr)
         return None
     seen = doc.get("seen", doc) if isinstance(doc, dict) else doc
