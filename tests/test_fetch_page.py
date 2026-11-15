@@ -171,6 +171,19 @@ class SchemeAndPathGuards(FetchPageFixture):
         self.assertIn("inside the repo", err)
         self.assertFalse(inside.exists())
 
+    def test_refuses_out_through_symlink_to_repo_subdirectory(self):
+        link = self.tmp / "cv_link"
+        try:
+            link.symlink_to(REPO_ROOT / "cv", target_is_directory=True)
+        except OSError:
+            self.skipTest("directory symlinks unavailable")
+        inside = link / "fetched.html"
+        code, out, err = self.run_main(f"{self.base}/ok.html", "--out", str(inside))
+        self.assertEqual(code, 2)
+        self.assertIn("inside the repo", err)
+        self.assertFalse(inside.exists())
+        self.assertEqual(self.gate_calls, [])
+
     def test_refuses_out_inside_repo_spelled_in_another_case(self):
         # On a case-insensitive filesystem the repo has many spellings, and
         # the guard compared resolved strings, so an upper-cased repo path
