@@ -51,10 +51,10 @@ def get_remote_url(remote_name: str) -> str:
 def get_framework_version_from_text(text: str) -> str | None:
     if not text.startswith("---\n"):
         return None
-    end = text.find("\n---", 4)
-    if end == -1:
+    closing = re.search(r"(?m)^---[ \t]*$", text[4:])
+    if closing is None:
         return None
-    for line in text[4:end].splitlines():
+    for line in text[4:4 + closing.start()].splitlines():
         if ":" in line:
             k, v = line.split(":", 1)
             if k.strip() == "framework_version":
