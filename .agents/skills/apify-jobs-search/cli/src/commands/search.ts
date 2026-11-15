@@ -35,11 +35,12 @@ export interface Job {
   description: string | null
 }
 
-function flag(item: unknown, paths: string[] | undefined): boolean {
+/** True when any path holds exactly `want` (so a missing field never counts either way). */
+function flag(item: unknown, paths: string[] | undefined, want = true): boolean {
   for (const p of paths ?? []) {
     let cur: unknown = item
     for (const part of p.split(".")) cur = cur !== null && typeof cur === "object" ? (cur as Record<string, unknown>)[part] : undefined
-    if (cur === true) return true
+    if (cur === want) return true
   }
   return false
 }
@@ -95,7 +96,8 @@ export function mapItems(items: unknown[], board: string, cfg: Board, now = new 
       salary: pick(it, cfg.fields.salary),
       jobType: pick(it, cfg.fields.jobType),
       applyUrl: httpUrl(pick(it, cfg.fields.applyUrl)),
-      isExpired: flag(it, cfg.fields.isExpired),
+      // Boards say "closed" either as isExpired/isClosed: true or as isActive: false.
+      isExpired: flag(it, cfg.fields.isExpired) || flag(it, cfg.fields.isActive, false),
       board,
       description: desc ? htmlToText(desc) : null,
     })
@@ -148,11 +150,21 @@ export async function runSearch(o: SearchOpts): Promise<number> {
   if (!cfg) return fail(`unknown board "${o.board}"; configured: ${Object.keys(boards).join(", ")} (see 'boards')`, "BAD_BOARD")
   if (!cfg.enabled) return fail(`board "${o.board}" is disabled in actors.json`, "BOARD_DISABLED")
 
+  const countryCode = o.country ?? cfg.defaults.country
+  let country: string | undefined = countryCode
+  if (cfg.countryMap && countryCode !== undefined) {
+    country = cfg.countryMap[countryCode.toUpperCase()]
+    if (country === undefined) {
+      return fail(`board "${o.board}" has no country "${countryCode}"; mapped: ${Object.keys(cfg.countryMap).join(", ")}`, "BAD_ARG")
+    }
+  }
   const input = buildInput(cfg.input, {
     query: o.query,
     location: o.location ?? cfg.defaults.location,
-    country: o.country ?? cfg.defaults.country,
+    country,
     limit: o.limit,
+    // Server-side recency where the actor has it, so stale postings are never billed.
+    jobage: o.jobage,
   })
   const actor = cfg.actor.replace("/", "~")
 

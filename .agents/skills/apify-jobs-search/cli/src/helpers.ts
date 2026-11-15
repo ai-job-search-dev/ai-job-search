@@ -89,6 +89,8 @@ export interface Board {
   url?: string
   input: Record<string, unknown>
   defaults: Record<string, string>
+  /** Translate the CLI's --country code to the value this actor expects (e.g. IN -> a Glassdoor site URL). */
+  countryMap?: Record<string, string>
   fields: Record<string, string[]>
 }
 
@@ -113,28 +115,40 @@ export function loadBoards(env = process.env): Record<string, Board> {
   return data.boards
 }
 
-/** Fill {query} {location} {country} {limit}; a placeholder left without a value drops its key. */
+const MISSING = Symbol("missing")
+
+/** One template value: "{x}" keeps x's type, "a {x}" becomes a string, MISSING when x has no value. */
+function fill(v: string, vals: Record<string, string | number | undefined>): string | number | typeof MISSING {
+  const whole = v.match(/^\{(\w+)\}$/)
+  if (whole) {
+    const val = vals[whole[1]]
+    return val === undefined || val === "" ? MISSING : val
+  }
+  let missing = false
+  const s = v.replace(/\{(\w+)\}/g, (_, name) => {
+    const val = vals[name]
+    if (val === undefined || val === "") missing = true
+    return String(val ?? "")
+  })
+  return missing ? MISSING : s
+}
+
+/**
+ * Fill {query} {location} {country} {limit} {jobage}. A placeholder without a value
+ * drops its key; inside an array it drops that element, and an array left empty drops its key.
+ */
 export function buildInput(template: Record<string, unknown>, vals: Record<string, string | number | undefined>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(template)) {
-    if (typeof v !== "string") {
+    if (typeof v === "string") {
+      const f = fill(v, vals)
+      if (f !== MISSING) out[k] = f
+    } else if (Array.isArray(v) && v.some((x) => typeof x === "string" && /\{\w+\}/.test(x))) {
+      const arr = v.map((x) => (typeof x === "string" ? fill(x, vals) : x)).filter((x) => x !== MISSING)
+      if (arr.length) out[k] = arr
+    } else {
       out[k] = v
-      continue
     }
-    const whole = v.match(/^\{(\w+)\}$/)
-    if (whole) {
-      const val = vals[whole[1]]
-      if (val === undefined || val === "") continue
-      out[k] = val
-      continue
-    }
-    let missing = false
-    const s = v.replace(/\{(\w+)\}/g, (_, name) => {
-      const val = vals[name]
-      if (val === undefined || val === "") missing = true
-      return String(val ?? "")
-    })
-    if (!missing) out[k] = s
   }
   return out
 }

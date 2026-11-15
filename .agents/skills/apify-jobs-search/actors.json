@@ -117,6 +117,459 @@
           "isExpired"
         ]
       }
+    },
+    "glassdoor": {
+      "enabled": true,
+      "actor": "bebity/glassdoor-jobs-scraper",
+      "url": "https://apify.com/bebity/glassdoor-jobs-scraper",
+      "_cost": "$0.0004 per job on the free tier, full description included (20 jobs = $0.008). 3,700 users, 4.4 stars.",
+      "input": {
+        "keyword": "{query}",
+        "matchTitle": "strict",
+        "location": "{location}",
+        "country": "{country}",
+        "maxItems": "{limit}",
+        "scrapeDetails": true,
+        "seniority": [
+          "Mid-senior",
+          "Director"
+        ],
+        "employmentType": [
+          "Full-time"
+        ]
+      },
+      "defaults": {
+        "country": "IN"
+      },
+      "countryMap": {
+        "IN": "https://www.glassdoor.co.in",
+        "DE": "https://www.glassdoor.de",
+        "NL": "https://www.glassdoor.nl",
+        "BE": "https://www.glassdoor.be",
+        "IE": "https://www.glassdoor.ie",
+        "GB": "https://www.glassdoor.co.uk",
+        "SG": "https://www.glassdoor.sg",
+        "US": "https://www.glassdoor.com"
+      },
+      "fields": {
+        "id": [
+          "job_id"
+        ],
+        "title": [
+          "job_title"
+        ],
+        "company": [
+          "company_name"
+        ],
+        "location": [
+          "job_location.city"
+        ],
+        "date": [
+          "job_posted_date"
+        ],
+        "url": [
+          "job_seo_url",
+          "job_url"
+        ],
+        "description": [
+          "job_description",
+          "job_description_html"
+        ],
+        "jobType": [
+          "job_type_labels",
+          "job_types"
+        ],
+        "isExpired": [
+          "job_expired"
+        ]
+      },
+      "_verified": "Verified by a 3-listing run on 2026-11-16 (engineering manager, Bengaluru): 3 rows, snake_case fields. Keyword search was loose (2 of 3 were Product Manager roles; the seniority filter let an Associate PM through), so matchTitle is set to strict: the title must contain every word of the term. job_url is a per-search tracking link, so url uses the stable job_seo_url. Salary is omitted because Glassdoor's figures are its own estimates (job_salary.estimated: true). job_posted_date can be a refresh date (one row: posted 2026-11-11, age 157 days). job_apply_url is also a Glassdoor tracking link, not the employer's posting, so applyUrl is left unmapped."
+    },
+    "foundit": {
+      "enabled": true,
+      "actor": "memo23/foundit-jobs-scraper",
+      "url": "https://apify.com/memo23/foundit-jobs-scraper",
+      "_cost": "$0.006 per job plus $0.005 per run (20 jobs = $0.125). experienceMinYears 8 drops junior roles server-side; postedWithinDays is server-side, so stale postings are not billed.",
+      "input": {
+        "searchKeywords": "{query}",
+        "location": "{location}",
+        "country": "{country}",
+        "maxItems": "{limit}",
+        "postedWithinDays": "{jobage}",
+        "experienceMinYears": 8,
+        "fetchDescriptions": true,
+        "excludeSyndicated": false
+      },
+      "defaults": {
+        "country": "IN"
+      },
+      "countryMap": {
+        "IN": "India",
+        "SG": "Singapore",
+        "MY": "Malaysia",
+        "ID": "Indonesia"
+      },
+      "fields": {
+        "id": [
+          "jobId"
+        ],
+        "title": [
+          "title"
+        ],
+        "company": [
+          "companyName"
+        ],
+        "location": [
+          "location",
+          "locations.city"
+        ],
+        "date": [
+          "postedDate"
+        ],
+        "url": [
+          "jobUrl"
+        ],
+        "description": [
+          "descriptionText",
+          "description"
+        ],
+        "salary": [
+          "salaryRaw",
+          "salary"
+        ],
+        "jobType": [
+          "employmentTypes",
+          "jobTypes"
+        ],
+        "applyUrl": [
+          "externalApplyUrl",
+          "applyUrl"
+        ],
+        "isActive": [
+          "isActive"
+        ]
+      },
+      "_verified": "Verified by a 3-listing run on 2026-11-16 (engineering manager, Bengaluru): 3 strong matches (IDFC EM 10-18 yrs, Nium Senior EM SRE, Apple Senior Software EM). All 3 were syndicated: applyUrl often points to LinkedIn, so scrape_state's company+title dedup catches overlap with linkedin-search. salary was null on all rows."
+    },
+    "instahyre": {
+      "enabled": true,
+      "actor": "getascraper/instahyre-jobs-scraper",
+      "url": "https://apify.com/getascraper/instahyre-jobs-scraper",
+      "_cost": "$0.00105 per job plus $0.0001 per detail (20 jobs = $0.023). Agency-posted jobs excluded.",
+      "input": {
+        "jobFunctionSlugs": [
+          "backend-development"
+        ],
+        "keywords": [
+          "{query}"
+        ],
+        "keywordMatch": "all",
+        "locations": [
+          "{location}"
+        ],
+        "includeDetails": true,
+        "excludeAgencyPosted": true,
+        "maxItems": "{limit}",
+        "maxPages": 10
+      },
+      "defaults": {},
+      "fields": {
+        "id": [
+          "jobId"
+        ],
+        "title": [
+          "title",
+          "candidateTitle"
+        ],
+        "company": [
+          "companyName"
+        ],
+        "location": [
+          "locations",
+          "locationsRaw"
+        ],
+        "date": [
+          "postedDate",
+          "createdAt"
+        ],
+        "url": [
+          "publicUrl"
+        ],
+        "description": [
+          "description"
+        ],
+        "jobType": [
+          "jobType"
+        ],
+        "isExpired": [
+          "isClosed"
+        ],
+        "isActive": [
+          "isActive"
+        ]
+      },
+      "_verified": "Verified by a 3-listing run on 2026-11-16 (engineering manager, Bengaluru): 2 rows from 10 pages of the backend-development feed (ZoomInfo Senior EM Integration; Flipkart Senior EM Payments). No posting-date field, so date is always null and --jobage cannot filter it. Both rows came back isAgencyPosted: true despite excludeAgencyPosted."
+    },
+    "remote": {
+      "enabled": true,
+      "actor": "memo23/remote-jobs-aggregator",
+      "url": "https://apify.com/memo23/remote-jobs-aggregator",
+      "_cost": "$0.002 per unique job (20 jobs = $0.04), deduplicated across RemoteOK, WeWorkRemotely, Remotive, Himalayas, Jobicy and Relomote.",
+      "input": {
+        "sources": [
+          "remoteok",
+          "weworkremotely",
+          "remotive",
+          "himalayas",
+          "jobicy",
+          "relomote"
+        ],
+        "dedupe": true,
+        "searchKeyword": "{query}",
+        "countries": [
+          "IN",
+          "DE",
+          "LU"
+        ],
+        "jobTypes": [
+          "FULL_TIME"
+        ],
+        "timeFilter": "30d",
+        "includeDescription": true,
+        "cleanHtml": true,
+        "maxItems": "{limit}"
+      },
+      "defaults": {},
+      "fields": {
+        "id": [
+          "sourceJobId"
+        ],
+        "title": [
+          "title"
+        ],
+        "company": [
+          "companyName"
+        ],
+        "location": [
+          "location"
+        ],
+        "date": [
+          "postedDate"
+        ],
+        "url": [
+          "url"
+        ],
+        "description": [
+          "descriptionText",
+          "description"
+        ],
+        "salary": [
+          "salaryText"
+        ],
+        "jobType": [
+          "employmentType"
+        ],
+        "applyUrl": [
+          "applyUrl"
+        ]
+      },
+      "_verified": "Verified by a 3-listing run on 2026-11-16 (engineering manager, Bengaluru): 1 row (Smartsheet Manager, Engineering via WeWorkRemotely, applicantCountries Anywhere). Low yield for EM terms; title text can say a narrower region than applicantCountries, so read the posting. Arbeitnow is left out (arbeitnow-search CLI covers it); --location is ignored."
+    },
+    "cutshort": {
+      "enabled": false,
+      "_status": "robots.txt allows Claude (checked 2026-11-16). Input fields taken from the Store listing only; full schema not yet checked. Output field names are not confirmed (the actor publishes no output schema): run one search with -n 3, fix 'fields' if PARSE_FAILED, then set enabled to true.",
+      "actor": "memo23/cutshort-jobs-scraper",
+      "url": "https://apify.com/memo23/cutshort-jobs-scraper",
+      "_cost": "$0.05 per run plus $0.0018 per job (20 jobs = $0.086); the start fee makes small runs expensive. The cheaper getascraper/cutshort-scraper searches by skill tags only, which does not fit role-title terms.",
+      "input": {
+        "searchQueries": [
+          "{query}"
+        ],
+        "city": "{location}",
+        "fullDetails": true,
+        "maxItems": "{limit}"
+      },
+      "defaults": {},
+      "fields": {
+        "id": [
+          "id",
+          "jobId"
+        ],
+        "title": [
+          "title",
+          "headline",
+          "jobTitle"
+        ],
+        "company": [
+          "companyName",
+          "company.name",
+          "company"
+        ],
+        "location": [
+          "locations",
+          "location",
+          "city"
+        ],
+        "date": [
+          "postedAt",
+          "postedDate",
+          "createdAt"
+        ],
+        "url": [
+          "url",
+          "jobUrl",
+          "publicUrl"
+        ],
+        "description": [
+          "description",
+          "descriptionText"
+        ],
+        "salary": [
+          "salary",
+          "salaryRange",
+          "displaySalary"
+        ],
+        "jobType": [
+          "jobType",
+          "employmentType"
+        ],
+        "applyUrl": [
+          "applyUrl"
+        ],
+        "isExpired": [
+          "isExpired"
+        ]
+      }
+    },
+    "stepstone": {
+      "enabled": false,
+      "_disabled_reason": "stepstone.de robots.txt could not be read (HTTP 403, 2026-11-16), so permission is unconfirmed; this workspace treats unconfirmed as no (09-web-research.md). Input fields from the Store listing only.",
+      "actor": "blackfalcondata/stepstone-de-scraper",
+      "url": "https://apify.com/blackfalcondata/stepstone-de-scraper",
+      "_cost": "$0.0007 per job plus $0.004 per run (20 jobs = $0.018). Many listings require German (Language Gate).",
+      "input": {
+        "query": "{query}",
+        "location": "{location}",
+        "maxResults": "{limit}",
+        "age": "{jobage}",
+        "includeDetails": true
+      },
+      "defaults": {},
+      "fields": {
+        "id": [
+          "id",
+          "jobId"
+        ],
+        "title": [
+          "title",
+          "jobTitle"
+        ],
+        "company": [
+          "company",
+          "companyName",
+          "company.name"
+        ],
+        "location": [
+          "location",
+          "locations"
+        ],
+        "date": [
+          "datePosted",
+          "postedAt",
+          "date"
+        ],
+        "url": [
+          "url",
+          "jobUrl",
+          "link"
+        ],
+        "description": [
+          "description",
+          "descriptionText"
+        ],
+        "salary": [
+          "salary",
+          "salaryText"
+        ],
+        "jobType": [
+          "contractType",
+          "workType",
+          "jobType"
+        ],
+        "applyUrl": [
+          "applyUrl",
+          "applyLink"
+        ],
+        "isExpired": [
+          "isExpired"
+        ]
+      }
+    },
+    "jobs-lu": {
+      "enabled": false,
+      "_disabled_reason": "jobs.lu robots.txt could not be read (HTTP 403, 2026-11-16), so permission is unconfirmed. The only actor has 7 users. Input fields from the Store listing only.",
+      "actor": "studio-amba/jobs-lu-scraper",
+      "url": "https://apify.com/studio-amba/jobs-lu-scraper",
+      "_cost": "$0.002 per job plus $0.005 per run (20 jobs = $0.045).",
+      "input": {
+        "searchQuery": "{query}",
+        "location": "{location}",
+        "maxResults": "{limit}"
+      },
+      "defaults": {},
+      "fields": {
+        "id": [
+          "id",
+          "jobId"
+        ],
+        "title": [
+          "title",
+          "jobTitle"
+        ],
+        "company": [
+          "company",
+          "employer",
+          "companyName"
+        ],
+        "location": [
+          "location"
+        ],
+        "date": [
+          "datePosted",
+          "postedDate",
+          "date"
+        ],
+        "url": [
+          "url",
+          "jobUrl",
+          "link"
+        ],
+        "description": [
+          "description"
+        ],
+        "salary": [
+          "salary"
+        ],
+        "jobType": [
+          "contractType",
+          "jobType"
+        ],
+        "applyUrl": [
+          "applyUrl"
+        ],
+        "isExpired": [
+          "isExpired"
+        ]
+      }
     }
+  },
+  "_not_configured": {
+    "google-jobs": "google.com/search disallows Claude-User in robots.txt (2026-11-16).",
+    "welcome-to-the-jungle": "welcometothejungle.com disallows Claude-User in robots.txt (2026-11-16).",
+    "xing": "xing.com/jobs/search disallows all crawlers (*) in robots.txt (2026-11-16).",
+    "linkedin": "covered by the linkedin-search CLI.",
+    "wellfound": "covered by the wellfound-search CLI.",
+    "hirist-iimjobs": "robots.txt allows Claude, but every Store actor has 3 or fewer users; revisit when one matures.",
+    "indeed-germany-luxembourg": "no separate board needed: use -b indeed --country DE or --country LU."
   }
 }

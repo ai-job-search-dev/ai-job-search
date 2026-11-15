@@ -75,6 +75,33 @@ describe("config and mapping", () => {
     expect(buildInput({ position: "{query}", location: "{location}", maxItems: "{limit}", fixed: true }, { query: "em", limit: 5 })).toEqual({ position: "em", maxItems: 5, fixed: true })
   })
 
+  test("placeholders inside arrays fill per element; an emptied array drops its key; literal arrays pass through", () => {
+    const t = { keywords: ["{query}"], locations: ["{location}"], sources: ["remoteok", "himalayas"], postedWithinDays: "{jobage}" }
+    expect(buildInput(t, { query: "engineering manager", jobage: 14 })).toEqual({ keywords: ["engineering manager"], sources: ["remoteok", "himalayas"], postedWithinDays: 14 })
+  })
+
+  test("isActive: false marks a listing expired; a missing isActive does not", () => {
+    const cfg = { ...loadBoards().instahyre }
+    const { jobs } = mapItems(
+      [
+        { jobId: "1", title: "EM", companyName: "A", publicUrl: "https://www.instahyre.com/job-1/", isActive: false },
+        { jobId: "2", title: "EM", companyName: "B", publicUrl: "https://www.instahyre.com/job-2/" },
+      ],
+      "instahyre",
+      cfg,
+      NOW,
+    )
+    expect(jobs.map((j) => j.isExpired)).toEqual([true, false])
+  })
+
+  test("every shipped board loads, and every disabled one says why", () => {
+    for (const [name, b] of Object.entries(loadBoards())) {
+      expect(b.actor).toMatch(/^[\w.-]+\/[\w.-]+$/)
+      if (!b.enabled) expect(Boolean((b as unknown as Record<string, unknown>)._status || (b as unknown as Record<string, unknown>)._disabled_reason)).toBe(true)
+      void name
+    }
+  })
+
   test("dates normalise; vague ones stay null", () => {
     expect(normalizeDate("2026-11-10T05:00:00Z", NOW)).toBe("2026-11-10")
     expect(normalizeDate("3 days ago", NOW)).toBe("2026-11-12")
@@ -152,5 +179,26 @@ describe("search (mocked API)", () => {
     const err = capture("stderr")
     expect(await runSearch({ ...base, board: "nope" })).toBe(1)
     expect(JSON.parse(err()).code).toBe("BAD_BOARD")
+  })
+
+  test("countryMap translates --country and rejects unmapped codes before any request", async () => {
+    const file = join(dir, "actors.json")
+    const boards = { boards: { gd: { enabled: true, actor: "bebity/glassdoor-jobs-scraper", input: { keyword: "{query}", country: "{country}", maxItems: "{limit}" }, defaults: { country: "IN" }, countryMap: { IN: "https://www.glassdoor.co.in", DE: "https://www.glassdoor.de" }, fields: { title: ["jobTitle"], company: ["companyName"], url: ["jobUrl"] } } } }
+    await Bun.write(file, JSON.stringify(boards))
+    process.env.APIFY_ACTORS_FILE = file
+    const calls = mockFetch((c) => {
+      if (c.method === "POST") return Response.json({ data: { id: "r", status: "SUCCEEDED", defaultDatasetId: "d", usageTotalUsd: 0.001 } }, { status: 201 })
+      if (c.url.includes("/actor-runs/r")) return Response.json({ data: { id: "r", status: "SUCCEEDED", defaultDatasetId: "d", usageTotalUsd: 0.001 } })
+      if (c.url.includes("/users/me/limits")) return Response.json({ data: {} })
+      return Response.json([{ jobTitle: "EM", companyName: "Acme", jobUrl: "https://www.glassdoor.de/job/1" }])
+    })
+    capture("stdout")
+    expect(await runSearch({ ...base, board: "gd", country: "de" })).toBe(0)
+    expect(calls[0].body).toMatchObject({ country: "https://www.glassdoor.de" })
+    const before = calls.length
+    const err = capture("stderr")
+    expect(await runSearch({ ...base, board: "gd", country: "LU" })).toBe(1)
+    expect(JSON.parse(err()).code).toBe("BAD_ARG")
+    expect(calls.length).toBe(before)
   })
 })

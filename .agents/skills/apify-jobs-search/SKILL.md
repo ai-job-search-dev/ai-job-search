@@ -53,7 +53,23 @@ bun run .agents/skills/apify-jobs-search/cli/src/cli.ts search -b <board> -q "<t
 Query syntax: passed verbatim to the actor's keyword input; each actor interprets it like the board's own search box (quotes and OR follow that board, not Google). One term per call. Not verified against a portal total.
 
 Flags:
-- `--board` / `-b <name>` - **required.** List boards with `boards`. Shipped: `indeed` (enabled) and `naukri` (**disabled**: naukri.com's robots.txt disallows Claude user agents, and this workspace does not route around a site that said no; enable it in `actors.json` only as your own informed choice).
+- `--board` / `-b <name>` - **required.** List boards with `boards`. Each board's `_status` / `_disabled_reason` and `_cost` notes in `actors.json` say why it is on or off and what 20 results cost. Boards Claude has decided not to configure (Google Jobs, Welcome to the Jungle, XING: robots.txt disallows Claude; LinkedIn and Wellfound: covered by CLIs) are listed under `_not_configured`.
+
+  | Board | State | Market | ~20 results |
+  |---|---|---|---|
+  | `indeed` | enabled, verified by a run | India; `--country DE` / `LU` for Germany and Luxembourg | $0.12 |
+  | `glassdoor` | enabled, verified by a run; strict title match | India, Germany (`--country` via `countryMap`); Mid-senior/Director, full-time | $0.008 |
+  | `foundit` | enabled, verified by a run | India (Monster India); 8+ years experience, server-side recency; many rows syndicated from LinkedIn | $0.125 |
+  | `instahyre` | enabled, verified by a run; no posting date | India tech; keyword filter over the backend-development feed | $0.023 |
+  | `remote` | enabled, verified by a run; low yield for EM terms | RemoteOK, WeWorkRemotely, Remotive, Himalayas, Jobicy, Relomote; open to IN/DE/LU | $0.04 |
+  | `cutshort` | off until verified | India startups; $0.05 start fee per run | $0.086 |
+  | `stepstone` | **off**: robots.txt unreadable (403), permission unconfirmed | Germany | $0.018 |
+  | `jobs-lu` | **off**: robots.txt unreadable (403), permission unconfirmed | Luxembourg | $0.045 |
+  | `naukri` | **off**: robots.txt disallows Claude user agents | India | — |
+
+  **Order inside a `/scrape` run (cheapest per result first),** so the `--run-budget` goes furthest: `glassdoor` → `instahyre` → `remote` → `indeed` → `foundit`. Use `-n 10` rather than 20 on `indeed` and `foundit` (about $0.06 a call), and stop at the first `RUN_BUDGET`. At the free plan's default per-run budget (~$0.60), expect roughly 2-3 terms across all five boards per run. That is enough for the Priority 1 terms; rotate Priority 2 terms across runs.
+
+  To switch a board on, run `search -b <board> -q "engineering manager" -n 3 --format json`. If it exits `PARSE_FAILED`, fix that board's `fields` to the names the actor returns, then set `"enabled": true`. Never enable a board whose `_disabled_reason` is about robots.txt unless you have decided to do so knowingly.
 - `--query` / `-q <term>` - **required.**
 - `--location` / `-l <place>` - the actor's location input (`Bengaluru`, `Hyderabad`, `Remote`, ...).
 - `--country <CC>` - for actors that take a country (Indeed; default `IN`).
@@ -100,6 +116,6 @@ bun run .agents/skills/apify-jobs-search/cli/src/cli.ts search -b indeed -q "sta
 
 | Format | Use |
 |--------|-----|
-| `json` (default) | `{ "meta": { "count", "page", "board", "run_id", "run_status", "cost_usd", "invalid_items" }, "results": [...] }`; each result has `id`, `title`, `company`, `location`, `date`, `url`, `salary`, `jobType` (the board's label, verbatim), `applyUrl` (the employer's own posting, which may pass through a tracking redirect, so prefer it for `/apply` research), `isExpired` (`true` only when the board marks the listing closed; treat it like `linkedin-search`'s `isActive: false` and store the entry as `expired`), `board`, `has_description`. |
+| `json` (default) | `{ "meta": { "count", "page", "board", "run_id", "run_status", "cost_usd", "invalid_items" }, "results": [...] }`; each result has `id`, `title`, `company`, `location`, `date`, `url`, `salary`, `jobType` (the board's label, verbatim), `applyUrl` (where the board says to apply: often the employer's own posting, sometimes another board such as LinkedIn, and may pass through a tracking redirect; null when the board only gives its own tracking link), `isExpired` (`true` only when the board marks the listing closed, as `isExpired`/`isClosed: true` or `isActive: false`; treat it like `linkedin-search`'s `isActive: false` and store the entry as `expired`), `board`, `has_description`. |
 | `table` | Title, company, location, date, URL, plus the run cost. |
 | `plain` | One block per posting. |
