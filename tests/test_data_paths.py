@@ -78,9 +78,17 @@ class DataRoot(unittest.TestCase):
         self.assertEqual(data_paths.data_root(self.worktree, env={}), self.worktree)
 
     def test_init_creates_user_data_in_the_main_checkout(self):
-        created = data_paths.init(self.worktree)
+        created = data_paths.init(self.worktree, env={})
         self.assertEqual(created, self.main / "user_data")
         self.assertTrue(created.is_dir())
+
+
+    def test_init_creates_the_override_it_will_then_resolve(self):
+        env = {"JOB_SEARCH_DATA_DIR": str(self.tmp / "cloud" / "jobs")}
+        created = data_paths.init(self.worktree, env=env)
+        self.assertTrue(created.is_dir())
+        self.assertEqual(created, data_paths.data_root(self.worktree, env=env))
+        self.assertFalse((self.main / "user_data").exists())
 
 
 class StateToolsFollowTheDataRoot(unittest.TestCase):

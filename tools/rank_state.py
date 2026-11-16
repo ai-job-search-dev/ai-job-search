@@ -51,7 +51,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from data_paths import data_root  # noqa: E402
 
-# The user's data, not the checkout: a linked worktree shares the main one's.
+# The data root: user_data/ in the main checkout when present (shared by linked
+# worktrees), else this checkout.
 ROOT = data_root()
 STATE = ROOT / "job_scraper" / "seen_jobs.json"
 TRACKER = ROOT / "job_search_tracker.csv"

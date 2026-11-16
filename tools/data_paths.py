@@ -14,7 +14,8 @@ Inside the data root the paths are the ones the specs already name
 
 Usage:
   python3 tools/data_paths.py          print the data root
-  python3 tools/data_paths.py --init   create user_data/ in the main checkout, print it
+  python3 tools/data_paths.py --init   create the data root (user_data/ in the main checkout,
+                                       or JOB_SEARCH_DATA_DIR when set) and print it
 """
 
 import os
@@ -49,10 +50,12 @@ def data_root(repo: Path = REPO, env=os.environ) -> Path:
     return shared if shared.is_dir() else repo
 
 
-def init(repo: Path = REPO) -> Path:
-    shared = main_checkout(repo) / DIR_NAME
-    shared.mkdir(exist_ok=True)
-    return shared
+def init(repo: Path = REPO, env=os.environ) -> Path:
+    """Create the root `data_root` will then return: the override when set."""
+    override = env.get(ENV)
+    target = Path(override).expanduser().resolve() if override else main_checkout(repo) / DIR_NAME
+    target.mkdir(parents=True, exist_ok=True)
+    return target
 
 
 if __name__ == "__main__":

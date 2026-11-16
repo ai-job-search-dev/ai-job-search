@@ -52,7 +52,7 @@ def check_dump_target(path, root=ROOT, data=None):
     # The CV may live in the user's data root rather than in this checkout.
     roots = {root, data_root() if data is None else data}
     if not any(parent.is_relative_to((r / d).resolve()) for r in roots for d in DUMP_TEXT_DIRS):
-        return "must be inside this repo's " + " or ".join(f"{d}/" for d in DUMP_TEXT_DIRS)
+        return "must be inside " + " or ".join(f"{d}/" for d in DUMP_TEXT_DIRS) + " of this repo or of the data root"
     return None
 
 
@@ -346,7 +346,10 @@ def build_parser():
     parser.add_argument(
         "--dump-text",
         type=Path,
-        help="write the extracted text layer to this .txt path under cv/ or cover_letters/ (UTF-8)",
+        help=(
+            "write the extracted text layer to this .txt path under cv/ or cover_letters/ "
+            "of this repo or of the data root (UTF-8)"
+        ),
     )
     parser.add_argument(
         "--ascii-dates",

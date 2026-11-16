@@ -159,7 +159,7 @@ def validate_data(data):
 def read_raw_data():
     """Load and JSON-parse salary_data.json; exit with a helpful message if missing/invalid."""
     if not DATA_FILE.exists():
-        print("Error: salary_data.json not found.", file=sys.stderr)
+        print(f"Error: salary_data.json not found at {DATA_FILE}.", file=sys.stderr)
         print("", file=sys.stderr)
         print("This tool requires a salary data file.", file=sys.stderr)
         print("See tools/README_SALARY_TOOL.md for setup instructions.", file=sys.stderr)
