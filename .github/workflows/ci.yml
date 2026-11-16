@@ -9,9 +9,11 @@
 #
 # No portal CLI ships here; they live in ai-job-search-dev/community-portals.
 # A fork that copies one into .agents/skills/ gets its typecheck and fixture
-# tests run by cli-checks. Deliberately NOT here: live smoke tests of portal
-# CLIs - they hit real portals (network-flaky, and some portals' terms forbid
-# automated requests). Live portal testing stays a local, on-demand step.
+# tests run by cli-checks; cli-checks-result rolls the matrix up into one
+# check name a ruleset can require. Deliberately NOT here: live smoke tests
+# of portal CLIs - they hit real portals (network-flaky, and some portals'
+# terms forbid automated requests). Live portal testing stays a local,
+# on-demand step.
 #
 # Security posture: this template ships pre-approved Claude Code permissions
 # and CLI code that every fork user executes, so the security-guards job
@@ -270,6 +272,21 @@ jobs:
             echo "No Bun tests found for $TOOL; skipping"
           fi
         working-directory: .agents/skills/${{ matrix.tool }}/cli
+
+  cli-checks-result:
+    # always() plus the explicit result check: a required job skipped because
+    # a need failed counts as passing.
+    name: CLI checks result
+    needs: [discover-clis, cli-checks]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          DISCOVER: ${{ needs.discover-clis.result }}
+          CHECKS: ${{ needs.cli-checks.result }}
+        run: |
+          echo "discover-clis: $DISCOVER, cli-checks: $CHECKS"
+          [ "$DISCOVER" = success ] && { [ "$CHECKS" = success ] || [ "$CHECKS" = skipped ]; }
 
   placeholder-integrity:
     name: Placeholder integrity (upstream template only)
