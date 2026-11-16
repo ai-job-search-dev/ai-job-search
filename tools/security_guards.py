@@ -74,6 +74,9 @@ ALLOWED_PERMISSIONS = {
     # here and in .claude/settings.json, per /add-portal.
     "Bash(python salary_lookup.py:*)",
     "Bash(python3 salary_lookup.py:*)",
+    # Prints the user's data root; --init only creates user_data/ in the main checkout.
+    "Bash(python tools/data_paths.py:*)",
+    "Bash(python3 tools/data_paths.py:*)",
     "Bash(python tools/rank_state.py:*)",
     "Bash(python3 tools/rank_state.py:*)",
     "Bash(python tools/job_key.py:*)",

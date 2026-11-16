@@ -25,7 +25,14 @@ import argparse
 import unicodedata
 from pathlib import Path
 
-DATA_FILE = Path(__file__).parent / "salary_data.json"
+sys.path.insert(0, str(Path(__file__).resolve().parent / "tools"))
+try:
+    from data_paths import data_root  # the user's data root, shared across worktrees
+except ImportError:  # this script copied somewhere without tools/
+    def data_root():
+        return Path(__file__).parent
+
+DATA_FILE = data_root() / "salary_data.json"
 
 # Common Nordic <-> anglicized spelling variants
 SPELLING_VARIANTS = {

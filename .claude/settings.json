@@ -4,6 +4,8 @@
       "Skill(job-application-assistant)",
       "Bash(python salary_lookup.py:*)",
       "Bash(python3 salary_lookup.py:*)",
+      "Bash(python tools/data_paths.py:*)",
+      "Bash(python3 tools/data_paths.py:*)",
       "Bash(python tools/rank_state.py:*)",
       "Bash(python3 tools/rank_state.py:*)",
       "Bash(python tools/job_key.py:*)",

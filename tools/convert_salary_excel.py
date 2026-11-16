@@ -34,6 +34,9 @@ import argparse
 import re
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from data_paths import data_root  # noqa: E402
+
 try:
     import openpyxl
 except ImportError:
@@ -452,7 +455,7 @@ def main():
         print("Error: openpyxl is required. Install it with: pip install openpyxl", file=sys.stderr)
         sys.exit(1)
 
-    output_path = Path(args.output) if args.output else Path(__file__).parent.parent / "salary_data.json"
+    output_path = Path(args.output) if args.output else data_root() / "salary_data.json"
 
     print(f"Reading: {excel_path}")
     wb = openpyxl.load_workbook(excel_path, read_only=True, data_only=True)
