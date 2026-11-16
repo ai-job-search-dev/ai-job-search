@@ -1,14 +1,7 @@
-// Shared free-tier budget ledger and rate limiter for the paid scraping CLIs.
-//
-// THIS FILE IS DUPLICATED, BYTE FOR BYTE, in
-//   .agents/skills/firecrawl-fetch/cli/src/budget.ts
-//   .agents/skills/apify-jobs-search/cli/src/budget.ts
-// Each portal CLI must stay self-contained (CI installs and tests them one at a
-// time), so the module cannot be imported across skills. tests/test_scrape_budget_sync.py
-// fails when the copies drift: edit one, copy it over the other.
+// Free-tier budget ledger and rate limiter for apify-jobs-search.
 //
 // What it enforces, across every process that shares the ledger file:
-//   * a monthly allowance per provider (Firecrawl credits, Apify USD), reset on
+//   * a monthly allowance per provider (Apify USD), reset on
 //     the provider's billing-cycle day, and synced upward from the provider's own
 //     usage endpoint when one is reachable (the provider's number wins if higher)
 //   * a reserve: /scrape stops at (1 - SCRAPE_BUDGET_RESERVE) of the allowance so
@@ -24,7 +17,7 @@
 import { closeSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "fs"
 import { dirname, join, resolve } from "path"
 
-export type Provider = "firecrawl" | "apify"
+export type Provider = "apify"
 
 export interface ProviderConfig {
   unit: "credits" | "usd"
@@ -39,13 +32,11 @@ export interface BudgetEnv {
 }
 
 const DEFAULTS: Record<Provider, ProviderConfig> = {
-  // Free plan: 1,000 credits/month, 10 req/min on /scrape and /search, 2 concurrent browsers.
-  firecrawl: { unit: "credits", monthly: 1000, cycleDay: 1, rpm: 8, concurrency: 2 },
   // Free plan: $5/month of platform usage. One actor run at a time keeps the spend predictable.
   apify: { unit: "usd", monthly: 5, cycleDay: 1, rpm: 4, concurrency: 1 },
 }
 
-const PREFIX: Record<Provider, string> = { firecrawl: "FIRECRAWL", apify: "APIFY" }
+const PREFIX: Record<Provider, string> = { apify: "APIFY" }
 
 export class BudgetError extends Error {
   constructor(message: string, readonly code: string) {
@@ -68,7 +59,7 @@ export function loadConfig(p: Provider, env: BudgetEnv = process.env): ProviderC
   const k = PREFIX[p]
   return {
     unit: d.unit,
-    monthly: num(env, p === "firecrawl" ? `${k}_MONTHLY_CREDITS` : `${k}_MONTHLY_USD`, d.monthly, 0, 1e9),
+    monthly: num(env, `${k}_MONTHLY_USD`, d.monthly, 0, 1e9),
     cycleDay: Math.trunc(num(env, `${k}_CYCLE_DAY`, d.cycleDay, 1, 28)),
     rpm: Math.trunc(num(env, `${k}_RPM`, d.rpm, 1, 10000)),
     concurrency: Math.trunc(num(env, `${k}_CONCURRENCY`, d.concurrency, 1, 100)),

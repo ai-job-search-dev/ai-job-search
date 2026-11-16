@@ -3,7 +3,7 @@ name: apify-jobs-search
 version: 1.0.0
 description: >
   Search job boards that have no portal CLI here, such as Indeed India, by
-  running Apify Store scraper actors on the Apify free plan ($5 a month) under a shared
+  running Apify Store scraper actors on the Apify free plan ($5 a month) under a
   monthly budget and rate limiter. Boards and their actors are configured in actors.json.
   Trigger phrases: Apify, Indeed jobs, India job boards, search Indeed.
 context: fork
@@ -20,9 +20,15 @@ is capped three ways before it starts:
 - `maxItems` (`-n`)
 - `--timeout` and `--memory`, which bound compute cost
 
-The run is charged against the ledger shared with `firecrawl-fetch`. After the run, the
-ledger records its real `usageTotalUsd` and syncs with `GET /v2/users/me/limits`. One
-run at a time by default.
+Each run is charged against a local budget ledger before it starts
+(`.claude/skills/job-scraper/job_scraper/api_budget.json`, gitignored). After the run,
+the ledger records its real `usageTotalUsd` and syncs with `GET /v2/users/me/limits`.
+The ledger enforces:
+- the monthly allowance, reset each billing cycle
+- a 20% reserve that `/scrape` never spends (`--allow-reserve` unlocks it for single-posting use)
+- a per-run cap keyed by `--run-id`
+- requests per minute and concurrency (one run at a time by default)
+- a pause after a 429, and a stop until the cycle resets once Apify reports the allowance exhausted
 
 **Setup.** Put `APIFY_API_TOKEN=apify_api_...` in the repo-root `.env` (gitignored; Bun
 loads it when you run from the repo root). Never pass the token as a flag.
@@ -76,7 +82,7 @@ Flags:
 - `--limit` / `-n <1-50>` - default 20.
 - `--jobage <days>` - client-side filter on the posting date. Undated items are kept, and `30+ days ago` stays undated.
 - `--max-charge <usd>` - default 0.25; `--timeout <secs>` default 180; `--memory <MB>` default 1024.
-- `--run-id <id>`, `--run-budget <usd>`, `--allow-reserve` - shared budget controls (see `firecrawl-fetch` SKILL.md).
+- `--run-id <id>` groups calls into one `/scrape` run; `--run-budget <usd>` caps that run's total spend (take it from `budget`'s `suggested_run_budget`); `--allow-reserve` lets a single-posting use spend the reserved share.
 - `--format json|table|plain` - default `json`.
 
 ### Detail (free)
@@ -87,7 +93,7 @@ bun run .agents/skills/apify-jobs-search/cli/src/cli.ts detail <url> [--format j
 
 Returns the description the last search already returned. It reads a local cache in the
 system temp directory and makes no request. `NOT_CACHED` or `NO_DESCRIPTION` means:
-fetch the posting with WebFetch, then `firecrawl-fetch detail`.
+fetch the posting with WebFetch, then `python3 tools/fetch_page.py`.
 
 ### Boards and budget (free)
 
@@ -97,11 +103,21 @@ bun run .agents/skills/apify-jobs-search/cli/src/cli.ts budget [--sync] [--forma
 ```
 
 Settings: `APIFY_MONTHLY_USD` (5), `APIFY_CYCLE_DAY` (1), `APIFY_RPM` (4),
-`APIFY_CONCURRENCY` (1), `APIFY_ACTORS_FILE`, and the shared `SCRAPE_BUDGET_RESERVE`,
-`SCRAPE_RUNS_PER_MONTH` and `SCRAPE_BUDGET_FILE`.
+`APIFY_CONCURRENCY` (1), `APIFY_ACTORS_FILE`, `SCRAPE_BUDGET_RESERVE` (0.2),
+`SCRAPE_RUNS_PER_MONTH` (8, which sets `suggested_run_budget`) and `SCRAPE_BUDGET_FILE`.
 
-Error codes match `firecrawl-fetch`, plus `BAD_BOARD`, `BOARD_DISABLED`, `ACTOR_NOT_FOUND`,
-`ACTOR_TIMEOUT` (aborted; the ledger is charged the full cap) and `ACTOR_FAILED`.
+Error codes:
+- **Budget:**
+  - `BUDGET_CEILING`: the scrape share or the whole allowance is spent
+  - `RUN_BUDGET`: this `--run-id` has spent its cap
+  - `RATE_LIMITED`: no slot within 90 s, or paused after a 429
+  - `BUDGET_EXHAUSTED`: Apify reported no allowance left
+- **Credentials:** `MISSING_CREDENTIALS`, `BAD_CREDENTIALS`
+- **Run:**
+  - `BAD_BOARD`, `BOARD_DISABLED`, `ACTOR_NOT_FOUND`, `ACTOR_FAILED`
+  - `ACTOR_TIMEOUT`: the run was aborted, and the ledger is charged the full cap
+  - `PARSE_FAILED`: the output field names changed
+  - `UPSTREAM_ERROR`
 Budget and rate errors are never evidence that the board is broken.
 
 ## Usage examples

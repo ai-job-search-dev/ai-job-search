@@ -77,9 +77,8 @@ ALLOWED_PERMISSIONS = {
     "Bash(bun run .agents/skills/jobnet-search/cli/src/cli.ts:*)",
     "Bash(bun run .agents/skills/linkedin-search/cli/src/cli.ts:*)",
     "Bash(bun run .agents/skills/freehire-search/cli/src/cli.ts:*)",
-    # Paid free-tier scrapers: each call is capped by the shared budget ledger
+    # Paid free-tier scraper: each call is capped by its budget ledger
     # (src/budget.ts) and reads its token only from the environment.
-    "Bash(bun run .agents/skills/firecrawl-fetch/cli/src/cli.ts:*)",
     "Bash(bun run .agents/skills/apify-jobs-search/cli/src/cli.ts:*)",
     "Bash(python salary_lookup.py:*)",
     "Bash(python3 salary_lookup.py:*)",

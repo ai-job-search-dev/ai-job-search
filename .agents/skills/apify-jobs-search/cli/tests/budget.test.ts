@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"
-import { BudgetError, cycleStart, reserve, settle, status, syncRemote, type Clock } from "../src/budget"
+import { BudgetError, cycleStart, reserve, settle, status, syncRemote, type BudgetEnv, type Clock } from "../src/budget"
 
 let dir: string
 let path: string
@@ -13,8 +13,13 @@ const clock: Clock = {
     t += ms
   },
 }
-const env = { FIRECRAWL_RPM: "3", FIRECRAWL_CONCURRENCY: "2", APIFY_RPM: "100", APIFY_CONCURRENCY: "1" }
-const o = () => ({ env, clock, path })
+/** Default $5 allowance, one run at a time. */
+const one: BudgetEnv = { APIFY_RPM: "100", APIFY_CONCURRENCY: "1" }
+/** Large allowance and no practical rate limit, for the allowance arithmetic. */
+const big: BudgetEnv = { APIFY_MONTHLY_USD: "1000", APIFY_RPM: "1000", APIFY_CONCURRENCY: "100" }
+/** Three requests a minute, two in flight. */
+const slow: BudgetEnv = { APIFY_MONTHLY_USD: "1000", APIFY_RPM: "3", APIFY_CONCURRENCY: "2" }
+const o = (env: BudgetEnv = one) => ({ env, clock, path })
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "budget-test-"))
@@ -42,13 +47,18 @@ describe("cycleStart", () => {
 
 describe("allowance, reserve and run budget", () => {
   test("scrape stops at 80% of the allowance; --allow-reserve may use the rest", async () => {
-    const big = { ...env, FIRECRAWL_RPM: "1000", FIRECRAWL_CONCURRENCY: "100" }
-    for (let i = 0; i < 4; i++) await settle(await reserve("firecrawl", 200, { env: big, clock, path }), 200, { env: big, clock, path })
-    expect(await code(reserve("firecrawl", 1, { env: big, clock, path }))).toBe("BUDGET_CEILING")
-    const tk = await reserve("firecrawl", 150, { env: big, clock, path, allowReserve: true })
-    await settle(tk, 150, { env: big, clock, path })
-    expect(await code(reserve("firecrawl", 51, { env: big, clock, path, allowReserve: true }))).toBe("BUDGET_CEILING")
-    expect((await status("firecrawl", { env: big, clock, path })).used).toBe(950)
+    for (let i = 0; i < 4; i++) await settle(await reserve("apify", 200, o(big)), 200, o(big))
+    expect(await code(reserve("apify", 1, o(big)))).toBe("BUDGET_CEILING")
+    const tk = await reserve("apify", 150, { ...o(big), allowReserve: true })
+    await settle(tk, 150, o(big))
+    expect(await code(reserve("apify", 51, { ...o(big), allowReserve: true }))).toBe("BUDGET_CEILING")
+    expect((await status("apify", o(big))).used).toBe(950)
+  })
+
+  test("the default $5 allowance leaves $4 for scraping", async () => {
+    const st = await status("apify", o())
+    expect(st.monthly).toBe(5)
+    expect(st.scrape_ceiling).toBe(4)
   })
 
   test("per-run budget is enforced by run id", async () => {
@@ -59,15 +69,15 @@ describe("allowance, reserve and run budget", () => {
   })
 
   test("settle replaces the estimate with the actual cost", async () => {
-    const tk = await reserve("firecrawl", 4, o())
-    await settle(tk, 2, o())
-    expect((await status("firecrawl", o())).used).toBe(2)
+    const tk = await reserve("apify", 0.25, o())
+    await settle(tk, 0.012, o())
+    expect((await status("apify", o())).used).toBe(0.012)
   })
 
   test("a new billing cycle resets usage", async () => {
-    await settle(await reserve("firecrawl", 5, o()), 5, o())
+    await settle(await reserve("apify", 1, o()), 1, o())
     t = Date.parse("2026-12-01T00:00:01Z")
-    const st = await status("firecrawl", o())
+    const st = await status("apify", o())
     expect(st.used).toBe(0)
     expect(st.period_start).toBe("2026-12-01")
   })
@@ -75,15 +85,15 @@ describe("allowance, reserve and run budget", () => {
 
 describe("rate and concurrency limits", () => {
   test("waits for a per-minute slot, then proceeds", async () => {
-    for (let i = 0; i < 3; i++) await settle(await reserve("firecrawl", 1, o()), 1, o())
+    for (let i = 0; i < 3; i++) await settle(await reserve("apify", 1, o(slow)), 1, o(slow))
     const before = t
-    await settle(await reserve("firecrawl", 1, o()), 1, o())
+    await settle(await reserve("apify", 1, o(slow)), 1, o(slow))
     expect(t - before).toBeGreaterThanOrEqual(59_000)
   })
 
   test("gives up with RATE_LIMITED rather than sending when no slot frees in time", async () => {
-    for (let i = 0; i < 3; i++) await settle(await reserve("firecrawl", 1, o()), 1, o())
-    expect(await code(reserve("firecrawl", 1, { ...o(), maxWaitMs: 5_000 }))).toBe("RATE_LIMITED")
+    for (let i = 0; i < 3; i++) await settle(await reserve("apify", 1, o(slow)), 1, o(slow))
+    expect(await code(reserve("apify", 1, { ...o(slow), maxWaitMs: 5_000 }))).toBe("RATE_LIMITED")
   })
 
   test("in-flight requests count against concurrency until settled", async () => {
@@ -91,10 +101,11 @@ describe("rate and concurrency limits", () => {
     expect(await code(reserve("apify", 0.1, { ...o(), maxWaitMs: 3_000 }))).toBe("RATE_LIMITED")
   })
 
-  test("a 429 pauses the provider; a 402 stops it for the cycle", async () => {
-    await settle(await reserve("firecrawl", 1, o()), 0, { ...o(), rateLimitedFor: 120 })
-    expect((await status("firecrawl", o())).paused_until).not.toBeNull()
-    expect(await code(reserve("firecrawl", 1, { ...o(), maxWaitMs: 60_000 }))).toBe("RATE_LIMITED")
+  test("a 429 pauses the provider; out-of-allowance stops it for the cycle", async () => {
+    await settle(await reserve("apify", 0.1, o()), 0, { ...o(), rateLimitedFor: 120 })
+    expect((await status("apify", o())).paused_until).not.toBeNull()
+    expect(await code(reserve("apify", 0.1, { ...o(), maxWaitMs: 60_000 }))).toBe("RATE_LIMITED")
+    t += 121_000
     await settle(await reserve("apify", 0.1, o()), 0, { ...o(), exhausted: true })
     expect(await code(reserve("apify", 0.1, o()))).toBe("BUDGET_EXHAUSTED")
   })
@@ -113,12 +124,12 @@ describe("provider sync", () => {
 
   test("a corrupt ledger is an error, never a silent reset", async () => {
     writeFileSync(path, "{not json")
-    expect(await code(status("firecrawl", o()))).toBe("BAD_LEDGER")
+    expect(await code(status("apify", o()))).toBe("BAD_LEDGER")
     expect(readFileSync(path, "utf8")).toBe("{not json")
   })
 
   test("suggested run budget splits what is left over the remaining runs", async () => {
-    const st = await status("firecrawl", { ...o(), env: { ...env, SCRAPE_RUNS_PER_MONTH: "8" } })
+    const st = await status("apify", o({ ...big, SCRAPE_RUNS_PER_MONTH: "8" }))
     expect(st.scrape_ceiling).toBe(800)
     expect(st.suggested_run_budget).toBeCloseTo(800 / st.runs_left_estimate, 1)
   })

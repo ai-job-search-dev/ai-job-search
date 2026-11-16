@@ -256,11 +256,11 @@ export function runDetail(o: { url: string; format: "json" | "plain" }): number 
   const job = readCache()[o.url.trim()]
   if (!job) {
     return fail(
-      "not in the local cache of recent apify-jobs-search results (the cache lives in the system temp dir); fetch the posting with firecrawl-fetch detail or WebFetch instead",
+      "not in the local cache of recent apify-jobs-search results (the cache lives in the system temp dir); fetch the posting with WebFetch or tools/fetch_page.py instead",
       "NOT_CACHED",
     )
   }
-  if (!job.description) return fail("this board's actor returned no description; fetch the posting with firecrawl-fetch detail or WebFetch", "NO_DESCRIPTION")
+  if (!job.description) return fail("this board's actor returned no description; fetch the posting with WebFetch or tools/fetch_page.py", "NO_DESCRIPTION")
   if (o.format === "plain") {
     process.stdout.write(`${job.title}\n${job.company} · ${job.location ?? "—"} · ${job.date ?? "—"}\n${job.salary ? `Salary: ${job.salary}\n` : ""}${job.url}\n\n${job.description}\n`)
   } else {

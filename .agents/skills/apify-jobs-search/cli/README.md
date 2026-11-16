@@ -9,5 +9,4 @@ bun run typecheck
 bun run test         # network-free: mocked fetch, temp ledger
 ```
 
-`src/budget.ts` is shared byte-for-byte with `firecrawl-fetch` (enforced by
-`tests/test_scrape_budget_sync.py` at the repo root): edit one, copy it over the other.
+`src/budget.ts` is the budget ledger and rate limiter every paid call goes through.

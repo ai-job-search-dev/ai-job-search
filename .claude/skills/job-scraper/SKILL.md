@@ -60,15 +60,15 @@ If this fails (bun not installed), skip to **1c (WebSearch fallback)** for all p
 
 #### 1b. Run CLI tools (primary — run these in parallel where possible)
 
-Discover all installed portal CLI skills by reading every `SKILL.md` found under `.agents/skills/*/SKILL.md` **whose directory also contains `cli/package.json`**. Each file documents that portal's exact CLI flags and usage examples. **Use each portal's own documented interface — do not guess flags.** This approach automatically includes any new portals added via `/add-portal` without requiring changes to this file. A skill directory without `cli/` is not a portal and is never run by this step. For example, the general-purpose `firecrawl` agent skill installed by `npx skills add` drives the global `firecrawl` CLI and bypasses the budget ledger; `/scrape` uses `firecrawl-fetch` instead.
+Discover all installed portal CLI skills by reading every `SKILL.md` found under `.agents/skills/*/SKILL.md` **whose directory also contains `cli/package.json`**. Each file documents that portal's exact CLI flags and usage examples. **Use each portal's own documented interface — do not guess flags.** This approach automatically includes any new portals added via `/add-portal` without requiring changes to this file. A skill directory without `cli/` is not a portal and is never run by this step.
 
-**Free portals first, paid portals last (budgeted).** `firecrawl-fetch` and `apify-jobs-search` spend a free-tier monthly allowance (Firecrawl 1,000 credits, Apify $5). Run them only after every free portal has returned, and only as follows:
+**Free portals first, the paid portal last (budgeted).** `apify-jobs-search` spends the Apify free plan's $5 monthly allowance. Run it only after every free portal has returned, and only as follows:
 
-1. **Open the run.** Pick one run id for this whole `/scrape`, `scrape-YYYY-MM-DD-HHMM`. Run `bun run .agents/skills/firecrawl-fetch/cli/src/cli.ts budget --sync` and `bun run .agents/skills/apify-jobs-search/cli/src/cli.ts budget --sync`. Read each one's `suggested_run_budget` and `remaining_for_scrape`. Skip a provider whose `remaining_for_scrape` is below one call (2 credits / $0.05), or that reports `exhausted` or `paused_until`, and record it for the Step 5 `budget:` line. A missing token (`MISSING_CREDENTIALS`) skips that provider silently apart from the `budget:` line.
-2. **Pass the caps on every paid call:** `--run-id <id> --run-budget <suggested_run_budget>`. Never pass `--allow-reserve` from `/scrape`; the reserve belongs to single-posting fetches in `/apply` and `/rank`.
-3. **Scope.** By default send paid searches only for the Priority 1 and Priority 2 plain terms (Priority 3 too on `/scrape broad`), one term per call. `firecrawl-fetch search` runs once per term with no location, or with `-l India` / `-l Germany` when the run is location-focused. `apify-jobs-search search` runs per enabled board in `actors.json`.
+1. **Open the run.** Pick one run id for this whole `/scrape`, `scrape-YYYY-MM-DD-HHMM`. Run `bun run .agents/skills/apify-jobs-search/cli/src/cli.ts budget --sync` and read its `suggested_run_budget` and `remaining_for_scrape`. Skip Apify if `remaining_for_scrape` is below one call ($0.05), or if it reports `exhausted` or `paused_until`, and record that for the Step 5 `budget:` line. A missing token (`MISSING_CREDENTIALS`) skips Apify silently apart from the `budget:` line. **Never read, grep, `test -f` or otherwise inspect `.env`** to find out whether the token is set. The workspace denies that by design. The `budget --sync` result is the only token check: exit 0 means the token works, `MISSING_CREDENTIALS` means it is unset, and `BAD_CREDENTIALS` means it was rejected.
+2. **Pass the caps on every paid call:** `--run-id <id> --run-budget <suggested_run_budget>`. Never pass `--allow-reserve` from `/scrape`.
+3. **Scope.** By default send paid searches only for the Priority 1 and Priority 2 plain terms (Priority 3 too on `/scrape broad`), one term per call, per enabled board in `actors.json`, in the order its SKILL.md gives.
 4. **Pacing.** The ledger enforces requests per minute and concurrency across processes. Run paid calls **sequentially in one agent**, not fanned out in parallel, so they queue on the limiter instead of timing out with `RATE_LIMITED`.
-5. **Stop conditions.** `RUN_BUDGET`, `BUDGET_CEILING` or `BUDGET_EXHAUSTED` ends that provider for this run: stop sending it calls and carry on with what you have. `RATE_LIMITED` means skip the rest of that provider's calls this run. Never retry in a loop.
+5. **Stop conditions.** `RUN_BUDGET`, `BUDGET_CEILING` or `BUDGET_EXHAUSTED` ends Apify for this run: stop sending calls and carry on with what you have. `RATE_LIMITED` means skip the rest of the Apify calls this run. Never retry in a loop.
 
 **Honor the `enabled` toggle.** A portal is enabled unless its `SKILL.md` frontmatter sets `enabled: false` (a missing key means enabled — the default). Skip each disabled portal and record it for the Step 5 summary. A fork can thus keep a portal installed but sit out a run without deleting its directory.
 
@@ -127,7 +127,7 @@ fields manually. If it returns HTTP 403, retry with browser headers via `python3
 `.claude/skills/job-application-assistant/09-web-research.md` before giving up — most
 bank and corporate sites reject WebFetch's user agent while serving browsers normally.
 
-**Paid-portal results, and the paid last resort.** For `apify-jobs-search` results, use its `detail` first. It is free: it reads the description the search already paid for. For `firecrawl-fetch` results, use `WebFetch` first. ATS pages (Greenhouse, Lever, Ashby) usually load for free, and `firecrawl-fetch detail` is the paid fallback. For **any** posting whose free routes failed (portal `detail`, `WebFetch`, then `fetch_page.py`), one `firecrawl-fetch detail '<URL>' --run-id <id> --run-budget <n>` is allowed as the last step before declaring it unreadable. Its robots gate refuses pages that `fetch_page.py` would refuse too, and a refusal is final. Spend detail credits on High/Medium-fit candidates only.
+**Paid-portal results.** For `apify-jobs-search` results, use its `detail` first. It is free: it reads the description the search already paid for. When it has none, fall back to `WebFetch` and then `fetch_page.py` on the result's `url`, or on its `applyUrl` when that is the employer's own posting.
 
 **Store a URL that actually resolves to the posting.** A listing-page URL with a
 `#fragment` appended (`.../jobs/ciso/#ikerian`) is not a posting: it fetches fine and
@@ -248,7 +248,7 @@ Scraper-based portal CLIs rot silently: when a portal changes its markup, the pa
 - **Degraded scan:** inspect the results it returned this run. Flags: `company` null or empty on every result, empty titles, undecoded entities (`&amp;`) or HTML fragments in titles, URLs that do not point at the portal. Any of these means the parser is half-working and `/scrape` is silently collecting junk.
 - **Yield history:** if the portal returned zero results across all of this run's queries, run `python3 tools/scrape_state.py history --portal <skill-name> --domain <portal-host>` (the host from that portal's documented base URL). It counts prior `job_scraper/seen_jobs.json` entries by `portal`, or by URL host for entries predating that field, without loading the history into context. A portal that produced jobs on earlier runs and produces nothing now is suspect - the same queries worked before.
 
-**Escalation (bounded, on suspicion only).** A suspect portal gets **one** sentinel probe: run its documented `search` with the example query from its own SKILL.md (that query provably worked when the skill was registered), the portal's limit flag capped at 3, `--format json`. If that returns nothing, retry **once** with a single common word. Only then is the verdict **broken**. A 429 or block page is **never** evidence of breakage - record the portal as **inconclusive (rate-limited)**, back off, and do not retry. For the paid portals (`firecrawl-fetch`, `apify-jobs-search`), the budget error codes (`RUN_BUDGET`, `BUDGET_CEILING`, `BUDGET_EXHAUSTED`, `RATE_LIMITED`, `MISSING_CREDENTIALS`) are never evidence of breakage either. Report them on the Step 5 `budget:` line, not as a `health:` line, and never spend a sentinel probe on a paid portal outside `/scrape health`. In health mode, a paid portal's probe is its `budget --sync` plus one search at `-n 3` (Firecrawl: 2 credits; Apify: at most `--max-charge 0.05`), and only when the budget shows room for it. An `apify-jobs-search` `PARSE_FAILED` means the actor's output field names changed: point the user at `actors.json`.
+**Escalation (bounded, on suspicion only).** A suspect portal gets **one** sentinel probe: run its documented `search` with the example query from its own SKILL.md (that query provably worked when the skill was registered), the portal's limit flag capped at 3, `--format json`. If that returns nothing, retry **once** with a single common word. Only then is the verdict **broken**. A 429 or block page is **never** evidence of breakage - record the portal as **inconclusive (rate-limited)**, back off, and do not retry. For the paid portal (`apify-jobs-search`), the budget error codes (`RUN_BUDGET`, `BUDGET_CEILING`, `BUDGET_EXHAUSTED`, `RATE_LIMITED`, `MISSING_CREDENTIALS`) are never evidence of breakage either. Report them on the Step 5 `budget:` line, not as a `health:` line, and never spend a sentinel probe on it outside `/scrape health`. In health mode, its probe is `budget --sync` plus one search at `-n 3 --max-charge 0.05`, and only when the budget shows room for it. An `apify-jobs-search` `PARSE_FAILED` means the actor's output field names changed: point the user at `actors.json`.
 
 **Verdicts.** Healthy portals get silence - no table, no line. Anything else surfaces in the Step 5 summary as a health line.
 
@@ -268,11 +268,11 @@ add one `health:` line per suspect portal (healthy portals get no line); after
 the report, offer to set that portal's `enabled: false` so `/scrape` stops
 running it (and covers it via the Step 1c fallback) until it is fixed - only
 edit the toggle with the user's confirmation, and never edit anything else in
-the skill. When the paid portals ran, or were skipped for budget, add one `budget:`
-line. Take this run's spend from the `meta.credits` / `meta.cost_usd` fields of their
-output. Take the cycle totals from a closing `budget --format json` call on each CLI,
-which is free. Name any provider skipped or stopped and the error code why. Omit the
-line when neither paid portal is installed.
+the skill. When the paid portal ran, or was skipped for budget, add one `budget:`
+line. Take this run's spend from the `meta.cost_usd` fields of its output. Take the
+cycle total from a closing `budget --format json` call, which is free. Name the stop
+or skip reason and its error code. Omit the line when `apify-jobs-search` is not
+installed.
 
 ```
 ## New Job Matches - YYYY-MM-DD
@@ -286,7 +286,7 @@ fallback (websearch): <portal-name>, <portal-name>
 health: <portal-name> - degraded (company null on all 12 results); parsing anchors in .agents/skills/<portal-name>/url-reference.md
 health: <portal-name> - broken (0 results for the SKILL.md test query and a broader retry); parsing anchors in .agents/skills/<portal-name>/url-reference.md
 
-budget: firecrawl 34 credits this run, 412/1000 this cycle (resets 2026-12-01); apify $0.42 this run, $2.10/$5 (stopped: RUN_BUDGET)
+budget: apify $0.42 this run, $2.10/$5 this cycle (resets 2026-12-01; stopped: RUN_BUDGET)
 
 | # | Fit | Title | Company | Location | Deadline | URL |
 |---|-----|-------|---------|----------|----------|-----|
