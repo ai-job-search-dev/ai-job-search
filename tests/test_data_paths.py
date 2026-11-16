@@ -84,11 +84,19 @@ class DataRoot(unittest.TestCase):
 
 
     def test_init_creates_the_override_it_will_then_resolve(self):
-        env = {"JOB_SEARCH_DATA_DIR": str(self.tmp / "cloud" / "jobs")}
+        env = {"JOB_SEARCH_DATA_DIR": str(self.tmp / "cloud")}
         created = data_paths.init(self.worktree, env=env)
         self.assertTrue(created.is_dir())
         self.assertEqual(created, data_paths.data_root(self.worktree, env=env))
         self.assertFalse((self.main / "user_data").exists())
+
+
+    def test_init_refuses_an_override_whose_parent_is_missing(self):
+        # A typo or an unmounted cloud folder must fail, not grow a wrong tree.
+        env = {"JOB_SEARCH_DATA_DIR": str(self.tmp / "unmounted" / "jobs")}
+        with self.assertRaises(FileNotFoundError):
+            data_paths.init(self.worktree, env=env)
+        self.assertFalse((self.tmp / "unmounted").exists())
 
 
 class StateToolsFollowTheDataRoot(unittest.TestCase):

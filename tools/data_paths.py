@@ -51,14 +51,23 @@ def data_root(repo: Path = REPO, env=os.environ) -> Path:
 
 
 def init(repo: Path = REPO, env=os.environ) -> Path:
-    """Create the root `data_root` will then return: the override when set."""
+    """Create the root `data_root` will then return: the override when set.
+
+    Only the last directory is created: a typo or an unmounted cloud folder in
+    the override must fail, not grow a wrong tree."""
     override = env.get(ENV)
     target = Path(override).expanduser().resolve() if override else main_checkout(repo) / DIR_NAME
-    target.mkdir(parents=True, exist_ok=True)
+    target.mkdir(exist_ok=True)
     return target
 
 
 if __name__ == "__main__":
     if sys.argv[1:] not in ([], ["--init"]):
         sys.exit(__doc__)
-    print(init() if sys.argv[1:] else data_root())
+    if not sys.argv[1:]:
+        print(data_root())
+    else:
+        try:
+            print(init())
+        except OSError as exc:
+            sys.exit(f"data_paths: cannot create the data root: {exc}")
