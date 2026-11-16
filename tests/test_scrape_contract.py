@@ -1,8 +1,9 @@
-"""Tests for the /scrape Step 2 search-output contract across portal CLIs.
+"""Tests for the /scrape Step 2 search-output contract.
 
 Mirrors the pattern of test_html_report_command.py: derive the contract from
-the spec itself and compare it against the real portal CLIs, so a drift on
-either side fails with a clean diff.
+the spec itself and compare it against the portal CLIs installed under
+.agents/skills/. None ship upstream (they live in community-portals), so these
+checks run on the portals a fork copies in or builds with /add-portal.
 
 Why this test exists: .claude/skills/job-scraper/SKILL.md Step 2 promises
 "Search output already includes title, company, location, date, and URL" for
@@ -51,7 +52,7 @@ def search_output_source(search_ts: Path) -> str:
 
 
 class ScrapeSearchOutputContractTests(unittest.TestCase):
-    """Every portal CLI's search output must carry the Step 2 contract fields."""
+    """Every installed portal CLI's search output must carry the Step 2 contract fields."""
 
     def test_step2_contract_sentence_is_found_in_the_scraper_skill(self):
         """Guards the anchor the field list is derived from."""
@@ -71,8 +72,7 @@ class ScrapeSearchOutputContractTests(unittest.TestCase):
             missing = sorted(contract - emitted)
             if missing:
                 failures.append(f"{portal.name}: missing {missing} in search output")
-        self.assertEqual([], failures, "; ".join(failures) or "no portal CLIs checked")
-
+        self.assertEqual([], failures, "; ".join(failures))
 
 
 # Step 4's storage schema, derived the same way as the Step 2 contract above:
@@ -238,7 +238,6 @@ class PortalQuerySyntaxTests(unittest.TestCase):
         self.assertIn("deduplicate the pool by URL before Step 2", step1b.group(0))
 
     def test_every_installed_portal_skill_has_a_query_syntax_line(self):
-        self.assertTrue(PORTAL_CLIS, "no installed portal skills found")
         missing = [
             portal.name
             for portal in PORTAL_CLIS

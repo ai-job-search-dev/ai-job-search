@@ -91,7 +91,7 @@ automatically from your Languages table above - don't duplicate them here. -->
 - `cv/` - LaTeX CV variants (moderncv template, banking style)
 - `cover_letters/` - LaTeX cover letters (custom cover.cls template)
 - `.claude/skills/` - AI skill definitions for the application workflow
-- `.agents/skills/` - Job search CLI tools
+- `.agents/skills/` - Job portal CLIs copied in from community-portals (none shipped)
 
 ## Workflow for New Job Applications
 1. User provides a job posting (URL or text)

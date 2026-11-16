@@ -71,7 +71,7 @@ class MakeKey(unittest.TestCase):
         self.assertFalse(key.startswith("_"))
 
     def test_one_url_keeps_one_key_when_a_non_latin_title_is_re_listed(self):
-        # freehire is the shipped multi-market portal, and its public API
+        # freehire, the community multi-market portal, has a public API that
         # returns Cyrillic and Greek titles. Its real slugs carry no run of six
         # digits, so the numeric-id branch above never fires for them and the
         # hash is the only key half left. Hashing the title alongside the URL

@@ -1,8 +1,8 @@
 # /add-portal - Generate a Job-Portal Search Skill for Your Local Market
 
-You are helping the user build a job-portal search skill for a job board in their market. The repo ships worked examples of the pattern (four Danish portals plus the country-agnostic `linkedin-search` and `freehire-search`), and the README invites users elsewhere to build equivalents — this command turns that invitation into a guided workflow: investigate the portal, scaffold the skill from the canonical structure, and test-run a live query before registering anything.
+You are helping the user build a job-portal search skill for a job board in their market. Worked examples of the pattern live in [community-portals](https://github.com/ai-job-search-dev/community-portals) (Danish boards plus the country-agnostic `linkedin-search` and `freehire-search`), and the README invites users elsewhere to build equivalents — this command turns that invitation into a guided workflow: investigate the portal, scaffold the skill from the canonical structure, and test-run a live query before registering anything.
 
-The generator is **country-agnostic**: it works for any portal in any market and language. The skills it produces are typically market-specific and live in the user's fork (per repo policy, country-specific portal skills are not merged upstream — the generator is the upstream feature, its output is yours).
+The generator is **country-agnostic**: it works for any portal in any market and language. The skills it produces are typically market-specific: they are not merged upstream (per repo policy), and once one works it belongs in community-portals, where its users own it — the generator is the upstream feature, its output is yours.
 
 `$ARGUMENTS` may contain a subcommand, a portal URL, or nothing.
 
@@ -26,7 +26,7 @@ Ask the user (skip anything already answered by `$ARGUMENTS`):
 
 1. **Portal URL** - the job board's public site (e.g. `https://www.seek.com.au`, `https://www.stepstone.de`).
 2. **Skill name** - kebab-case, suffixed `-search` (e.g. `seek-search`, `stepstone-search`). Must not collide with an existing folder in `.agents/skills/`.
-3. **Market and language** - which country/region the portal covers and what language its postings use. This drives the trigger phrases in `SKILL.md` (include local-language terms like the Danish skills do: "ledige stillinger", "jobsøgning").
+3. **Market and language** - which country/region the portal covers and what language its postings use. This drives the trigger phrases in `SKILL.md` (include local-language terms, e.g. Danish "ledige stillinger", "jobsøgning").
 4. **A realistic test query** - a job title or skill the user would actually search for, used for the live test in Step 4.
 
 ---
@@ -51,7 +51,7 @@ Record everything you found - endpoints, parameters, field anchors, quirks - you
 
 ## Step 3: Scaffold the Skill
 
-**Canonical reference:** read `.agents/skills/linkedin-search/` before generating - it is the zero-dependency worked example of this exact structure. Copy its architecture, not its LinkedIn-specific parsing.
+**Canonical reference:** read community-portals' `portals/global/linkedin-search/` before generating - it is the zero-dependency worked example of this exact structure. Use `.agents/skills/linkedin-search/` if it is installed; otherwise fetch each file as `https://raw.githubusercontent.com/ai-job-search-dev/community-portals/main/portals/global/linkedin-search/<path>` (e.g. `/cli/src/helpers.ts`). Copy its architecture, not its LinkedIn-specific parsing.
 
 Create `.agents/skills/<name>/` with:
 
@@ -70,7 +70,7 @@ Create `.agents/skills/<name>/` with:
     │       ├── search.ts
     │       └── detail.ts
     └── tests/
-        └── helpers.ts    # runCLI + parseJSON test utilities (copy from jobindex-search)
+        └── helpers.ts    # runCLI + parseJSON test utilities (copy from linkedin-search)
 ```
 
 ### The portal-skill contract (every generated skill MUST honor this)
@@ -78,10 +78,10 @@ Create `.agents/skills/<name>/` with:
 These conventions are what make portal skills interchangeable for `/scrape` and for users reading any skill's docs:
 
 - **Commands:** `search` and `detail <id|url>`.
-- **Search flags:** `--query`/`-q`, `--jobage <days>` (posting age; map to the portal's parameter, note in SKILL.md if unsupported), `--page <n>` (1-indexed), `--limit <n>` (client-side cap), `--format json|table|plain` (default `json`). Add `--location`/`-l` if the portal supports location as a parameter; if it only supports location inside the keyword query, document that in SKILL.md the way `jobindex-search` does ("include the city in `--query`").
+- **Search flags:** `--query`/`-q`, `--jobage <days>` (posting age; map to the portal's parameter, note in SKILL.md if unsupported), `--page <n>` (1-indexed), `--limit <n>` (client-side cap), `--format json|table|plain` (default `json`). Add `--location`/`-l` if the portal supports location as a parameter; if it only supports location inside the keyword query, document that in SKILL.md ("include the city in `--query`").
 - **JSON output shape:** `{ "meta": { "count": ..., "page": ... }, "results": [...] }` where each result has at least `id`, `title`, `company`, `location`, `date`, `url` (missing values are `null`, never omitted).
 - **Errors:** written to **stderr** as `{ "error": "...", "code": "..." }`, exit code `1`. Never write errors to stdout.
-- **Fetching:** an honest User-Agent that names the tool (`Mozilla/5.0 (compatible; <portal>-cli/1.0)`, the convention every shipped portal CLI follows) - never a full browser impersonation; if the portal refuses that UA, escalation to browser headers goes through the robots.txt gate in `.claude/skills/job-application-assistant/09-web-research.md`, not through the CLI's default. Exponential backoff with jitter on 429/5xx (max ~6 retries), `""`/`null` on 404 rather than a crash.
+- **Fetching:** an honest User-Agent that names the tool (`Mozilla/5.0 (compatible; <portal>-cli/1.0)`, the convention every community portal CLI follows) - never a full browser impersonation; if the portal refuses that UA, escalation to browser headers goes through the robots.txt gate in `.claude/skills/job-application-assistant/09-web-research.md`, not through the CLI's default. Exponential backoff with jitter on 429/5xx (max ~6 retries), `""`/`null` on 404 rather than a crash.
 - **HTML parsing:** split the response into per-result chunks and parse each independently, so one malformed card cannot break the rest (see `parseJobCards` in `linkedin-search/cli/src/helpers.ts`).
 - **Output hygiene:** listing text is third-party data, so text a reader of the posting never sees must not reach the model. Run HTML through `visibleHtml` before stripping tags (comments, `<script>`/`<style>`/`<template>` blocks and elements marked `hidden` or styled `display:none` would otherwise become visible text), and run every result through `stripInvisible` before any output format sees it (control, bidi, zero-width, variation-selector and Unicode tag characters). Copy both from `linkedin-search/cli/src/helpers.ts`.
 - **Dependencies:** default to **zero runtime dependencies** (plain `bun` + `fetch` + regex parsing) like `linkedin-search` - `bun install` should only pull dev types. Only add a parsing library if the portal's markup genuinely defeats chunked regex parsing, and say so in the README.
@@ -93,7 +93,7 @@ These conventions are what make portal skills interchangeable for `/scrape` and 
 - **`SKILL.md` body:** what the skill searches, the personal-use warning if Step 2 found terms restrictions, command reference with flags, 4-6 usage examples using the user's market (real cities, realistic roles), output-format table, and a Notes section recording portal quirks found in Step 2. If Step 2.5 found the portal needs a credential, add a **Setup** section naming the service, the exact environment variable to export, and the fact that every call is billed - stated where the user reads it before running the skill, not after. Under the search command, write one line `Query syntax: ...` stating whether the portal honours phrase quoting and which operators, if any, it supports (e.g. `Query syntax: double quotes inside the argument make an exact phrase, word order included; no OR.`). `/scrape` sends one plain term per call and follows this line for quoting, so the rule lives in the portal skill rather than in a list upstream maintains. Determine it in Step 4 by running a two-word test query bare, inside double quotes, inside single quotes, reversed inside double quotes, and with `OR` between two terms, each with `--format json` and no `--limit`, then comparing the total the portal itself reports (not the rows returned, which `--limit` and the portal's page size cap): a quoted total below the bare one means the quotes narrow the match, and a reversed total below the quoted one means word order counts. If the portal reports no total, write the behaviour as not verified - never assume it from another portal.
 - **`url-reference.md`:** the endpoints, parameters table, and response-structure notes from Step 2 - this is the file a future maintainer needs when the portal changes its markup.
 - **`package.json`:** name `<portal>-cli`, `"type": "module"`, scripts `start`, `test` (`bun test --timeout 30000`), and `typecheck` (`tsc --noEmit`); dev-only dependencies in the zero-dependency default.
-- **`tests/`:** copy `runCLI`/`parseJSON` from `jobindex-search/cli/tests/helpers.ts`, then add network-free fixture/mock tests. Use the response captured in Step 2 to exercise the real parser or CLI: `search` returns exit code 0 and the fixture's expected `id`/`title`/`url`; a bogus flag or missing required arg exits 1 with a JSON error on stderr. For a CLI-level request test, follow the shipped portal tests' local HTTP server/fetch-preload pattern and reject unexpected external requests. Do not put live portal calls in checked-in `*.test.ts` files: CI discovers every generated CLI and runs its test script on every push. The bounded live search/detail verification belongs to Step 4, run manually, rather than to `bun test`.
+- **`tests/`:** copy `runCLI`/`parseJSON` from `linkedin-search/cli/tests/helpers.ts`, then add network-free fixture/mock tests. Use the response captured in Step 2 to exercise the real parser or CLI: `search` returns exit code 0 and the fixture's expected `id`/`title`/`url`; a bogus flag or missing required arg exits 1 with a JSON error on stderr. For a CLI-level request test, follow the local HTTP server/fetch-preload pattern in `linkedin-search/cli/tests/detail-description-cli.test.ts` (fetched as in Step 3 if not installed) and reject unexpected external requests. Do not put live portal calls in checked-in `*.test.ts` files: CI discovers every generated CLI and runs its test script on every push. The bounded live search/detail verification belongs to Step 4, run manually, rather than to `bun test`.
 
 ---
 
@@ -150,15 +150,15 @@ Present a summary:
 >
 > Try it: `bun run .agents/skills/<name>/cli/src/cli.ts search -q "<test query>" --format table`
 >
-> Per upstream policy, market-specific skills like this live in your fork rather than being PR'd upstream. If the portal changes its markup later, `url-reference.md` records the parsing anchors to update.
+> Per upstream policy, market-specific skills like this are not PR'd upstream. Contribute it to [community-portals](https://github.com/ai-job-search-dev/community-portals) instead: copy it to `portals/<country>/<name>/`, list yourself as its owner in `.github/CODEOWNERS`, and open a PR (that repo's CONTRIBUTING.md has the review bar). If the portal changes its markup later, `url-reference.md` records the parsing anchors to update.
 
 ---
 
 ## Design Principles
 
-- The generator is country-agnostic; its output is market-specific and stays in the user's fork. This matches the repo policy that upstream stays a universal template.
+- The generator is country-agnostic; its output is market-specific and belongs in community-portals, owned by its users. This matches the repo policy that upstream stays a universal template.
 - Investigation before scaffolding: the command never generates parsers from guesses - Step 2 fetches real responses first, and Step 4 verifies against live data before anything is registered.
-- The portal-skill contract keeps every generated skill interchangeable with the shipped ones: same commands, same flags, same output shape, same error convention.
+- The portal-skill contract keeps every generated skill interchangeable with the community portals: same commands, same flags, same output shape, same error convention.
 - Zero runtime dependencies by default, matching `linkedin-search` - a portal skill should run on a fresh clone with nothing but `bun`.
 - Access rules are surfaced, not silently bypassed: auth-walled portals are declined, robots.txt/ToS restrictions are reported to the user, and restricted portals get a prominent personal-use-only warning in the generated skill.
 - Credentials live in the environment, never in the repo: a generated skill reads its token from an environment variable, fails loudly when it is unset, and never commits it. Per-call cost is disclosed before the skill is generated, not discovered afterwards.
