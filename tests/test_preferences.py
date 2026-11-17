@@ -276,6 +276,16 @@ class LlmNormalizationTests(unittest.TestCase):
         self.assertFalse(ev.should_veto)
         self.assertIsNone(ev.veto_reason)
 
+    def test_a_phd_boilerplate_veto_is_lifted_only_when_phd_is_the_sole_cause(self):
+        prefs = CareerPreferences()
+        boilerplate = dict(should_veto=True, phd_requirement_analysis="generic_hr_boilerplate")
+        lifted = normalize_evaluation(self._ev(veto_reason="Requires a PhD", **boilerplate), prefs)
+        self.assertFalse(lifted.should_veto)
+        for reason in ("Requires a PhD and US citizenship", "PhD required; on-site in Boston only",
+                       "PhD and security clearance required", "Needs a PhD, unpaid internship"):
+            kept = normalize_evaluation(self._ev(veto_reason=reason, **boilerplate), prefs)
+            self.assertTrue(kept.should_veto, reason)
+
     def test_a_veto_for_a_penalty_rule_becomes_a_score_penalty(self):
         ev = normalize_evaluation(self._ev(should_veto=True, veto_reason="Management role: director"), italian_in_argentina())
         self.assertFalse(ev.should_veto)
@@ -315,6 +325,17 @@ class PromptTests(unittest.TestCase):
         self.assertIn("{{ candidate }}", prompt)
         for personal in ("Qiskit", "PennyLane", "Franco", "IMMEDIATE VETO"):
             self.assertNotIn(personal, prompt)
+
+    def test_real_profile_is_git_ignored_and_only_the_example_is_committed(self):
+        root = Path(__file__).resolve().parent.parent
+        self.assertIn("profile/master_profile.yaml", (root / ".gitignore").read_text().splitlines())
+        self.assertTrue((root / "profile" / "master_profile.example.yaml").exists())
+
+    def test_prompts_tell_the_model_postings_are_untrusted_data(self):
+        root = Path(__file__).resolve().parent.parent
+        prompts = yaml.safe_load((root / "config" / "prompts.yaml").read_text())
+        for section in ("ranker", "tailor"):
+            self.assertIn("untrusted", prompts[section]["system_prompt"].lower())
 
     def test_candidate_context_comes_from_the_profile(self):
         with tempfile.TemporaryDirectory() as tmp:

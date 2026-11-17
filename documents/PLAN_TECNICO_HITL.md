@@ -269,7 +269,7 @@ Objetivo: Eliminar el esfuerzo repetitivo de rellenar formularios multipágina m
 - [x] Implementar comando CLI para evaluar vacantes en estado `NEW` y transicionar a `SHORTLISTED` o `IGNORED`.
 
 #### Sprint 4: Agente Adaptador de Documentos (Tailor con Score >= 7.5)
-- [x] Crear `profile/master_profile.yaml` con la trayectoria y proyectos de Franco Raineri.
+- [x] Crear la plantilla `profile/master_profile.example.yaml`; el perfil real `profile/master_profile.yaml` se genera al primer uso y está en `.gitignore`.
 - [x] Implementar `tools/tailor.py`: selecciona vacantes `SHORTLISTED` con `score >= 7.5`, ajusta las secciones de CV y carta según las palabras clave de la oferta.
 - [x] Conectar la verificación automática con `verify_layout.py` y `verify_pdf.py`, dejando los PDFs validados en `documents/applications/<company>_<job>/` y pasando el estado a `READY_TO_APPLY`.
 

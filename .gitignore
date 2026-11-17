@@ -21,6 +21,8 @@ build/
 
 # Personal data (never commit these)
 salary_data.json
+# Real candidate profile: copy profile/master_profile.example.yaml to this name, or let the importers create it
+profile/master_profile.yaml
 # Match at any depth: the job-scraper skill resolves `job_scraper/` relative to
 # its own directory, so these land at .claude/skills/job-scraper/job_scraper/*.
 # A rooted `job_scraper/...` pattern silently fails to match them.

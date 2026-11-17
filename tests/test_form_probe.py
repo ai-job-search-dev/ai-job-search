@@ -205,6 +205,7 @@ class RunApplyUrlTests(unittest.TestCase):
         @contextmanager
         def factory(url, cdp_url=None):
             self.opened.append(url)
+            self.page.url = url
             yield self.page
 
         self.factory = factory
@@ -238,7 +239,7 @@ class RunApplyUrlTests(unittest.TestCase):
 
     def test_a_page_without_an_application_form_triggers_a_warning(self):
         self.page.fields = [field("Search jobs"), field("Newsletter signup topics")]
-        job_id = self.ready_job("https://careers.example.com/role", "jobspy:indeed")
+        job_id = self.ready_job("https://job-boards.greenhouse.io/acme/jobs/9", "jobspy:indeed")
         result, out = self.apply(job_id)
         self.assertEqual(result, "pending")
         self.assertIn("No application form was recognised", out)

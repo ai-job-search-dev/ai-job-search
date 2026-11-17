@@ -143,6 +143,32 @@ class DbLifecycleTests(unittest.TestCase):
             self.assertEqual(row["stage"], "SUBMITTED")
             self.assertIsNotNone(row["applied_at"])
 
+    def test_unverified_documents_are_never_offered_for_apply(self):
+        with get_db(self.db) as conn:
+            job_id = self._shortlisted(conn)
+            record_tailored_documents(conn, job_id, "cv.pdf", "cl.pdf", ats_verified=True, layout_verified=False)
+            self.assertEqual(conn.execute("SELECT stage FROM applications").fetchone()[0], "TAILORED")
+            self.assertIsNone(get_ready_application(conn, job_id))
+            with self.assertRaises(ValueError):
+                confirm_application(conn, job_id)
+            record_tailored_documents(conn, job_id, "cv.pdf", "cl.pdf", ats_verified=True, layout_verified=True)
+            self.assertEqual(conn.execute("SELECT COUNT(*), MAX(stage) FROM applications").fetchone()[:], (1, "READY_TO_APPLY"))
+            self.assertIsNotNone(get_ready_application(conn, job_id))
+
+    def test_legacy_unverified_row_marked_ready_is_not_offered(self):
+        with get_db(self.db) as conn:
+            job_id = self._shortlisted(conn)
+            record_tailored_documents(conn, job_id, "cv.pdf", "cl.pdf", ats_verified=True, layout_verified=True)
+            conn.execute("UPDATE applications SET layout_verified = 0")
+            self.assertIsNone(get_ready_application(conn, job_id))
+
+    def test_company_names_in_non_latin_scripts_stay_distinct(self):
+        from tools.db import normalize_company_name
+        self.assertNotEqual(normalize_company_name("量子科技"), normalize_company_name("光子研究"))
+        self.assertNotEqual(normalize_company_name("Квант"), normalize_company_name("Фотон"))
+        self.assertEqual(normalize_company_name("Café Quantum Inc."), "cafe")
+        self.assertEqual(normalize_company_name("Acme, Inc."), "acme")
+
     def test_confirm_requires_ready_application(self):
         with get_db(self.db) as conn:
             job_id = self._shortlisted(conn)
@@ -307,6 +333,8 @@ class FakePage:
 
 
 class RunApplyTests(unittest.TestCase):
+    final_url = None
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         root = Path(self.tmp.name)
@@ -319,7 +347,7 @@ class RunApplyTests(unittest.TestCase):
         self.cv.write_bytes(b"%PDF-1.4")
         init_db(self.db)
         with get_db(self.db) as conn:
-            self.job_id, _ = upsert_job(conn, "QSE", "Acme Quantum", "https://boards.example.com/1", "greenhouse:acme")
+            self.job_id, _ = upsert_job(conn, "QSE", "Acme Quantum", "https://job-boards.greenhouse.io/acme/jobs/1", "ashby:acme")
             record_evaluation(conn, self.job_id, 9.0, matched_skills=["Python"])
             record_tailored_documents(conn, self.job_id, str(self.cv), None, True, True)
         self.page = FakePage([
@@ -330,6 +358,7 @@ class RunApplyTests(unittest.TestCase):
         @contextmanager
         def factory(url, cdp_url=None):
             self.opened = url
+            self.page.url = self.final_url or url
             yield self.page
 
         self.factory = factory
@@ -380,6 +409,27 @@ class RunApplyTests(unittest.TestCase):
         with get_db(self.db) as conn:
             conn.execute("UPDATE jobs SET url = 'file:///etc/passwd'")
         self.assertEqual(self._run("applied"), "blocked")
+
+    def test_blocked_for_unapproved_or_insecure_host(self):
+        for url in ("http://job-boards.greenhouse.io/a/1", "https://evil.example.com/1",
+                    "https://greenhouse.io.evil.com/1", "https://greenhouse.io@evil.com/1"):
+            with get_db(self.db) as conn:
+                conn.execute("UPDATE jobs SET url = ?", (url,))
+            self.assertEqual(self._run("applied"), "blocked", url)
+            self.assertEqual(self.page.filled, {})
+
+    def test_extra_host_is_allowed_explicitly(self):
+        with get_db(self.db) as conn:
+            conn.execute("UPDATE jobs SET url = 'https://careers.acme.com/1'")
+        out = browser_apply.run_apply(self.job_id, db_path=self.db, profile_path=self.profile_path, input_fn=lambda _: "x",
+                                      page_factory=self.factory, extra_hosts=("acme.com",))
+        self.assertEqual(out, "pending")
+
+    def test_blocked_when_page_redirects_off_host_before_any_fill(self):
+        self.final_url = "https://evil.example.com/collect"
+        self.assertEqual(self._run("applied"), "blocked")
+        self.assertEqual(self.page.filled, {})
+        self.assertEqual(self.page.uploaded, {})
 
     def test_blocked_when_documents_missing(self):
         self.cv.unlink()

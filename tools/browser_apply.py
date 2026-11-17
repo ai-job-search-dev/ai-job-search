@@ -58,6 +58,18 @@ ID_NOISE = re.compile(
 MAX_LABEL_CHARS = 90  # longer text is a custom question (visa, authorization...), never a profile field
 SKIP_INPUT_TYPES = {"hidden", "password", "checkbox", "radio", "submit", "button", "image", "reset"}
 CAPTCHA_MARKERS = ("captcha", "recaptcha", "hcaptcha", "turnstile")
+APPROVED_APPLY_HOSTS = (
+    "greenhouse.io", "lever.co", "ashbyhq.com", "myworkdayjobs.com", "workday.com", "smartrecruiters.com", "workable.com",
+)
+
+
+def host_allowed(url: str, extra_hosts: Tuple[str, ...] = ()) -> bool:
+    """True for an https URL whose host is, or is a subdomain of, an approved ATS apex or an explicitly allowed host."""
+    parsed = urlparse(url or "")
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or not host or parsed.username or parsed.password:
+        return False
+    return any(host == h or host.endswith("." + h) for h in APPROVED_APPLY_HOSTS + tuple(h.lower() for h in extra_hosts))
 
 COLLECT_FIELDS_JS = """
 () => {
@@ -289,8 +301,9 @@ def run_apply(
     cdp_url: Optional[str] = None,
     input_fn: Callable[[str], str] = input,
     page_factory: Callable[..., Any] = open_browser_page,
+    extra_hosts: Tuple[str, ...] = (),
 ) -> str:
-    """Returns 'applied', 'pending' or 'blocked'."""
+    """Returns 'applied', 'pending' or 'blocked'. Nothing is filled unless the final page is on an approved https host."""
     profile = load_profile(profile_path or DEFAULT_PROFILE_FILE)
     init_db(db_path)
     with get_db(db_path) as conn:
@@ -316,6 +329,9 @@ def run_apply(
             logger.info(f"Opening the application form directly: {target_url}")
         with page_factory(target_url, cdp_url) as page:
             page.wait_for_timeout(1500)
+            if not host_allowed(getattr(page, "url", ""), extra_hosts):
+                logger.error(f"Blocked: the page ended up on {getattr(page, 'url', None)!r}, which is not an approved host. Nothing was filled.")
+                return "blocked"
             fields = page.evaluate(COLLECT_FIELDS_JS)
             fills, left = plan_fills(fields, answers, app["cv_path"], app["cover_letter_path"])
             filled = apply_fills(page, fills)
@@ -358,10 +374,11 @@ if __name__ == "__main__":
     parser.add_argument("--job-id", type=int, help="READY_TO_APPLY job to open")
     parser.add_argument("--list", action="store_true", help="List READY_TO_APPLY jobs")
     parser.add_argument("--cdp-url", default=None, help="Attach to a Chrome started by tools/browser_profile.py")
+    parser.add_argument("--allow-host", action="append", default=[], help="Extra host (and its subdomains) to trust for this run")
     args = parser.parse_args()
     if args.list or args.job_id is None:
         for r in list_ready():
             print(f"[{r['id']}] {r['company']} - {r['title']}\n     {r['url']}")
         sys.exit(0)
-    outcome = run_apply(args.job_id, cdp_url=args.cdp_url)
+    outcome = run_apply(args.job_id, cdp_url=args.cdp_url, extra_hosts=tuple(args.allow_host))
     sys.exit(0 if outcome in ("applied", "pending") else 1)

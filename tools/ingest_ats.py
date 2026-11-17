@@ -8,6 +8,7 @@ sanitizes descriptions using posting_guard, and stores them in job_search.db.
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import re
 import sys
@@ -43,11 +44,11 @@ HEADERS = {
 _HTML_TAGS = re.compile(r"<[^>]+>")
 
 
-def strip_html(html: str) -> str:
+def strip_html(markup: str) -> str:
     """Simple clean text extractor from HTML."""
-    if not html:
+    if not markup:
         return ""
-    text = _HTML_TAGS.sub(" ", html)
+    text = _HTML_TAGS.sub(" ", markup)
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -60,8 +61,7 @@ def fetch_greenhouse_jobs(slug: str) -> List[Dict[str, Any]]:
     data = resp.json()
     jobs = []
     for item in data.get("jobs", []):
-        raw_content = item.get("content", "")
-        clean_text = strip_html(raw_content)
+        raw_content = html.unescape(item.get("content", "") or "")  # Greenhouse sends the HTML entity-escaped
         location = (
             item.get("location", {}).get("name", "")
             if isinstance(item.get("location"), dict)
@@ -73,7 +73,8 @@ def fetch_greenhouse_jobs(slug: str) -> List[Dict[str, Any]]:
             "url": item.get("absolute_url", ""),
             "location": location,
             "is_remote": is_remote,
-            "raw_description": clean_text,
+            "raw_description": raw_content,
+            "description_format": "html",
             "portal": f"greenhouse:{slug}",
         })
     return jobs
@@ -88,7 +89,9 @@ def fetch_lever_jobs(slug: str) -> List[Dict[str, Any]]:
     data = resp.json()
     jobs = []
     for item in data:
-        raw_desc = item.get("descriptionPlain") or strip_html(item.get("description", ""))
+        plain = item.get("descriptionPlain")
+        raw_desc = plain or item.get("description", "")
+        desc_format = "text" if plain else "html"
         cats = item.get("categories", {})
         location = cats.get("location", "")
         workplace_type = cats.get("workplaceType", "").lower()
@@ -99,6 +102,7 @@ def fetch_lever_jobs(slug: str) -> List[Dict[str, Any]]:
             "location": location,
             "is_remote": is_remote,
             "raw_description": raw_desc,
+            "description_format": desc_format,
             "portal": f"lever:{slug}",
         })
     return jobs
@@ -113,7 +117,7 @@ def fetch_ashby_jobs(slug: str) -> List[Dict[str, Any]]:
     data = resp.json()
     jobs = []
     for item in data.get("jobs", []):
-        raw_desc = strip_html(item.get("descriptionHtml", ""))
+        raw_desc = item.get("descriptionHtml", "") or ""
         location = item.get("location", "")
         is_remote = item.get("isRemote", False) or "remote" in location.lower()
         jobs.append({
@@ -122,6 +126,7 @@ def fetch_ashby_jobs(slug: str) -> List[Dict[str, Any]]:
             "location": location,
             "is_remote": is_remote,
             "raw_description": raw_desc,
+            "description_format": "html",
             "portal": f"ashby:{slug}",
         })
     return jobs
@@ -183,7 +188,8 @@ def run_ats_ingestion(config_file: Optional[Path] = None, db_path: Optional[Path
 
                 # Sanitize using posting_guard logic
                 raw_desc = p.get("raw_description", "")
-                cleaned_desc, findings = guard(raw_desc, mode="text")
+                is_html = p.get("description_format") == "html"
+                cleaned_desc, findings = guard(raw_desc, mode="html" if is_html else "text")
                 if "⚠" in findings.get("verdict", ""):
                     logger.warning(f"Security Alert on {name} - {p['title']}", verdict=findings["verdict"])
                     METRICS.increment("sanitized_flagged")
@@ -198,7 +204,8 @@ def run_ats_ingestion(config_file: Optional[Path] = None, db_path: Optional[Path
                     portal=p["portal"],
                     location=p.get("location", ""),
                     is_remote=p.get("is_remote", False),
-                    raw_description=raw_desc,
+                    # HTML is never stored: the ranker falls back to raw_description, and hidden markup must not reach it
+                    raw_description=cleaned_desc if is_html else raw_desc,
                     cleaned_description=cleaned_desc,
                     guard_verdict=flagged_verdict(findings),
                 )

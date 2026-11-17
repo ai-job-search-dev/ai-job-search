@@ -129,16 +129,16 @@ def normalize_company_name(name: str) -> str:
     if not name:
         return ""
     text = unicodedata.normalize("NFKD", name).casefold()
-    ascii_text = text.encode("ascii", "ignore").decode("ascii")
+    text = "".join(c for c in text if not unicodedata.combining(c))
     suffixes = [
         " inc.", " inc", " corp.", " corp", " llc", " ltd.", " ltd",
         " gmbh", " s.a.", " sa", " s.l.", " sl", " ag", " b.v.", " bv",
         " technologies", " technology", " tech", " labs", " lab", " quantum"
     ]
     for s in suffixes:
-        if ascii_text.endswith(s):
-            ascii_text = ascii_text[:-len(s)]
-    return "".join(c for c in ascii_text if c.isalnum()).strip()
+        if text.endswith(s):
+            text = text[:-len(s)]
+    return "".join(c for c in text if c.isalnum()).strip()
 
 
 class ManagedConnection(sqlite3.Connection):
@@ -674,14 +674,15 @@ def record_tailored_documents(
 ) -> int:
     """Store generated documents and move the job to TAILORED, or READY_TO_APPLY when both checks passed."""
     conn.execute(
-        "DELETE FROM applications WHERE job_id = ? AND stage = 'READY_TO_APPLY'", (job_id,)
+        "DELETE FROM applications WHERE job_id = ? AND stage IN ('READY_TO_APPLY', 'TAILORED')", (job_id,)
     )
+    ready = ats_verified and layout_verified
     cursor = conn.execute(
         """
         INSERT INTO applications (
             job_id, cv_path, cover_letter_path, ats_verified, layout_verified,
             applied_at, submission_mode, stage, notes
-        ) VALUES (?, ?, ?, ?, ?, NULL, NULL, 'READY_TO_APPLY', ?)
+        ) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?)
         """,
         (
             job_id,
@@ -689,10 +690,10 @@ def record_tailored_documents(
             cover_letter_path,
             1 if ats_verified else 0,
             1 if layout_verified else 0,
+            "READY_TO_APPLY" if ready else "TAILORED",
             notes,
         ),
     )
-    ready = ats_verified and layout_verified
     update_job_status(conn, job_id, STATUS_READY_TO_APPLY if ready else STATUS_TAILORED)
     return cursor.lastrowid
 
@@ -705,7 +706,7 @@ def get_ready_application(conn: sqlite3.Connection, job_id: int) -> Optional[sql
         FROM applications a
         JOIN jobs j ON j.id = a.job_id
         JOIN companies c ON c.id = j.company_id
-        WHERE a.job_id = ? AND a.stage = 'READY_TO_APPLY'
+        WHERE a.job_id = ? AND a.stage = 'READY_TO_APPLY' AND a.ats_verified = 1 AND a.layout_verified = 1
         ORDER BY a.id DESC LIMIT 1
         """,
         (job_id,),

@@ -79,6 +79,16 @@ PHD_VETO_REASON = "VETO: Pure academic theoretical physics research without soft
 NON_ENGINEERING_VETO_REASON = "VETO: Not a software engineering role (sales, support, recruiting or operations)."
 MANAGEMENT_VETO_REASON = "VETO: Management role, not an individual-contributor engineering position."
 UNPAID_VETO_REASON = "VETO: Unpaid or volunteer position."
+NON_PHD_VETO_CAUSE = re.compile(r"on-?site|in-?person|relocat|location|hybrid|office|work[- ]?permit", re.IGNORECASE)
+
+
+def _phd_is_sole_veto_cause(reason: Optional[str]) -> bool:
+    """True when a veto reason names no cause other than the PhD boilerplate, so lifting it cannot hide another veto."""
+    if NON_PHD_VETO_CAUSE.search(reason or ""):
+        return False
+    return not any(reason_matches(name, reason) for name in RULE_TEXT if name != "research_phd")
+
+
 RE_EVALUABLE_STATUSES = {STATUS_NEW, "DISCOVERED", STATUS_SHORTLISTED, STATUS_IGNORED}
 
 
@@ -144,6 +154,7 @@ def normalize_evaluation(ev: QuantumJobEvaluation, prefs: Optional[CareerPrefere
         and ev.is_software_role
         and ev.phd_requirement_analysis == "generic_hr_boilerplate"
         and re.search(r"ph\.?d|doctorate", reason or "", re.IGNORECASE)
+        and _phd_is_sole_veto_cause(reason)
     ):
         vetoed, reason = False, None
     elif (
@@ -347,7 +358,7 @@ def evaluate_with_instructor(
     body = user_template.replace("{{ company }}", company)
     body = body.replace("{{ title }}", title).replace("{{ location }}", location)
     body = body.replace("{{ is_remote }}", str(is_remote)).replace("{{ portal }}", "direct_ats_or_aggregator")
-    body = body.replace("{{ description }}", description[:MAX_DESCRIPTION_CHARS])
+    body = body.replace("{{ description }}", description[:MAX_DESCRIPTION_CHARS].replace('"' * 3, "'" * 3))
     messages = [{"role": "system", "content": system}, {"role": "user", "content": body}]
     try:
         evaluation, call = gateway.evaluate(messages, QuantumJobEvaluation, job_id=job_id)

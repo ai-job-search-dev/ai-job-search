@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Master Profile Manager: Multi-Source Ingestion, Consistency Audit & Iterative Learning.
 
-Manages profile/master_profile.yaml as the single source of truth.
+Manages profile/master_profile.yaml (git-ignored, created on first use) as the single source of truth.
+profile/master_profile.example.yaml is the committed template.
 Parses PDFs, checks chronological and evidence consistency (anti-hallucination),
 and learns from shortlisted jobs in SQLite to auto-complete and improve the profile over time.
 """
