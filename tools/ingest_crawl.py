@@ -109,7 +109,7 @@ def run_niche_crawling(config_file: Optional[Path] = None, db_path: Optional[Pat
 
             if parser_type == "unitary_fund":
                 postings = crawl_unitary_fund(url)
-            else:
+            elif parser_type == "generic_page":
                 logger.info(f"Generic markdown crawl for {name} ({url})")
                 try:
                     resp = requests.get(url, headers=HEADERS, timeout=15)
@@ -127,6 +127,9 @@ def run_niche_crawling(config_file: Optional[Path] = None, db_path: Optional[Pat
                 except Exception as e:
                     logger.error(f"Failed generic crawl on {url}: {e}")
                     continue
+            else:
+                logger.warning(f"No parser '{parser_type}' for {name}; skipping (use unitary_fund or generic_page)")
+                continue
 
             for post in postings:
                 stats["total"] += 1

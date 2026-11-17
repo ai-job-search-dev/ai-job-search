@@ -30,17 +30,18 @@ jobspy:
   description_format: "markdown"
 
 # Niche portals and community boards for specialized crawlers (Crawl4AI)
+# parser: unitary_fund | generic_page (stores the whole page as ONE posting; only for single-job URLs)
 niche_portals:
   - name: "Unitary Fund Job Board"
     url: "https://unitary.fund/jobs/"
     category: "quantum_open_source"
-    enabled: true
+    enabled: false
     parser: "unitary_fund"
-    notes: "Non-profit open-source quantum tech community postings."
+    notes: "Disabled: moved to unitary.foundation and no longer publishes a job list (HTTP 404)."
 
   - name: "Quantum Jobs Org"
     url: "https://quantumjobs.org/"
     category: "quantum_niche"
-    enabled: true
+    enabled: false
     parser: "quantum_jobs"
-    notes: "Global aggregator specifically dedicated to quantum computing roles."
+    notes: "Disabled: the domain is parked for sale and has no listings."

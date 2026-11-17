@@ -43,6 +43,7 @@ class FunnelMetrics:
             "evaluated_total": 0,
             "vetoed_hardware": 0,
             "vetoed_location": 0,
+            "vetoed_role": 0,
             "vetoed_phd_strict": 0,
             "phd_boilerplate_tolerated": 0,
             "shortlisted_total": 0,
@@ -82,6 +83,7 @@ class FunnelMetrics:
         print(f"  • Opportunities Evaluated by Ranker:   {data['evaluated_total']}")
         print(f"  • Vetoed - Experimental Hardware/Lab:  {data['vetoed_hardware']}")
         print(f"  • Vetoed - Incompatible Location:      {data['vetoed_location']}")
+        print(f"  • Vetoed - Non-engineering/Management: {data['vetoed_role']}")
         print(f"  • PhD Boilerplate Rescued (SWE Fit):   {data['phd_boilerplate_tolerated']}")
         print(f"  • Vetoed - Strict Academic Research:   {data['vetoed_phd_strict']}")
         print("-" * 65)

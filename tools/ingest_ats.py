@@ -146,6 +146,8 @@ def run_ats_ingestion(config_file: Optional[Path] = None, db_path: Optional[Path
 
     with get_db(db_path) as conn:
         for c in companies:
+            if not c.get("enabled", True):
+                continue
             name = c.get("name")
             provider = c.get("ats_provider", "").lower()
             slug = c.get("slug")

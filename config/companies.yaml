@@ -8,6 +8,7 @@
 #   domain: Official company domain
 #   focus: Primary technical focus (quantum_software, algorithms, sdk, cloud)
 #   notes: Optional context or guidance
+#   enabled: false skips the company (default true)
 
 companies:
   - name: "SandboxAQ"
@@ -39,6 +40,7 @@ companies:
     notes: "Fault-tolerant photonic architecture, quantum SDKs and systems software."
 
   - name: "Xanadu"
+    enabled: false  # slug not found on Greenhouse/Lever/Ashby; use JobSpy or the careers page
     ats_provider: "greenhouse"
     slug: "xanadu"
     domain: "xanadu.ai"
@@ -46,6 +48,7 @@ companies:
     notes: "Creators of PennyLane (quantum differentiable programming), Strawberry Fields."
 
   - name: "Zapata AI"
+    enabled: false  # slug not found on Greenhouse/Lever/Ashby; use JobSpy or the careers page
     ats_provider: "lever"
     slug: "zapata"
     domain: "zapata.ai"
@@ -53,6 +56,7 @@ companies:
     notes: "Industrial generative AI & quantum algorithms (Orquestra platform)."
 
   - name: "Classiq Technologies"
+    enabled: false  # slug not found on Greenhouse/Lever/Ashby; use JobSpy or the careers page
     ats_provider: "greenhouse"
     slug: "classiq"
     domain: "classiq.io"
@@ -60,6 +64,7 @@ companies:
     notes: "Quantum algorithm design platform, high-level synthesis and compilation."
 
   - name: "Algorithmiq"
+    enabled: false  # slug not found on Greenhouse/Lever/Ashby; use JobSpy or the careers page
     ats_provider: "ashby"
     slug: "algorithmiq"
     domain: "algorithmiq.pro"
@@ -74,6 +79,7 @@ companies:
     notes: "Quantum Error Correction (QEC) operating systems and decoders (Deltaflow)."
 
   - name: "QC Ware"
+    enabled: false  # slug not found on Greenhouse/Lever/Ashby; use JobSpy or the careers page
     ats_provider: "lever"
     slug: "qcware"
     domain: "qcware.com"
@@ -81,15 +87,28 @@ companies:
     notes: "Enterprise quantum software (Forge) and quantum machine learning."
 
   - name: "Q-CTRL"
-    ats_provider: "greenhouse"
+    ats_provider: "lever"
     slug: "q-ctrl"
     domain: "q-ctrl.com"
     focus: "quantum_software"
     notes: "Quantum firmware, error mitigation software (Fire Opal) and infrastructure."
 
   - name: "D-Wave Systems"
+    enabled: false  # slug not found on Greenhouse/Lever/Ashby; use JobSpy or the careers page
     ats_provider: "greenhouse"
     slug: "dwavesys"
     domain: "dwavesys.com"
     focus: "quantum_software"
     notes: "Quantum annealing & gate-model cloud APIs (Ocean SDK)."
+  - name: "Atom Computing"
+    ats_provider: "lever"
+    slug: "atomcomputing"
+    domain: "atom-computing.com"
+    focus: "quantum_software"
+    notes: "Neutral-atom quantum computers; control software and systems."
+  - name: "Multiverse Computing"
+    ats_provider: "ashby"
+    slug: "multiverse"
+    domain: "multiversecomputing.com"
+    focus: "algorithms"
+    notes: "Quantum and AI software for finance and industry."
