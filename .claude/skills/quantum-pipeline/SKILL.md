@@ -96,6 +96,22 @@ Start every new session with `pipeline.py status`, and run `--dry-run` before an
 - Do not run two pipeline runs at once. A `.pipeline.lock` file next to the database guards this; a lock older than six hours or left by a dead process is taken over.
 - Do not weaken `tools/posting_guard.py`, the approved-host list or the prompt rules that mark postings as untrusted data without a test that proves the replacement is at least as strict.
 
+## Free local LLM (no API key)
+
+`tools/local_llm.sh` runs Ollama with the `qwen2.5:7b-instruct` model inside a macOS sandbox (`config/ollama-sandbox.sb`). The process cannot read or write anything under `/Users` except its own model folder (`~/.local/share/ai-job-search-llm`), and while serving it has no internet access, only loopback. Models are weights, not code, so they cannot touch your files either way; the sandbox protects against the server process itself.
+
+```bash
+brew install ollama                    # once; do not run `brew services start ollama`, that service is not sandboxed
+tools/local_llm.sh setup               # once: downloads the model (about 4.7 GB) with network allowed, files still confined
+tools/local_llm.sh start               # serve on 127.0.0.1:11434
+tools/local_llm.sh verify              # every probe must print BLOCKED, and the model home must print ALLOWED
+eval "$(tools/local_llm.sh env)"       # points the ranker at it for this shell
+python3 tools/pipeline.py run --skip-ingest --dry-run
+tools/local_llm.sh stop
+```
+
+Local scores are on a different scale than the keyword heuristic and than OpenAI models, and the first call after `start` takes about 30 seconds while the model loads. Cost is zero, so `--max-cost` is irrelevant; use `--limit` to bound time. Re-run `tools/local_llm.sh verify` after changing the profile or upgrading Ollama.
+
 ## Configuration map
 
 | File                                  | Controls                                                      |

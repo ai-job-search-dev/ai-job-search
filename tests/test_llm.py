@@ -69,9 +69,13 @@ class PricingTests(unittest.TestCase):
     def test_shipped_pricing_file_is_valid(self):
         pricing = load_pricing()
         self.assertIn("gpt-4o-mini", pricing)
-        for rates in pricing.values():
-            self.assertGreater(float(rates["input"]), 0)
-            self.assertGreater(float(rates["output"]), 0)
+        for model, rates in pricing.items():
+            floor = 0 if model.startswith("qwen") else None  # local models are free; hosted ones must have a price
+            for key in ("input", "output"):
+                if floor is None:
+                    self.assertGreater(float(rates[key]), 0, model)
+                else:
+                    self.assertGreaterEqual(float(rates[key]), floor, model)
 
     def test_preferences_hash_changes_only_when_preferences_change(self):
         a = CareerPreferences()
