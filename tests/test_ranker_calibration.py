@@ -164,7 +164,7 @@ class ConfigHandlingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "p.yaml"
             path.write_text(yaml.safe_dump(cfg))
-            with mock.patch.object(ingest_crawl.requests, "get") as get:
+            with mock.patch.object(ingest_crawl, "get_with_retry") as get:
                 stats = ingest_crawl.run_niche_crawling(path, db_path=Path(tmp) / "t.db")
         get.assert_not_called()
         self.assertEqual(stats["total"], 0)

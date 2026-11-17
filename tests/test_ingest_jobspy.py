@@ -4,8 +4,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import pandas as pd
 import yaml
+
+try:
+    import jobspy  # noqa: F401
+    import pandas as pd
+except ImportError:
+    raise unittest.SkipTest("python-jobspy and pandas are not installed")
 
 from tools import ingest_jobspy
 from tools.db import get_db, init_db

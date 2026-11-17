@@ -283,3 +283,14 @@ Objetivo: Eliminar el esfuerzo repetitivo de rellenar formularios multipágina m
 - `tools/tailor.py` es determinista: solo reordena contenido del perfil maestro y descarta habilidades que el perfil no respalda. Ajusta fuente y márgenes hasta que el CV entre en una página y luego corre `verify_pdf` y `verify_layout`.
 - `tools/browser_apply.py` usa Playwright directo (Chrome headed, perfil dedicado) en lugar de `browser-use`: el relleno es por reglas, sin LLM. Nunca hace clic, no resuelve CAPTCHAs y deja sin tocar selects, textareas, radios y checkboxes. `APPLIED` solo se registra si el usuario escribe `applied` tras enviar el formulario él mismo.
 - Flujo: `python tools/ranker.py` -> `python tools/tailor.py` -> `python tools/browser_apply.py --list` -> `python tools/browser_apply.py --job-id N`.
+
+#### Operación y robustez
+
+- **Esquema versionado:** `PRAGMA user_version` y migraciones ordenadas en `tools/db.py` (`MIGRATIONS`). Una base antigua se actualiza sola al abrirla.
+- **Respaldos:** `python tools/db.py --backup` copia la base a `backups/` y conserva las 5 más recientes. Las ingestas y `ranker.py --reevaluate` respaldan solas antes de escribir (como máximo una vez por hora y por 10 minutos respectivamente).
+- **Integridad:** `python tools/db.py --check` ejecuta `PRAGMA integrity_check` y sale con código distinto de cero si falla.
+- **Ofertas vencidas:** cada ingesta actualiza `last_seen`. `python tools/db.py --close-stale 21` pasa a `CLOSED` las `NEW` y `SHORTLISTED` que ninguna ingesta vio en 21 días. Si reaparecen, vuelven a `NEW`.
+- **Cuarentena:** el veredicto de `posting_guard` se guarda en `jobs.guard_flagged`. Esas ofertas se evalúan solo con la heurística y nunca se envían al LLM.
+- **Red:** `tools/net.py` reintenta con espera exponencial (conexión, timeouts, 429 y 5xx) y respeta `Retry-After`. Un 404 de un ATS se informa como slug incorrecto y la corrida continúa con el resto de las empresas.
+- **CI:** `requirements-ci.txt` instala lo necesario para los tests. Los tests que requieren `pandas` y `python-jobspy` se omiten si faltan. La salida de consola no falla con codificaciones como cp1252.
+

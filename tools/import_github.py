@@ -20,6 +20,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+from tools.net import get_with_retry
 from tools.profile_manager import DEFAULT_PROFILE_FILE, load_profile, save_profile
 from tools.profile_schema import ProjectEntry
 
@@ -30,7 +31,7 @@ def fetch_repos(user: str, token: Optional[str] = None, timeout: int = 20) -> Li
     headers = {"Accept": "application/vnd.github+json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    resp = requests.get(
+    resp = get_with_retry(
         f"{API}/users/{user}/repos", params={"per_page": 100, "sort": "pushed"},
         headers=headers, timeout=timeout,
     )

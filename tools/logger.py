@@ -29,6 +29,18 @@ LEVEL_MAP = {
 }
 
 
+
+def safe_print(text: str, stream: Any = None, flush: bool = True) -> None:
+    """Print without crashing on consoles that cannot encode the text (Windows cp1252 and similar)."""
+    stream = stream or sys.stdout
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    try:
+        text.encode(encoding)
+    except (UnicodeEncodeError, LookupError):
+        text = text.encode(encoding if encoding else "ascii", "replace").decode(encoding if encoding else "ascii")
+    print(text, file=stream, flush=flush)
+
+
 class FunnelMetrics:
     """Thread-safe funnel counter for observability across all pipeline layers."""
 
@@ -70,30 +82,31 @@ class FunnelMetrics:
     def print_summary(self) -> None:
         """Render a readable summary table of the recruitment funnel."""
         data = self.to_dict()
-        print("\n" + "=" * 65)
-        print("          AI-JOB-SEARCH PIPELINE FUNNEL SUMMARY")
-        print("=" * 65)
-        print(f"  • Total Opportunities Ingested:        {data['ingested_total']}")
-        print(f"  • Sanitized Clean:                     {data['sanitized_clean']}")
+        lines = ["", "=" * 65]
+        lines.append("          AI-JOB-SEARCH PIPELINE FUNNEL SUMMARY")
+        lines.append("=" * 65)
+        lines.append(f"  - Total Opportunities Ingested:        {data['ingested_total']}")
+        lines.append(f"  - Sanitized Clean:                     {data['sanitized_clean']}")
         if data['sanitized_flagged'] > 0:
-            print(f"  • Flagged by Security Guard:           {data['sanitized_flagged']}")
-        print(f"  • Duplicates / Already Seen:           {data['duplicates_skipped']}")
-        print(f"  • Company Cooldown Skipped (30d):      {data['cooldown_skipped']}")
-        print("-" * 65)
-        print(f"  • Opportunities Evaluated by Ranker:   {data['evaluated_total']}")
-        print(f"  • Vetoed - Experimental Hardware/Lab:  {data['vetoed_hardware']}")
-        print(f"  • Vetoed - Incompatible Location:      {data['vetoed_location']}")
-        print(f"  • Vetoed - Non-engineering/Management: {data['vetoed_role']}")
-        print(f"  • PhD Boilerplate Rescued (SWE Fit):   {data['phd_boilerplate_tolerated']}")
-        print(f"  • Vetoed - Strict Academic Research:   {data['vetoed_phd_strict']}")
-        print("-" * 65)
-        print(f"  ★ SHORTLISTED (>= threshold):           {data['shortlisted_total']}")
-        print(f"  ✗ IGNORED (below threshold or vetoed): {data['ignored_total']}")
-        print(f"  ✓ Documents Tailored:                  {data['tailored_total']}")
-        print(f"  🚀 Postulations Applied (HITL):        {data['applied_total']}")
+            lines.append(f"  - Flagged by Security Guard:           {data['sanitized_flagged']}")
+        lines.append(f"  - Duplicates / Already Seen:           {data['duplicates_skipped']}")
+        lines.append(f"  - Company Cooldown Skipped (30d):      {data['cooldown_skipped']}")
+        lines.append("-" * 65)
+        lines.append(f"  - Opportunities Evaluated by Ranker:   {data['evaluated_total']}")
+        lines.append(f"  - Vetoed - Experimental Hardware/Lab:  {data['vetoed_hardware']}")
+        lines.append(f"  - Vetoed - Incompatible Location:      {data['vetoed_location']}")
+        lines.append(f"  - Vetoed - Non-engineering/Management: {data['vetoed_role']}")
+        lines.append(f"  - PhD Boilerplate Rescued (SWE Fit):   {data['phd_boilerplate_tolerated']}")
+        lines.append(f"  - Vetoed - Strict Academic Research:   {data['vetoed_phd_strict']}")
+        lines.append("-" * 65)
+        lines.append(f"  * SHORTLISTED (>= threshold):           {data['shortlisted_total']}")
+        lines.append(f"  x IGNORED (below threshold or vetoed): {data['ignored_total']}")
+        lines.append(f"  + Documents Tailored:                  {data['tailored_total']}")
+        lines.append(f"  > Postulations Applied (HITL):        {data['applied_total']}")
         if data['errors_total'] > 0:
-            print(f"  ⚠ Pipeline Errors / Exceptions:        {data['errors_total']}")
-        print("=" * 65 + "\n")
+            lines.append(f"  ! Pipeline Errors / Exceptions:        {data['errors_total']}")
+        lines.append("=" * 65)
+        safe_print("\n".join(lines))
 
 
 METRICS = FunnelMetrics()
@@ -124,7 +137,7 @@ class StructuredLogger:
                 "message": message,
                 **extra_data,
             }
-            print(json.dumps(entry), file=sys.stderr if lvl >= logging.WARNING else sys.stdout, flush=True)
+            safe_print(json.dumps(entry), sys.stderr if lvl >= logging.WARNING else sys.stdout)
         else:
             # Pretty console format with ANSI colors
             colors = {
@@ -138,7 +151,7 @@ class StructuredLogger:
             color = colors.get(level_name, "")
             extra_str = f" | {json.dumps(extra_data)}" if extra_data else ""
             out = f"{color}[{timestamp[:19]}] [{level_name:<7}] [{self.name}] {message}{extra_str}{reset}"
-            print(out, file=sys.stderr if lvl >= logging.WARNING else sys.stdout, flush=True)
+            safe_print(out, sys.stderr if lvl >= logging.WARNING else sys.stdout)
 
     def debug(self, message: str, **kwargs: Any) -> None:
         self._log("DEBUG", message, kwargs)

@@ -26,13 +26,14 @@ PROMPTS_PATH = ROOT_DIR / "config" / "prompts.yaml"
 from tools.db import (
     get_db,
     init_db,
+    backup_db,
     get_pending_jobs,
     record_evaluation,
     STATUS_NEW,
     STATUS_SHORTLISTED,
     STATUS_IGNORED,
 )
-from tools.logger import get_logger, METRICS
+from tools.logger import METRICS, get_logger, safe_print
 from tools.preferences import (
     RULE_TEXT,
     assess_work_authorization,
@@ -321,12 +322,15 @@ def heuristic_quantum_eval(
 def evaluate_with_instructor(
     title: str, company: str, description: str, location: str, is_remote: bool,
     system_prompt: str, user_template: str, prefs: Optional[CareerPreferences] = None,
-    candidate: str = "",
+    candidate: str = "", use_llm: bool = True,
 ) -> QuantumJobEvaluation:
     """Evaluate posting using Instructor-wrapped LLM client."""
     prefs = prefs or CareerPreferences()
     api_key = os.environ.get("OPENAI_API_KEY")
     model_name = os.environ.get("AI_JOB_SEARCH_MODEL", "gpt-4o-mini")
+
+    if not use_llm:
+        return heuristic_quantum_eval(title, company, description, location, is_remote, prefs)
 
     if not api_key:
         logger.info("OPENAI_API_KEY not set. Using built-in deterministic Quantum heuristic engine.")
@@ -399,8 +403,9 @@ def run_ranker(
     user_template = prompts.get("user_prompt_template", "Job: {{ company }} - {{ title }}\n{{ description }}")
 
     init_db(db_path)
+    if reevaluate and not dry_run:
+        backup_db(db_path, min_interval_minutes=10)
     evaluated = []
-
     with get_db(db_path) as conn:
         if specific_job_id:
             jobs = conn.execute("SELECT * FROM jobs WHERE id = ?", (specific_job_id,)).fetchall()
@@ -446,6 +451,7 @@ def run_ranker(
                 user_template=user_template,
                 prefs=prefs,
                 candidate=candidate,
+                use_llm=not job["guard_flagged"],
             )
 
             METRICS.increment("evaluated_total")
@@ -497,16 +503,15 @@ def run_ranker(
                 "matched": eval_res.matched_skills,
             })
 
-    # Display shortlisted opportunities
     shortlisted = [e for e in evaluated if e["status"] == STATUS_SHORTLISTED]
     if shortlisted:
-        print("\n" + "★" * 65)
-        print(f"     NEWLY SHORTLISTED OPPORTUNITIES FOR TAILORING (Score >= {threshold})")
-        print("★" * 65)
-        for s in shortlisted:
-            print(f"  • [{s['score']}/10] {s['company']} — {s['title']}")
-            print(f"    Matched: {', '.join(s['matched'][:5])}")
-        print("★" * 65 + "\n")
+        rule = "*" * 65
+        lines = ["", rule, f"     NEWLY SHORTLISTED OPPORTUNITIES FOR TAILORING (Score >= {threshold})", rule]
+        for item in shortlisted:
+            lines.append(f"  - [{item['score']}/10] {item['company']} - {item['title']}")
+            lines.append(f"    Matched: {', '.join(item['matched'][:5])}")
+        lines.append(rule)
+        safe_print("\n".join(lines))
 
     return evaluated
 

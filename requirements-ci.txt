@@ -1,0 +1,8 @@
+# Dependencies the unit tests need in CI.
+# Heavier optional packages (python-jobspy, pandas, instructor, playwright) are not installed
+# there; the tests that need them skip themselves when they are missing.
+pydantic>=2.8.0
+pyyaml>=6.0.1
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+markdownify>=0.12.0

@@ -27,7 +27,8 @@ CONFIG_PATH = (
     else ROOT_DIR / "config" / "target_companies.yaml"
 )
 
-from tools.db import get_db, init_db, upsert_job, check_company_cooldown
+from tools.db import backup_db, check_company_cooldown, flagged_verdict, get_db, init_db, upsert_job
+from tools.net import SourceError, get_with_retry
 from tools.posting_guard import guard
 from tools.logger import get_logger, METRICS
 
@@ -53,10 +54,9 @@ def strip_html(html: str) -> str:
 def fetch_greenhouse_jobs(slug: str) -> List[Dict[str, Any]]:
     """Fetch jobs from public Greenhouse board API."""
     url = f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true"
-    resp = requests.get(url, headers=HEADERS, timeout=REQ_TIMEOUT)
+    resp = get_with_retry(url, headers=HEADERS, timeout=REQ_TIMEOUT)
     if resp.status_code != 200:
-        logger.warning(f"[Greenhouse] '{slug}' returned HTTP {resp.status_code}", slug=slug)
-        return []
+        raise SourceError(f"greenhouse:{slug}", resp.status_code)
     data = resp.json()
     jobs = []
     for item in data.get("jobs", []):
@@ -82,10 +82,9 @@ def fetch_greenhouse_jobs(slug: str) -> List[Dict[str, Any]]:
 def fetch_lever_jobs(slug: str) -> List[Dict[str, Any]]:
     """Fetch jobs from public Lever postings API."""
     url = f"https://api.lever.co/v0/postings/{slug}?mode=json"
-    resp = requests.get(url, headers=HEADERS, timeout=REQ_TIMEOUT)
+    resp = get_with_retry(url, headers=HEADERS, timeout=REQ_TIMEOUT)
     if resp.status_code != 200:
-        logger.warning(f"[Lever] '{slug}' returned HTTP {resp.status_code}", slug=slug)
-        return []
+        raise SourceError(f"lever:{slug}", resp.status_code)
     data = resp.json()
     jobs = []
     for item in data:
@@ -108,10 +107,9 @@ def fetch_lever_jobs(slug: str) -> List[Dict[str, Any]]:
 def fetch_ashby_jobs(slug: str) -> List[Dict[str, Any]]:
     """Fetch jobs from public Ashby job board API."""
     url = f"https://api.ashbyhq.com/posting-api/job-board/{slug}"
-    resp = requests.get(url, headers=HEADERS, timeout=REQ_TIMEOUT)
+    resp = get_with_retry(url, headers=HEADERS, timeout=REQ_TIMEOUT)
     if resp.status_code != 200:
-        logger.warning(f"[Ashby] '{slug}' returned HTTP {resp.status_code}", slug=slug)
-        return []
+        raise SourceError(f"ashby:{slug}", resp.status_code)
     data = resp.json()
     jobs = []
     for item in data.get("jobs", []):
@@ -141,9 +139,9 @@ def run_ats_ingestion(config_file: Optional[Path] = None, db_path: Optional[Path
 
     companies = config.get("companies", [])
     init_db(db_path)
-
-    stats = {"total": 0, "new": 0, "refreshed": 0, "companies_queried": 0, "cooldown_skipped": 0}
-
+    backup_db(db_path, min_interval_minutes=60)
+    stats = {"total": 0, "new": 0, "refreshed": 0, "companies_queried": 0, "cooldown_skipped": 0, "companies_failed": 0}
+    failed: list = []
     with get_db(db_path) as conn:
         for c in companies:
             if not c.get("enabled", True):
@@ -175,8 +173,9 @@ def run_ats_ingestion(config_file: Optional[Path] = None, db_path: Optional[Path
                 time.sleep(0.5)  # Friendly rate-limiting
             except Exception as e:
                 logger.error(f"Failed fetching {name}: {e}")
+                stats["companies_failed"] += 1
+                failed.append(f"{name}: {e}")
                 continue
-
             stats["companies_queried"] += 1
             for p in postings:
                 stats["total"] += 1
@@ -201,13 +200,16 @@ def run_ats_ingestion(config_file: Optional[Path] = None, db_path: Optional[Path
                     is_remote=p.get("is_remote", False),
                     raw_description=raw_desc,
                     cleaned_description=cleaned_desc,
+                    guard_verdict=flagged_verdict(findings),
                 )
                 if is_new:
                     stats["new"] += 1
                 else:
                     stats["refreshed"] += 1
                     METRICS.increment("duplicates_skipped")
-
+            conn.commit()
+    if failed:
+        logger.warning(f"{len(failed)} source(s) failed: " + " | ".join(failed))
     logger.info("ATS Ingestion Run Complete", **stats)
     return stats
 

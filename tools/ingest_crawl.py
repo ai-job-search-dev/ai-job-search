@@ -23,7 +23,8 @@ if str(ROOT_DIR) not in sys.path:
 
 CONFIG_PATH = ROOT_DIR / "config" / "portals.yaml"
 
-from tools.db import get_db, init_db, upsert_job, check_company_cooldown
+from tools.db import backup_db, check_company_cooldown, flagged_verdict, get_db, init_db, upsert_job
+from tools.net import get_with_retry
 from tools.posting_guard import guard
 from tools.logger import get_logger, METRICS
 
@@ -39,7 +40,7 @@ def crawl_unitary_fund(url: str = "https://unitary.fund/jobs/") -> List[Dict[str
     """Specialized crawler for the Unitary Fund Open-Source Quantum Job Board."""
     logger.info(f"Crawling Unitary Fund jobs from {url}")
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=15)
+        resp = get_with_retry(url, headers=HEADERS, timeout=15)
         if resp.status_code != 200:
             logger.warning(f"Unitary Fund returned HTTP {resp.status_code}")
             return []
@@ -94,6 +95,7 @@ def run_niche_crawling(config_file: Optional[Path] = None, db_path: Optional[Pat
 
     niche_portals = config.get("niche_portals", [])
     init_db(db_path)
+    backup_db(db_path, min_interval_minutes=60)
     stats = {"total": 0, "new": 0, "refreshed": 0, "portals_queried": 0}
 
     with get_db(db_path) as conn:
@@ -112,7 +114,7 @@ def run_niche_crawling(config_file: Optional[Path] = None, db_path: Optional[Pat
             elif parser_type == "generic_page":
                 logger.info(f"Generic markdown crawl for {name} ({url})")
                 try:
-                    resp = requests.get(url, headers=HEADERS, timeout=15)
+                    resp = get_with_retry(url, headers=HEADERS, timeout=15)
                     if resp.status_code == 200:
                         soup = BeautifulSoup(resp.text, "html.parser")
                         postings.append({
@@ -153,6 +155,7 @@ def run_niche_crawling(config_file: Optional[Path] = None, db_path: Optional[Pat
                     is_remote=post.get("is_remote", True),
                     raw_description=raw_desc,
                     cleaned_description=cleaned_desc,
+                    guard_verdict=flagged_verdict(findings),
                 )
 
                 if is_new:

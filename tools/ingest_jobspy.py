@@ -26,7 +26,7 @@ if str(ROOT_DIR) not in sys.path:
 
 CONFIG_PATH = ROOT_DIR / "config" / "portals.yaml"
 
-from tools.db import check_company_cooldown, get_db, init_db, upsert_job
+from tools.db import backup_db, check_company_cooldown, flagged_verdict, get_db, init_db, upsert_job
 from tools.logger import METRICS, get_logger
 from tools.posting_guard import guard
 from tools.preferences import load_preferences
@@ -183,6 +183,7 @@ def run_jobspy_ingestion(
     has_linkedin = "linkedin" in sites
 
     init_db(db_path)
+    backup_db(db_path, min_interval_minutes=60)
     stats = {"total": 0, "new": 0, "refreshed": 0, "cooldown_skipped": 0, "not_remote_skipped": 0,
              "queries": len(queries), "site_errors": 0, "irrelevant_skipped": 0}
 
@@ -266,7 +267,7 @@ def run_jobspy_ingestion(
                         conn=conn, title=title, company=company, url=url, portal=f"jobspy:{site}",
                         location=job_location, is_remote=remote_ok, raw_description=raw_desc,
                         cleaned_description=cleaned_desc, salary_min=salary_min, salary_max=salary_max,
-                        currency=currency,
+                        currency=currency, guard_verdict=flagged_verdict(findings),
                     )
                     if is_new:
                         stats["new"] += 1

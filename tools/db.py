@@ -34,6 +34,7 @@ STATUS_INTERVIEW = "INTERVIEW"
 STATUS_REJECTED = "REJECTED"
 STATUS_OFFER = "OFFER"
 STATUS_ARCHIVED = "ARCHIVED"
+STATUS_CLOSED = "CLOSED"  # posting disappeared from its source
 
 VALID_STATUSES = {
     STATUS_NEW,
@@ -47,6 +48,7 @@ VALID_STATUSES = {
     STATUS_REJECTED,
     STATUS_OFFER,
     STATUS_ARCHIVED,
+    STATUS_CLOSED,
 }
 
 SCHEMA_SQL = """
@@ -139,34 +141,154 @@ def normalize_company_name(name: str) -> str:
     return "".join(c for c in ascii_text if c.isalnum()).strip()
 
 
+class ManagedConnection(sqlite3.Connection):
+    """A connection whose `with` block commits and then closes it, so no file handle outlives the block."""
+
+    def __exit__(self, exc_type, exc, tb):  # type: ignore[override]
+        try:
+            return super().__exit__(exc_type, exc, tb)
+        finally:
+            self.close()
+
+
+def resolve_db_path(db_path: Optional[Path | str] = None) -> Path:
+    return Path(db_path or os.environ.get("AI_JOB_SEARCH_DB") or DEFAULT_DB_PATH)
+
+
 def get_db(db_path: Optional[Path | str] = None) -> sqlite3.Connection:
-    """Get an open SQLite connection with Row factory and foreign keys enabled."""
-    path = Path(db_path or os.environ.get("AI_JOB_SEARCH_DB") or DEFAULT_DB_PATH)
+    """Open the SQLite database with Row factory and foreign keys on. Use it as `with get_db() as conn:`."""
+    path = resolve_db_path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(path), timeout=30.0)
+    conn = sqlite3.connect(str(path), timeout=30.0, factory=ManagedConnection)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
     conn.execute("PRAGMA journal_mode = WAL;")
     return conn
 
 
+def _columns(conn: sqlite3.Connection, table: str) -> List[str]:
+    return [row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+
+
+def _migration_1_evaluation_columns(conn: sqlite3.Connection) -> None:
+    """Columns the evaluations table gained after its first release."""
+    columns = _columns(conn, "evaluations")
+    for name, ddl in (
+        ("phd_requirement_analysis", "TEXT"),
+        ("is_experimental_hardware", "BOOLEAN DEFAULT 0"),
+        ("matched_skills", "TEXT"),
+        ("missing_keywords", "TEXT"),
+        ("tailoring_recommendations", "TEXT"),
+    ):
+        if columns and name not in columns:
+            conn.execute(f"ALTER TABLE evaluations ADD COLUMN {name} {ddl};")
+
+
+def _migration_2_job_tracking(conn: sqlite3.Connection) -> None:
+    """last_seen for closing vanished postings, and the posting_guard verdict for quarantine."""
+    columns = _columns(conn, "jobs")
+    for name, ddl in (("last_seen", "TIMESTAMP"), ("guard_flagged", "INTEGER DEFAULT 0"), ("guard_verdict", "TEXT")):
+        if name not in columns:
+            conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {ddl};")
+    conn.execute("UPDATE jobs SET last_seen = COALESCE(updated_at, created_at) WHERE last_seen IS NULL")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_last_seen ON jobs(last_seen)")
+    try:
+        from tools.posting_guard import guard
+    except Exception:
+        return
+    rows = conn.execute("SELECT id, raw_description FROM jobs WHERE guard_verdict IS NULL AND raw_description <> ''").fetchall()
+    for row in rows:
+        _, findings = guard(row["raw_description"], mode="text")
+        verdict = flagged_verdict(findings)
+        if verdict:
+            conn.execute("UPDATE jobs SET guard_flagged = 1, guard_verdict = ? WHERE id = ?", (verdict, row["id"]))
+
+
+MIGRATIONS = [(1, _migration_1_evaluation_columns), (2, _migration_2_job_tracking)]
+SCHEMA_VERSION = MIGRATIONS[-1][0]
+
+
+def get_schema_version(conn: sqlite3.Connection) -> int:
+    return int(conn.execute("PRAGMA user_version").fetchone()[0])
+
+
 def init_db(db_path: Optional[Path | str] = None) -> None:
-    """Initialize SQLite database tables, indices, and run lightweight migrations."""
+    """Create the tables, then apply any pending migrations in order, recording the version reached."""
     with get_db(db_path) as conn:
         conn.executescript(SCHEMA_SQL)
-        # Migrate existing evaluations table columns if absent
-        cursor = conn.execute("PRAGMA table_info(evaluations)")
-        columns = [row["name"] for row in cursor.fetchall()]
-        if columns and "phd_requirement_analysis" not in columns:
-            conn.execute("ALTER TABLE evaluations ADD COLUMN phd_requirement_analysis TEXT;")
-        if columns and "is_experimental_hardware" not in columns:
-            conn.execute("ALTER TABLE evaluations ADD COLUMN is_experimental_hardware BOOLEAN DEFAULT 0;")
-        if columns and "matched_skills" not in columns:
-            conn.execute("ALTER TABLE evaluations ADD COLUMN matched_skills TEXT;")
-        if columns and "missing_keywords" not in columns:
-            conn.execute("ALTER TABLE evaluations ADD COLUMN missing_keywords TEXT;")
-        if columns and "tailoring_recommendations" not in columns:
-            conn.execute("ALTER TABLE evaluations ADD COLUMN tailoring_recommendations TEXT;")
+        current = get_schema_version(conn)
+        for version, migrate in MIGRATIONS:
+            if version > current:
+                migrate(conn)
+                conn.execute(f"PRAGMA user_version = {version}")
+                conn.commit()
+
+
+def flagged_verdict(findings: Dict[str, Any]) -> Optional[str]:
+    """The posting_guard verdict when it raised a warning, else None."""
+    verdict = str(findings.get("verdict", ""))
+    return verdict if "\u26a0" in verdict else None
+
+
+def check_integrity(db_path: Optional[Path | str] = None) -> Tuple[bool, str]:
+    """Run SQLite's integrity check. Returns (ok, message)."""
+    path = resolve_db_path(db_path)
+    if not path.exists():
+        return False, f"database not found: {path}"
+    try:
+        with get_db(path) as conn:
+            rows = [r[0] for r in conn.execute("PRAGMA integrity_check").fetchall()]
+    except sqlite3.DatabaseError as exc:
+        return False, str(exc)
+    return rows == ["ok"], "; ".join(rows)
+
+
+def backup_db(
+    db_path: Optional[Path | str] = None, keep: int = 5, min_interval_minutes: float = 0.0
+) -> Optional[Path]:
+    """Copy the database into a `backups/` folder beside it and keep the newest `keep` copies.
+
+    Returns the new backup, or None when the database does not exist or a backup newer than
+    `min_interval_minutes` is already there.
+    """
+    import time
+
+    path = resolve_db_path(db_path)
+    if not path.exists():
+        return None
+    folder = path.parent / "backups"
+    folder.mkdir(parents=True, exist_ok=True)
+    existing = sorted(folder.glob(f"{path.stem}-*.db"))
+    if min_interval_minutes and existing:
+        if (time.time() - existing[-1].stat().st_mtime) < min_interval_minutes * 60:
+            return None
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    dest = folder / f"{path.stem}-{stamp}.db"
+    source = sqlite3.connect(str(path), timeout=30.0)
+    target = sqlite3.connect(str(dest))
+    try:
+        source.backup(target)
+    finally:
+        target.close()
+        source.close()
+    for old in sorted(folder.glob(f"{path.stem}-*.db"))[:-keep]:
+        old.unlink()
+    return dest
+
+
+def mark_stale_jobs(
+    conn: sqlite3.Connection, days: int = 21, statuses: Tuple[str, ...] = (STATUS_NEW, STATUS_SHORTLISTED)
+) -> int:
+    """Close postings not seen by any ingestion for `days` days. Tailored and applied jobs are never touched."""
+    marks = ",".join("?" for _ in statuses)
+    cursor = conn.execute(
+        f"""
+        UPDATE jobs SET status = ?, rejection_reason = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE status IN ({marks}) AND last_seen IS NOT NULL AND last_seen < datetime('now', ?)
+        """,
+        (STATUS_CLOSED, f"No longer listed (not seen for {days} days)", *statuses, f"-{int(days)} days"),
+    )
+    return cursor.rowcount
 
 
 def get_or_create_company(
@@ -231,6 +353,7 @@ def upsert_job(
     salary_max: Optional[float] = None,
     currency: Optional[str] = None,
     canonical_key: Optional[str] = None,
+    guard_verdict: Optional[str] = None,
 ) -> Tuple[int, bool]:
     """Insert or update a job record using canonical deduplication.
 
@@ -265,7 +388,11 @@ def upsert_job(
                 salary_min = COALESCE(?, salary_min),
                 salary_max = COALESCE(?, salary_max),
                 currency = COALESCE(?, currency),
-                updated_at = CURRENT_TIMESTAMP
+                updated_at = CURRENT_TIMESTAMP,
+                last_seen = CURRENT_TIMESTAMP,
+                guard_flagged = ?,
+                guard_verdict = ?,
+                status = CASE WHEN status = 'CLOSED' THEN 'NEW' ELSE status END
             WHERE id = ?
             """,
             (
@@ -279,6 +406,8 @@ def upsert_job(
                 salary_min,
                 salary_max,
                 currency,
+                1 if guard_verdict else 0,
+                guard_verdict,
                 job_id,
             ),
         )
@@ -289,8 +418,8 @@ def upsert_job(
             INSERT INTO jobs (
                 canonical_key, title, company_id, location, is_remote,
                 url, portal, raw_description, cleaned_description,
-                salary_min, salary_max, currency, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                salary_min, salary_max, currency, status, last_seen, guard_flagged, guard_verdict
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
             """,
             (
                 canonical_key,
@@ -306,6 +435,8 @@ def upsert_job(
                 salary_max,
                 currency,
                 STATUS_NEW,
+                1 if guard_verdict else 0,
+                guard_verdict,
             ),
         )
         return cursor.lastrowid, True
@@ -584,8 +715,25 @@ def get_pipeline_summary(conn: sqlite3.Connection) -> Dict[str, int]:
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Database maintenance for job_search.db")
+    parser.add_argument("--backup", action="store_true", help="Write a rotating backup")
+    parser.add_argument("--check", action="store_true", help="Run SQLite's integrity check")
+    parser.add_argument("--close-stale", type=int, metavar="DAYS", help="Close NEW/SHORTLISTED jobs not seen for DAYS days")
+    args = parser.parse_args()
+
     init_db()
+    if args.backup:
+        print("backup:", backup_db())
+    if args.check:
+        ok, message = check_integrity()
+        print("integrity:", message)
+        if not ok:
+            sys.exit(1)
     with get_db() as c:
-        summary = get_pipeline_summary(c)
-        print("ai-job-search SQLite initialized successfully at:", DEFAULT_DB_PATH)
-        print("Pipeline Summary:", summary)
+        if args.close_stale:
+            print("closed:", mark_stale_jobs(c, args.close_stale))
+        print("ai-job-search SQLite ready at:", resolve_db_path())
+        print("schema version:", get_schema_version(c))
+        print("Pipeline Summary:", get_pipeline_summary(c))
