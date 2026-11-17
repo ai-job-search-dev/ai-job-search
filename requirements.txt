@@ -1,0 +1,13 @@
+# Core dependencies for ai-job-search flexible automation
+pydantic>=2.8.0
+pypdf>=4.2.0
+requests>=2.31.0
+pyyaml>=6.0.1
+python-jobspy>=1.4.0
+playwright>=1.44.0
+instructor>=1.17.0
+openai>=1.50.0
+beautifulsoup4>=4.12.0
+markdownify>=0.12.0
+tenacity>=8.2.0
+pytest>=8.0.0

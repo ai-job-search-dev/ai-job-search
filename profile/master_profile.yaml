@@ -1,0 +1,135 @@
+version: 2.0.0
+updated_at: '2026-11-17T00:52:16.228386+00:00'
+identity:
+  name: Franco Raineri
+  title: Software Engineer & Quantum Systems Developer
+  email: franco.raineri@example.com
+  phone: null
+  location: Argentina (Remote)
+  linkedin: https://linkedin.com/in/franco-raineri
+  github: https://github.com/franraineri
+  portfolio: null
+  languages:
+  - name: Spanish
+    level: Native
+    notes: Mother tongue
+  - name: English
+    level: Fluent / Bilingual
+    notes: Professional working proficiency
+summary: Software Engineer specializing in modern backend architectures, distributed
+  systems, and quantum software development (Qiskit, PennyLane). Track record of building
+  reliable APIs, asynchronous event-driven pipelines, and mathematical simulation
+  tooling.
+education:
+- degree: Computer Science / Software Engineering Degree
+  institution: University
+  period: 2019 - 2024
+  thesis: null
+  key_topics:
+  - Algorithms
+  - Distributed Systems
+  - Discrete Mathematics
+  - Quantum Computing Basics
+experience:
+- company: Software & Technology Services
+  role: Software Engineer
+  location: Remote
+  start_date: 2023-01
+  end_date: Present
+  is_current: true
+  achievements:
+  - Designed and developed scalable backend APIs and event-driven data ingestion pipelines
+    in Python.
+  - Implemented mathematical simulation and quantum algorithm testbenches using Qiskit
+    and NumPy.
+  - Optimized computational throughput and memory footprint by 35% across batch workloads.
+  skills_used:
+  - Python
+  - FastAPI
+  - Qiskit
+  - PostgreSQL
+  - Docker
+  - Git
+  - CI/CD
+  star_examples: []
+projects:
+- name: Quantum Simulation & Algorithm Benchmarks
+  description: High-performance simulation pipeline for hybrid quantum-classical algorithms
+    (VQE, QAOA) using Qiskit and PennyLane with statevector analysis.
+  repo_url: https://github.com/franraineri/quantum-benchmarks
+  technologies:
+  - Python
+  - Qiskit
+  - PennyLane
+  - NumPy
+  - Matplotlib
+  impact_highlights:
+  - Benchmarked circuit execution noise models and statevector convergence.
+- name: Distributed Job Search Automation Engine
+  description: Modular multi-agent job application assistant with SQLite state machine,
+    ATS API connectors, and automated layout and ATS verification.
+  repo_url: https://github.com/franraineri/ai-job-search
+  technologies:
+  - Python
+  - SQLite
+  - Pydantic
+  - Typst
+  - Playwright
+  - Docker
+  impact_highlights:
+  - Processes hundreds of job postings with deterministic prompt-injection defenses.
+skills:
+- name: Python
+  category: Backend & APIs
+  proficiency: Expert
+  evidence_sources:
+  - Experience
+  - Projects
+- name: Qiskit
+  category: Quantum Computing
+  proficiency: Advanced
+  evidence_sources:
+  - Projects
+  - Experience
+- name: PennyLane
+  category: Quantum Computing
+  proficiency: Advanced
+  evidence_sources:
+  - Projects
+- name: FastAPI
+  category: Backend & APIs
+  proficiency: Advanced
+  evidence_sources:
+  - Experience
+- name: PostgreSQL
+  category: Backend & APIs
+  proficiency: Advanced
+  evidence_sources:
+  - Experience
+- name: Docker
+  category: Cloud & DevOps
+  proficiency: Advanced
+  evidence_sources:
+  - Experience
+  - Projects
+- name: Algorithms & Data Structures
+  category: Mathematics & Algorithms
+  proficiency: Advanced
+  evidence_sources:
+  - Education
+  - Experience
+preferences:
+  target_roles:
+  - Quantum Software Engineer
+  - Quantum Applications Scientist
+  - Backend Software Engineer
+  - Distributed Systems Engineer
+  remote_only: true
+  salary_floor_usd: 2500.0
+  deal_breakers:
+  - Cleanroom / physical hardware fabrication roles
+  - Non-remote positions outside local commuting zone
+  - Unpaid trial periods
+  preferred_locations:
+  - Remote (Global / US / Europe / LATAM)
+discovered_insights: {}

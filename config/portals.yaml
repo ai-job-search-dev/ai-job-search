@@ -1,0 +1,46 @@
+# ==============================================================================
+# Search Portals & Aggregators Configuration
+# ==============================================================================
+
+# python-jobspy generalist search parameters
+jobspy:
+  sites:
+    - "linkedin"
+    - "indeed"
+    - "glassdoor"
+    - "google"
+  search_terms:
+    - "Quantum Software Engineer"
+    - "Quantum Computing Software"
+    - "Quantum SDK Developer"
+    - "Quantum Algorithms Python"
+    - "Quantum Compiler Engineer"
+    - "Junior Quantum Software"
+    - "Quantum Computing Residency"
+  locations:
+    - "Remote"
+    - "United States"
+    - "Europe"
+    - "United Kingdom"
+    - "Canada"
+  results_wanted: 25
+  hours_old: 72
+  country_indeed: "USA"
+  is_remote: true
+  description_format: "markdown"
+
+# Niche portals and community boards for specialized crawlers (Crawl4AI)
+niche_portals:
+  - name: "Unitary Fund Job Board"
+    url: "https://unitary.fund/jobs/"
+    category: "quantum_open_source"
+    enabled: true
+    parser: "unitary_fund"
+    notes: "Non-profit open-source quantum tech community postings."
+
+  - name: "Quantum Jobs Org"
+    url: "https://quantumjobs.org/"
+    category: "quantum_niche"
+    enabled: true
+    parser: "quantum_jobs"
+    notes: "Global aggregator specifically dedicated to quantum computing roles."

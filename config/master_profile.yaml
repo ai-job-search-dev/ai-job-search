@@ -1,0 +1,47 @@
+# ==============================================================================
+# Candidate Master Profile: Franco Raineri
+# Target Role: Junior to Mid Quantum Software Engineer
+# ==============================================================================
+
+candidate:
+  name: "Franco Raineri"
+  target_title: "Quantum Software Engineer"
+  location: "Remote / International"
+  remote_preference: "Remote or Relocation assistance"
+  languages:
+    - language: "Spanish"
+      level: "Native"
+    - language: "English"
+      level: "Full Professional Working Proficiency (C1/C2)"
+
+  summary: >
+    Software Engineer specializing in Quantum Computing, SDK development, and high-performance classical-quantum hybrid architectures.
+    Experienced with Python, C++, Qiskit, PennyLane, and modern distributed software engineering practices.
+
+  technical_skills:
+    primary:
+      - "Python"
+      - "C++"
+      - "Qiskit"
+      - "PennyLane"
+      - "Cirq"
+      - "Git & GitHub Actions (CI/CD)"
+      - "Object-Oriented Design (OOP) & Clean Code"
+      - "Unit Testing & Test-Driven Development (PyTest, Google Test)"
+    secondary:
+      - "Quantum Algorithms (VQE, QAOA, QPE, Grover)"
+      - "NumPy & SciPy"
+      - "Docker & Containerization"
+      - "RESTful APIs & Microservices (FastAPI)"
+      - "Linux / POSIX Systems & Bash"
+      - "OpenQASM & Quantum Intermediate Representation (QIR)"
+
+  education:
+    - degree: "Bachelor of Science / Engineering in Computer Science / Software Engineering"
+      institution: "University Level"
+      focus: "Quantum Software, Algorithms, High-Performance Computing"
+
+  dealbreakers:
+    - "Wet-lab physical experimentation (cleanroom, dilution refrigerators, lasers, cryostats)"
+    - "In-person requirement without relocation assistance outside authorized zone"
+    - "Active Top Secret US Defense Clearance strictly required without visa/remote option"

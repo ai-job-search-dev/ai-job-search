@@ -91,6 +91,9 @@ documents/interview/**
 
 # Personal job search tracking
 job_search_tracker.csv
+job_search.db*
+*.db*
+*.sqlite*
 
 # Gmail sync state (message IDs, subjects - personal data)
 gmail_sync/

@@ -1,0 +1,32 @@
+# Curated target companies for direct ATS JSON ingestion
+# Fields:
+#   name: Company display name
+#   ats_provider: greenhouse | lever | ashby
+#   slug: ATS board or company slug
+#   domain: official domain
+#   focus: quantum_software | algorithms | ai_systems | swe
+
+companies:
+  - name: "SandboxAQ"
+    ats_provider: "ashby"
+    slug: "sandboxaq"
+    domain: "sandboxaq.com"
+    focus: "quantum_software"
+
+  - name: "Rigetti Computing"
+    ats_provider: "lever"
+    slug: "rigetti"
+    domain: "rigetti.com"
+    focus: "quantum_software"
+
+  - name: "IonQ"
+    ats_provider: "greenhouse"
+    slug: "ionq"
+    domain: "ionq.com"
+    focus: "quantum_software"
+
+  - name: "PsiQuantum"
+    ats_provider: "greenhouse"
+    slug: "psiquantum"
+    domain: "psiquantum.com"
+    focus: "quantum_software"

@@ -1,0 +1,95 @@
+# ==============================================================================
+# Curated Target Companies: Quantum Computing & High-Performance Software
+# ==============================================================================
+# Fields per company:
+#   name: Display name
+#   ats_provider: greenhouse | lever | ashby
+#   slug: Board slug on public ATS API
+#   domain: Official company domain
+#   focus: Primary technical focus (quantum_software, algorithms, sdk, cloud)
+#   notes: Optional context or guidance
+
+companies:
+  - name: "SandboxAQ"
+    ats_provider: "ashby"
+    slug: "sandboxaq"
+    domain: "sandboxaq.com"
+    focus: "quantum_software"
+    notes: "AI + Quantum simulations and enterprise cryptographic agility."
+
+  - name: "Rigetti Computing"
+    ats_provider: "lever"
+    slug: "rigetti"
+    domain: "rigetti.com"
+    focus: "quantum_software"
+    notes: "PyQuil, Quilc, Quantum Cloud Services (QCS) and hybrid algorithms."
+
+  - name: "IonQ"
+    ats_provider: "greenhouse"
+    slug: "ionq"
+    domain: "ionq.com"
+    focus: "quantum_software"
+    notes: "Trapped ion hardware, cloud compilers and quantum algorithms."
+
+  - name: "PsiQuantum"
+    ats_provider: "greenhouse"
+    slug: "psiquantum"
+    domain: "psiquantum.com"
+    focus: "quantum_software"
+    notes: "Fault-tolerant photonic architecture, quantum SDKs and systems software."
+
+  - name: "Xanadu"
+    ats_provider: "greenhouse"
+    slug: "xanadu"
+    domain: "xanadu.ai"
+    focus: "quantum_software"
+    notes: "Creators of PennyLane (quantum differentiable programming), Strawberry Fields."
+
+  - name: "Zapata AI"
+    ats_provider: "lever"
+    slug: "zapata"
+    domain: "zapata.ai"
+    focus: "quantum_software"
+    notes: "Industrial generative AI & quantum algorithms (Orquestra platform)."
+
+  - name: "Classiq Technologies"
+    ats_provider: "greenhouse"
+    slug: "classiq"
+    domain: "classiq.io"
+    focus: "quantum_software"
+    notes: "Quantum algorithm design platform, high-level synthesis and compilation."
+
+  - name: "Algorithmiq"
+    ats_provider: "ashby"
+    slug: "algorithmiq"
+    domain: "algorithmiq.pro"
+    focus: "algorithms"
+    notes: "Quantum algorithms for life sciences and noise mitigation (Aurora)."
+
+  - name: "Riverlane"
+    ats_provider: "greenhouse"
+    slug: "riverlane"
+    domain: "riverlane.com"
+    focus: "quantum_software"
+    notes: "Quantum Error Correction (QEC) operating systems and decoders (Deltaflow)."
+
+  - name: "QC Ware"
+    ats_provider: "lever"
+    slug: "qcware"
+    domain: "qcware.com"
+    focus: "quantum_software"
+    notes: "Enterprise quantum software (Forge) and quantum machine learning."
+
+  - name: "Q-CTRL"
+    ats_provider: "greenhouse"
+    slug: "q-ctrl"
+    domain: "q-ctrl.com"
+    focus: "quantum_software"
+    notes: "Quantum firmware, error mitigation software (Fire Opal) and infrastructure."
+
+  - name: "D-Wave Systems"
+    ats_provider: "greenhouse"
+    slug: "dwavesys"
+    domain: "dwavesys.com"
+    focus: "quantum_software"
+    notes: "Quantum annealing & gate-model cloud APIs (Ocean SDK)."
