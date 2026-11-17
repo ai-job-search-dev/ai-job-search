@@ -42,7 +42,12 @@ SCORE_THRESHOLD = 7.5
 MAX_CV_PAGES = 2
 MAX_PROJECTS = 3
 
-FIT_LADDER = ((10.0, 1.8, MAX_PROJECTS), (9.5, 1.5, MAX_PROJECTS), (9.0, 1.3, 2), (9.0, 1.2, 1))
+# (font pt, margin cm, projects). One-page options first, then roomier two-page options that fill page 2.
+FIT_LADDER = (
+    (10.0, 1.8, MAX_PROJECTS), (9.5, 1.5, MAX_PROJECTS), (9.0, 1.3, 2), (9.0, 1.2, 1),
+    (10.0, 2.0, MAX_PROJECTS), (10.5, 2.0, MAX_PROJECTS), (11.0, 2.0, MAX_PROJECTS),
+    (11.0, 2.2, MAX_PROJECTS), (10.5, 2.4, MAX_PROJECTS),
+)
 
 
 def page_setup(font_pt: float = 10.0, margin_cm: float = 1.8) -> str:
@@ -318,15 +323,34 @@ def compile_typst(source: Path, output: Path) -> None:
 def compile_cv_to_fit(
     profile: MasterProfile, matched_skills: Sequence[str], source: Path, output: Path
 ) -> TailoredCV:
-    """Compile the CV with progressively denser settings until it fits on one page."""
+    """Try the layout ladder and keep the first setting with at most MAX_CV_PAGES and no layout problems."""
+    import contextlib
+    import io
+
+    from tools.verify_layout import parse_pdf
+    from tools.verify_layout import report as layout_report
     from tools.verify_pdf import extract_text_layer
 
-    for font_pt, margin_cm, max_projects in FIT_LADDER:
+    best: Optional[Tuple[int, Tuple[float, float, int]]] = None
+    for setting in FIT_LADDER:
+        font_pt, margin_cm, max_projects = setting
         cv = build_cv(profile, matched_skills, max_projects=max_projects)
         source.write_text(render_cv(cv, font_pt, margin_cm), encoding="utf-8")
         compile_typst(source, output)
-        if extract_text_layer(output)[1] <= 1:
+        if extract_text_layer(output)[1] > MAX_CV_PAGES:
+            continue
+        with contextlib.redirect_stdout(io.StringIO()):
+            problems = len(layout_report(output, parse_pdf(output)))
+        if best is None or problems < best[0]:
+            best = (problems, setting)
+        if problems == 0:
             break
+    if best is None:
+        best = (0, FIT_LADDER[-1])
+    font_pt, margin_cm, max_projects = best[1]
+    cv = build_cv(profile, matched_skills, max_projects=max_projects)
+    source.write_text(render_cv(cv, font_pt, margin_cm), encoding="utf-8")
+    compile_typst(source, output)
     return cv
 
 
