@@ -276,6 +276,15 @@ class RankerWithLlmTests(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(self.sources()[-1][2], preferences_hash(changed))
 
+    def test_stale_only_ignores_jobs_that_have_no_usable_description(self):
+        self.add("Acme")
+        self.add("Empty", description="")
+        client = FakeClient()
+        self.run_ranker(client)
+        changed = CareerPreferences(shortlist_threshold=6.0)
+        results = self.run_ranker(client, stale_only=True, prefs=changed)
+        self.assertEqual([r["company"] for r in results], ["Acme"])
+
     def test_without_a_client_or_key_the_heuristic_runs_and_no_gateway_is_built(self):
         self.add("Acme")
         self.run_ranker(None)

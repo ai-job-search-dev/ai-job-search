@@ -40,7 +40,7 @@ from tools.db import (
 from tools.llm import DEFAULT_MODEL, estimate_cost, llm_configured, load_pricing, preferences_hash, price_for, total_spend
 from tools.logger import METRICS, get_logger, safe_print
 from tools.preferences import load_preferences
-
+from tools.ranker import MIN_DESCRIPTION_CHARS
 logger = get_logger("pipeline")
 
 DEFAULT_SOURCES = ("ats", "jobspy")
@@ -352,7 +352,8 @@ def plan_run(opts: Options, db_path: Optional[Path] = None, profile_path: Option
             if "prefs_hash" in cols:
                 stale = conn.execute(
                     "SELECT COUNT(*) FROM jobs j JOIN evaluations e ON e.id = (SELECT MAX(id) FROM evaluations WHERE job_id = j.id) "
-                    "WHERE j.status IN ('NEW', 'DISCOVERED', 'SHORTLISTED', 'IGNORED') AND (e.prefs_hash IS NULL OR e.prefs_hash != ?)",
+                    "WHERE j.status IN ('NEW', 'DISCOVERED', 'SHORTLISTED', 'IGNORED') AND (e.prefs_hash IS NULL OR e.prefs_hash != ?) "
+                    "AND LENGTH(TRIM(COALESCE(NULLIF(j.cleaned_description, ''), j.raw_description, ''))) >= " + str(MIN_DESCRIPTION_CHARS),
                     (preferences_hash(prefs),),
                 ).fetchone()[0]
             else:

@@ -422,7 +422,8 @@ def run_ranker(
             marks = ",".join("?" for _ in RE_EVALUABLE_STATUSES)
             sql = (
                 "SELECT j.* FROM jobs j LEFT JOIN evaluations e ON e.id = (SELECT MAX(id) FROM evaluations WHERE job_id = j.id) "
-                f"WHERE j.status IN ({marks}) AND (e.id IS NULL OR e.prefs_hash IS NULL OR e.prefs_hash != ?) ORDER BY j.id ASC"
+                f"WHERE j.status IN ({marks}) AND (e.id IS NULL OR e.prefs_hash IS NULL OR e.prefs_hash != ?) "
+                f"AND LENGTH(TRIM(COALESCE(NULLIF(j.cleaned_description, ''), j.raw_description, ''))) >= {MIN_DESCRIPTION_CHARS} ORDER BY j.id ASC"
             )
             params = [*sorted(RE_EVALUABLE_STATUSES), phash]
             if limit:
