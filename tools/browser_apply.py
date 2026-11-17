@@ -18,7 +18,7 @@ import sys
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
-
+from urllib.parse import parse_qs, urlparse
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
@@ -52,6 +52,10 @@ FIELD_PATTERNS: List[Tuple[str, "re.Pattern[str]"]] = [
     ("location", re.compile(r"\bcity\b|\blocation\b|where.*(?:based|located)|current[\s_-]*location", re.I)),
 ]
 
+ID_NOISE = re.compile(
+    r"(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])|https?://\S+|\bquestion_\d+\b", re.IGNORECASE
+)
+MAX_LABEL_CHARS = 90  # longer text is a custom question (visa, authorization...), never a profile field
 SKIP_INPUT_TYPES = {"hidden", "password", "checkbox", "radio", "submit", "button", "image", "reset"}
 CAPTCHA_MARKERS = ("captcha", "recaptcha", "hcaptcha", "turnstile")
 
@@ -89,6 +93,27 @@ COLLECT_FIELDS_JS = """
 """
 
 
+def application_url(job_url: str, portal: str = "") -> str:
+    """The page that holds the application form, for ATS hosts where it is not the posting page.
+
+    Lever keeps the form under /apply and Ashby under /application. Greenhouse postings often live on the
+    company's own site with the form in an iframe, so the embedded form URL is built from the board slug
+    (`portal` is "greenhouse:<slug>") and the job id. Anything else is returned unchanged.
+    """
+    parsed = urlparse(job_url)
+    host, path = parsed.netloc.lower(), parsed.path.rstrip("/")
+    if host.endswith("jobs.lever.co") and path and not path.endswith("/apply"):
+        return parsed._replace(path=path + "/apply", query="", fragment="").geturl()
+    if host.endswith("jobs.ashbyhq.com") and path and not path.endswith("/application"):
+        return parsed._replace(path=path + "/application", query="", fragment="").geturl()
+    if portal.lower().startswith("greenhouse:"):
+        slug = portal.split(":", 1)[1].strip()
+        job_id = (parse_qs(parsed.query).get("gh_jid") or [""])[0] or (re.search(r"/jobs/(\d+)", path) or [None, ""])[1]
+        if slug and job_id.isdigit():
+            return f"https://boards.greenhouse.io/embed/job_app?for={slug}&token={job_id}"
+    return job_url
+
+
 def split_name(full_name: str) -> Tuple[str, str]:
     parts = full_name.split()
     if len(parts) <= 1:
@@ -119,6 +144,9 @@ def classify_field(descriptor: str, tag: str = "input", input_type: str = "text"
         return None
     if tag == "textarea":
         return None
+    descriptor = re.sub(r"\s+", " ", ID_NOISE.sub(" ", descriptor)).strip()
+    if "?" in descriptor or len(descriptor) > MAX_LABEL_CHARS:
+        return None
     if input_type == "file":
         for key, pattern in FIELD_PATTERNS:
             if key in ("cover_letter_file", "resume_file") and pattern.search(descriptor):
@@ -145,13 +173,15 @@ def plan_fills(
     """Decide what to fill. Returns (fills, labels left for the human)."""
     fills: List[Dict[str, Any]] = []
     left: List[str] = []
+    used: set = set()
     files = {"resume_file": cv_path, "cover_letter_file": cover_letter_path}
     for f in fields:
         label = (f.get("descriptor") or f.get("type") or f.get("tag") or "field")[:80]
         key = classify_field(f.get("descriptor", ""), f.get("tag", "input"), f.get("type", "text"))
         if f.get("type") == "file":
             path = files.get(key or "")
-            if key and path:
+            if key and path and key not in used:
+                used.add(key)
                 fills.append({"index": f["index"], "kind": "file", "key": key, "value": path})
             else:
                 left.append(label)
@@ -161,7 +191,8 @@ def plan_fills(
             continue
         if f.get("value"):
             continue
-        if key and key in answers:
+        if key and key in answers and key not in used:
+            used.add(key)
             fills.append({"index": f["index"], "kind": "text", "key": key, "value": answers[key]})
         else:
             left.append(label)
@@ -171,6 +202,12 @@ def plan_fills(
 def detect_captcha(page_html: str) -> bool:
     lowered = page_html.lower()
     return any(marker in lowered for marker in CAPTCHA_MARKERS)
+
+
+def form_recognised(fields: List[Dict[str, Any]]) -> bool:
+    """True when the page has at least an email, a name or a resume field, i.e. it is an application form."""
+    keys = {classify_field(f.get("descriptor", ""), f.get("tag", "input"), f.get("type", "text")) for f in fields}
+    return bool(keys & {"email", "first_name", "full_name", "resume_file"})
 
 
 def apply_fills(page: Any, fills: List[Dict[str, Any]]) -> int:
@@ -274,7 +311,10 @@ def run_apply(
             return "blocked"
 
         answers = build_answers(profile)
-        with page_factory(app["url"], cdp_url) as page:
+        target_url = application_url(app["url"], app["portal"] or "")
+        if target_url != app["url"]:
+            logger.info(f"Opening the application form directly: {target_url}")
+        with page_factory(target_url, cdp_url) as page:
             page.wait_for_timeout(1500)
             fields = page.evaluate(COLLECT_FIELDS_JS)
             fills, left = plan_fills(fields, answers, app["cv_path"], app["cover_letter_path"])
@@ -285,8 +325,11 @@ def run_apply(
                 f"  For you:  {len(left)} field(s) left untouched"
                 + (f": {'; '.join(left[:8])}" if left else ""),
             ]
+            if not form_recognised(fields):
+                summary.append("  WARNING:  No application form was recognised on this page (login wall, iframe or a different site).")
+                summary.append("            Open the real application page yourself; nothing useful was filled.")
             if detect_captcha(page.content()):
-                summary.append("  WARNING:  CAPTCHA detected. Solve it yourself; this tool will not.")
+                summary.append("  NOTE:     A CAPTCHA widget is on the page. If it asks, solve it yourself; this tool will not.")
             if not human_checkpoint("\n".join(summary), input_fn=input_fn):
                 logger.info("No confirmation received. Job stays READY_TO_APPLY.")
                 return "pending"

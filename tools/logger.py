@@ -63,6 +63,12 @@ class FunnelMetrics:
             "tailored_total": 0,
             "applied_total": 0,
             "errors_total": 0,
+            "llm_calls": 0,
+            "llm_cache_hits": 0,
+            "llm_prompt_tokens": 0,
+            "llm_completion_tokens": 0,
+            "llm_cost_microusd": 0,
+            "llm_errors": 0,
         }
 
     def increment(self, metric: str, amount: int = 1) -> None:
@@ -103,6 +109,9 @@ class FunnelMetrics:
         lines.append(f"  x IGNORED (below threshold or vetoed): {data['ignored_total']}")
         lines.append(f"  + Documents Tailored:                  {data['tailored_total']}")
         lines.append(f"  > Postulations Applied (HITL):        {data['applied_total']}")
+        if data['llm_calls'] or data['llm_cache_hits']:
+            lines.append(f"  $ LLM: {data['llm_calls']} calls, {data['llm_cache_hits']} from cache, "
+                         f"{data['llm_prompt_tokens'] + data['llm_completion_tokens']} tokens, ${data['llm_cost_microusd'] / 1e6:.4f}")
         if data['errors_total'] > 0:
             lines.append(f"  ! Pipeline Errors / Exceptions:        {data['errors_total']}")
         lines.append("=" * 65)

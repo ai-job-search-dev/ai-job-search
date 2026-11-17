@@ -204,7 +204,34 @@ def _migration_2_job_tracking(conn: sqlite3.Connection) -> None:
             conn.execute("UPDATE jobs SET guard_flagged = 1, guard_verdict = ? WHERE id = ?", (verdict, row["id"]))
 
 
-MIGRATIONS = [(1, _migration_1_evaluation_columns), (2, _migration_2_job_tracking)]
+def _migration_3_llm_and_runs(conn: sqlite3.Connection) -> None:
+    """LLM usage log and response cache, pipeline run history, and how each evaluation was produced."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS llm_calls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, job_id INTEGER, model TEXT,
+            prompt_tokens INTEGER DEFAULT 0, completion_tokens INTEGER DEFAULT 0, cost_usd REAL,
+            cache_hit INTEGER DEFAULT 0, prefs_hash TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS llm_cache (
+            cache_key TEXT PRIMARY KEY, model TEXT, response_json TEXT,
+            prompt_tokens INTEGER DEFAULT 0, completion_tokens INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS pipeline_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            finished_at TIMESTAMP, status TEXT, steps TEXT, metrics TEXT, llm_cost_usd REAL DEFAULT 0, notes TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_llm_calls_created ON llm_calls(created_at);
+        """
+    )
+    columns = _columns(conn, "evaluations")
+    for name in ("eval_source", "eval_model", "prefs_hash"):
+        if name not in columns:
+            conn.execute(f"ALTER TABLE evaluations ADD COLUMN {name} TEXT;")
+
+
+MIGRATIONS = [(1, _migration_1_evaluation_columns), (2, _migration_2_job_tracking), (3, _migration_3_llm_and_runs)]
 SCHEMA_VERSION = MIGRATIONS[-1][0]
 
 
@@ -485,6 +512,9 @@ def record_evaluation(
     raw_eval: Optional[Dict[str, Any]] = None,
     auto_update_status: bool = True,
     threshold: float = 7.5,
+    eval_source: str = "heuristic",
+    eval_model: Optional[str] = None,
+    prefs_hash: Optional[str] = None,
 ) -> int:
     """Record evaluation scores and update job status (SHORTLISTED if score >= 7.5 and not vetoed)."""
     # Consolidate strengths/matched_skills
@@ -499,8 +529,8 @@ def record_evaluation(
             phd_requirement_analysis, is_experimental_hardware,
             veto_triggered, veto_reason, recommended_channel,
             matched_skills, missing_keywords, tailoring_recommendations,
-            strengths, gaps, raw_eval
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            strengths, gaps, raw_eval, eval_source, eval_model, prefs_hash
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             job_id,
@@ -518,6 +548,9 @@ def record_evaluation(
             json.dumps(final_matched, ensure_ascii=False),
             json.dumps(final_missing, ensure_ascii=False),
             json.dumps(raw_eval or {}, ensure_ascii=False),
+            eval_source,
+            eval_model,
+            prefs_hash,
         ),
     )
 
@@ -668,7 +701,7 @@ def get_ready_application(conn: sqlite3.Connection, job_id: int) -> Optional[sql
     """Pending (not yet submitted) application row for a job, with job and company fields."""
     return conn.execute(
         """
-        SELECT a.*, j.title, j.url, j.status AS job_status, c.name AS company_name
+        SELECT a.*, j.title, j.url, j.portal, j.status AS job_status, c.name AS company_name
         FROM applications a
         JOIN jobs j ON j.id = a.job_id
         JOIN companies c ON c.id = j.company_id

@@ -33,6 +33,7 @@ from tools.db import (
     STATUS_SHORTLISTED,
     STATUS_IGNORED,
 )
+from tools.llm import Budget, BudgetExceeded, LLMGateway, llm_configured, preferences_hash
 from tools.logger import METRICS, get_logger, safe_print
 from tools.preferences import (
     RULE_TEXT,
@@ -185,6 +186,7 @@ CITIZENSHIP_REQUIRED = re.compile(
     re.IGNORECASE,
 )
 MIN_DESCRIPTION_CHARS = 100
+MAX_DESCRIPTION_CHARS = 4500  # characters of a posting sent to the model
 RESEARCH_TITLE = re.compile(r"scientist|researcher|research (?:fellow|associate)|postdoc", re.IGNORECASE)
 ENGINEER_TITLE = re.compile(r"engineer|developer|programmer", re.IGNORECASE)
 SOFTWARE_TITLE = re.compile(r"software|developer|compiler|\bsdk\b|algorithm|\bcloud\b|backend|full[- ]?stack|\bml\b|machine learning", re.IGNORECASE)
@@ -322,56 +324,53 @@ def heuristic_quantum_eval(
 def evaluate_with_instructor(
     title: str, company: str, description: str, location: str, is_remote: bool,
     system_prompt: str, user_template: str, prefs: Optional[CareerPreferences] = None,
-    candidate: str = "", use_llm: bool = True,
+    candidate: str = "", use_llm: bool = True, gateway: Optional[LLMGateway] = None,
+    job_id: Optional[int] = None, info: Optional[Dict[str, Any]] = None,
 ) -> QuantumJobEvaluation:
-    """Evaluate posting using Instructor-wrapped LLM client."""
+    """Score a posting with the LLM through `gateway`, or with the keyword heuristic when that is not possible.
+
+    `info`, when given, is filled with how the answer was produced: source, model and cache_hit.
+    """
     prefs = prefs or CareerPreferences()
-    api_key = os.environ.get("OPENAI_API_KEY")
-    model_name = os.environ.get("AI_JOB_SEARCH_MODEL", "gpt-4o-mini")
+
+    def heuristic(reason: str) -> QuantumJobEvaluation:
+        if info is not None:
+            info.update(source="heuristic", model="", cache_hit=False, reason=reason)
+        return heuristic_quantum_eval(title, company, description, location, is_remote, prefs)
 
     if not use_llm:
-        return heuristic_quantum_eval(title, company, description, location, is_remote, prefs)
+        return heuristic("quarantined")
+    if gateway is None:
+        return heuristic("no_llm_configured")
 
-    if not api_key:
-        logger.info("OPENAI_API_KEY not set. Using built-in deterministic Quantum heuristic engine.")
-        return heuristic_quantum_eval(title, company, description, location, is_remote, prefs)
-
+    system = system_prompt.replace("{{ candidate }}", candidate).replace("{{ preferences }}", describe_preferences(prefs))
+    body = user_template.replace("{{ company }}", company)
+    body = body.replace("{{ title }}", title).replace("{{ location }}", location)
+    body = body.replace("{{ is_remote }}", str(is_remote)).replace("{{ portal }}", "direct_ats_or_aggregator")
+    body = body.replace("{{ description }}", description[:MAX_DESCRIPTION_CHARS])
+    messages = [{"role": "system", "content": system}, {"role": "user", "content": body}]
     try:
-        import instructor
-        from openai import OpenAI
+        evaluation, call = gateway.evaluate(messages, QuantumJobEvaluation, job_id=job_id)
+    except BudgetExceeded as exc:
+        if "budget" not in gateway.summary.notes:
+            logger.warning(f"LLM budget reached ({exc}). The rest of this run uses the keyword heuristic.")
+            gateway.summary.notes.append("budget")
+        return heuristic("budget")
+    except Exception as exc:
+        gateway.summary.errors += 1
+        logger.warning(f"LLM evaluation failed ({exc}). Falling back to heuristic engine.")
+        return heuristic("llm_error")
 
-        client = instructor.from_openai(OpenAI(api_key=api_key))
-
-        system_prompt = system_prompt.replace("{{ candidate }}", candidate).replace(
-            "{{ preferences }}", describe_preferences(prefs)
-        )
-        prompt_body = user_template.replace("{{ company }}", company)
-        prompt_body = prompt_body.replace("{{ title }}", title)
-        prompt_body = prompt_body.replace("{{ location }}", location)
-        prompt_body = prompt_body.replace("{{ is_remote }}", str(is_remote))
-        prompt_body = prompt_body.replace("{{ portal }}", "direct_ats_or_aggregator")
-        prompt_body = prompt_body.replace("{{ description }}", description[:4500])
-
-        evaluation: QuantumJobEvaluation = client.chat.completions.create(
-            model=model_name,
-            response_model=QuantumJobEvaluation,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt_body},
-            ],
-            temperature=0.1,
-        )
-        evaluation = normalize_evaluation(evaluation, prefs)
-        veto, penalty, _ = deterministic_screen(prefs, title, location, description)
-        updates: Dict[str, Any] = {}
-        if veto and not evaluation.should_veto:
-            updates.update(should_veto=True, veto_reason=veto)
-        if penalty:
-            updates["overall_score"] = max(0.0, round(evaluation.overall_score - penalty, 1))
-        return evaluation.model_copy(update=updates) if updates else evaluation
-    except Exception as e:
-        logger.warning(f"LLM evaluation failed ({e}). Falling back to heuristic engine.")
-        return heuristic_quantum_eval(title, company, description, location, is_remote, prefs)
+    evaluation = normalize_evaluation(evaluation, prefs)
+    veto, penalty, _ = deterministic_screen(prefs, title, location, description)
+    updates: Dict[str, Any] = {}
+    if veto and not evaluation.should_veto:
+        updates.update(should_veto=True, veto_reason=veto)
+    if penalty:
+        updates["overall_score"] = max(0.0, round(evaluation.overall_score - penalty, 1))
+    if info is not None:
+        info.update(source="llm", model=call.model, cache_hit=call.cache_hit)
+    return evaluation.model_copy(update=updates) if updates else evaluation
 
 
 def veto_metric(ev: QuantumJobEvaluation) -> str:
@@ -394,11 +393,18 @@ def run_ranker(
     reevaluate: bool = False,
     profile_path: Optional[Path] = None,
     prefs: Optional[CareerPreferences] = None,
+    llm_client: Any = None,
+    max_llm_calls: Optional[int] = None,
+    max_cost_usd: Optional[float] = None,
+    use_cache: bool = True,
+    stale_only: bool = False,
+    usage_out: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """Evaluate pending jobs in job_search.db and transition states."""
     prompts, loaded_prefs, candidate = load_config(profile_path)
     prefs = prefs or loaded_prefs
     threshold = prefs.shortlist_threshold
+    phash = preferences_hash(prefs)
     system_prompt = prompts.get("system_prompt", "Evaluate job posting for Quantum SWE.")
     user_template = prompts.get("user_prompt_template", "Job: {{ company }} - {{ title }}\n{{ description }}")
 
@@ -407,8 +413,22 @@ def run_ranker(
         backup_db(db_path, min_interval_minutes=10)
     evaluated = []
     with get_db(db_path) as conn:
+        gateway: Optional[LLMGateway] = None
+        if llm_client is not None or llm_configured():
+            gateway = LLMGateway(conn, client=llm_client, budget=Budget(max_llm_calls, max_cost_usd), use_cache=use_cache, prefs_hash=phash)
         if specific_job_id:
             jobs = conn.execute("SELECT * FROM jobs WHERE id = ?", (specific_job_id,)).fetchall()
+        elif stale_only:
+            marks = ",".join("?" for _ in RE_EVALUABLE_STATUSES)
+            sql = (
+                "SELECT j.* FROM jobs j LEFT JOIN evaluations e ON e.id = (SELECT MAX(id) FROM evaluations WHERE job_id = j.id) "
+                f"WHERE j.status IN ({marks}) AND (e.id IS NULL OR e.prefs_hash IS NULL OR e.prefs_hash != ?) ORDER BY j.id ASC"
+            )
+            params = [*sorted(RE_EVALUABLE_STATUSES), phash]
+            if limit:
+                sql += " LIMIT ?"
+                params.append(int(limit))
+            jobs = conn.execute(sql, params).fetchall()
         elif reevaluate:
             marks = ",".join("?" for _ in RE_EVALUABLE_STATUSES)
             sql = f"SELECT * FROM jobs WHERE status IN ({marks}) ORDER BY id ASC"
@@ -441,6 +461,7 @@ def run_ranker(
                 METRICS.increment("skipped_no_description")
                 continue
 
+            info: Dict[str, Any] = {}
             eval_res = evaluate_with_instructor(
                 title=title,
                 company=company_name,
@@ -452,6 +473,9 @@ def run_ranker(
                 prefs=prefs,
                 candidate=candidate,
                 use_llm=not job["guard_flagged"],
+                gateway=gateway,
+                job_id=job_id,
+                info=info,
             )
 
             METRICS.increment("evaluated_total")
@@ -491,6 +515,9 @@ def run_ranker(
                     raw_eval=eval_res.model_dump(),
                     auto_update_status=job["status"] in RE_EVALUABLE_STATUSES,
                     threshold=threshold,
+                    eval_source=info.get("source", "heuristic"),
+                    eval_model=info.get("model") or None,
+                    prefs_hash=phash,
                 )
 
             evaluated.append({
@@ -503,6 +530,17 @@ def run_ranker(
                 "matched": eval_res.matched_skills,
             })
 
+    if gateway is not None:
+        usage = gateway.summary
+        METRICS.increment("llm_calls", usage.calls)
+        METRICS.increment("llm_cache_hits", usage.cache_hits)
+        METRICS.increment("llm_prompt_tokens", usage.prompt_tokens)
+        METRICS.increment("llm_completion_tokens", usage.completion_tokens)
+        METRICS.increment("llm_cost_microusd", int(usage.cost_usd * 1_000_000))
+        METRICS.increment("llm_errors", usage.errors)
+        if usage_out is not None:
+            usage_out.update(usage.to_dict())
+        logger.info("LLM usage", **usage.to_dict())
     shortlisted = [e for e in evaluated if e["status"] == STATUS_SHORTLISTED]
     if shortlisted:
         rule = "*" * 65
@@ -522,7 +560,14 @@ if __name__ == "__main__":
     parser.add_argument("--job-id", type=int, default=None, help="Evaluate a specific job ID")
     parser.add_argument("--dry-run", action="store_true", help="Run evaluation without updating DB status")
     parser.add_argument("--reevaluate", action="store_true", help="Also re-score NEW, SHORTLISTED and IGNORED jobs (never tailored or applied ones)")
+    parser.add_argument("--stale-only", action="store_true", help="Re-score only jobs whose evaluation predates the current preferences")
+    parser.add_argument("--max-llm-calls", type=int, default=None, help="Stop calling the LLM after this many paid calls")
+    parser.add_argument("--max-cost", type=float, default=None, help="Stop calling the LLM once this many USD are spent")
+    parser.add_argument("--no-cache", action="store_true", help="Ignore cached LLM answers")
     args = parser.parse_args()
 
-    run_ranker(limit=args.limit, specific_job_id=args.job_id, dry_run=args.dry_run, reevaluate=args.reevaluate)
+    run_ranker(
+        limit=args.limit, specific_job_id=args.job_id, dry_run=args.dry_run, reevaluate=args.reevaluate,
+        stale_only=args.stale_only, max_llm_calls=args.max_llm_calls, max_cost_usd=args.max_cost, use_cache=not args.no_cache,
+    )
     METRICS.print_summary()

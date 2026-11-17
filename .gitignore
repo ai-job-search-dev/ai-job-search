@@ -124,3 +124,6 @@ company_research/*.json
 
 # Brainstorm mockups (superpowers visual companion) - never ship
 .superpowers/
+
+# Run lock written by tools/pipeline.py next to the database
+.pipeline.lock
