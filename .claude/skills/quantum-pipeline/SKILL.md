@@ -6,7 +6,7 @@ description: >
   application up to, but never including, Submit. Triggers on: pipeline, ingest, rank jobs,
   shortlist, tailor, READY_TO_APPLY, pre-fill application, browser_apply, form probe, preferences,
   master_profile
-allowed-tools: Read, Write, Glob, Grep, Bash
+allowed-tools: Read, Write, Glob, Grep
 ---
 # Quantum pipeline
 
