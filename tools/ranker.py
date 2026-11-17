@@ -105,13 +105,17 @@ def deterministic_screen(
     employment = detect_employment_types(title, description)
 
     holds_us = "US" in {c.upper() for c in prefs.work_authorization.citizenships}
-    if CITIZENSHIP_REQUIRED.search(description) and not holds_us:
+    citizenship = citizenship_requirement(description) if not holds_us else None
+    if citizenship:
         setting = prefs.rules.citizenship_clearance
-        if setting.mode == "veto":
+        if setting.mode == "veto" and citizenship == "hard":
             veto = veto or CITIZENSHIP_VETO_REASON
-        elif setting.mode == "penalty":
+        elif setting.mode in ("veto", "penalty"):
             penalty += setting.penalty
-            notes.append("citizenship or clearance requirement")
+            notes.append(
+                "citizenship or clearance requirement" if citizenship == "hard"
+                else "export-control or preferred clearance wording"
+            )
 
     if prefs.employment.paid_only and is_unpaid(title, description):
         setting = prefs.rules.unpaid
@@ -196,6 +200,28 @@ CITIZENSHIP_REQUIRED = re.compile(
     r"(?:secret|ts/sci|top secret) (?:access|clearance)|eligib\w+ for (?:a )?(?:secret|security clearance)",
     re.IGNORECASE,
 )
+CLEARANCE_NEGATED_BEFORE = re.compile(r"(?:\bno|\bnot|\bwithout|n't|\bnever)\b[^.;]{0,30}$", re.IGNORECASE)
+CLEARANCE_NEGATED_AFTER = re.compile(r"^[^.;]{0,25}\b(?:not (?:required|needed|necessary)|is not a requirement)", re.IGNORECASE)
+CLEARANCE_OPTIONAL = re.compile(r"preferred|a plus|desirable|nice to have|bonus|an advantage|is helpful|ideal", re.IGNORECASE)
+EXPORT_CONTROL_BOILERPLATE = re.compile(r"license exception|any necessary license|export licen[sc]e|export[- ]control", re.IGNORECASE)
+
+
+def citizenship_requirement(text: str) -> Optional[str]:
+    """'hard' for a stated citizenship or clearance requirement, 'soft' for export-control boilerplate or a preference, else None."""
+    level: Optional[str] = None
+    for match in CITIZENSHIP_REQUIRED.finditer(text or ""):
+        before = text[max(0, match.start() - 60):match.start()]
+        after = text[match.end():match.end() + 60]
+        if CLEARANCE_NEGATED_BEFORE.search(before) or CLEARANCE_NEGATED_AFTER.search(after):
+            continue
+        window = text[max(0, match.start() - 250):match.end() + 350]
+        if CLEARANCE_OPTIONAL.search(before[-40:] + match.group(0) + after[:40]) or EXPORT_CONTROL_BOILERPLATE.search(window):
+            level = level or "soft"
+        else:
+            return "hard"
+    return level
+
+
 MIN_DESCRIPTION_CHARS = 100
 MAX_DESCRIPTION_CHARS = 4500  # characters of a posting sent to the model
 RESEARCH_TITLE = re.compile(r"scientist|researcher|research (?:fellow|associate)|postdoc", re.IGNORECASE)

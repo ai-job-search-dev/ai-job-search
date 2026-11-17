@@ -44,6 +44,26 @@ class HeuristicCalibrationTests(unittest.TestCase):
             self.assertTrue(ev.should_veto, title)
             self.assertLess(ev.overall_score, 7.5, title)
 
+    def test_negated_or_preferred_clearance_is_not_a_veto(self):
+        for text in ("No security clearance required.", "A security clearance is not required.",
+                     "We do not require a security clearance."):
+            ev = evaluate("Quantum Software Engineer", GOOD_DESC + " " + text)
+            self.assertFalse(ev.should_veto, text)
+        preferred = evaluate("Quantum Software Engineer", GOOD_DESC + " Security clearance preferred.")
+        self.assertFalse(preferred.should_veto)
+        self.assertLess(preferred.overall_score, evaluate("Quantum Software Engineer").overall_score)
+
+    def test_export_control_us_person_boilerplate_is_a_penalty_not_a_veto(self):
+        boilerplate = (" Employment is contingent on verifying U.S. Person (e.g., U.S. citizen, U.S. national) status "
+                       "for export controls, obtaining any necessary license, or a license exception.")
+        ev = evaluate("Quantum Software Engineer", GOOD_DESC + boilerplate)
+        self.assertFalse(ev.should_veto)
+        self.assertLess(ev.overall_score, evaluate("Quantum Software Engineer").overall_score)
+
+    def test_hard_citizenship_requirement_still_vetoes(self):
+        self.assertTrue(evaluate("Quantum Software Engineer", GOOD_DESC + " Must be a U.S. citizen.").should_veto)
+        self.assertTrue(evaluate("Quantum Software Engineer", GOOD_DESC + " Active TS/SCI clearance required.").should_veto)
+
     def test_citizenship_or_clearance_is_vetoed(self):
         ev = evaluate("Quantum Software Engineer", GOOD_DESC + " Only U.S. citizens are eligible to apply.")
         self.assertTrue(ev.should_veto)
