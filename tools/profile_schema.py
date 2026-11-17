@@ -119,6 +119,8 @@ class MasterProfile(BaseModel):
     projects: List[ProjectEntry] = Field(default_factory=list)
     skills: List[SkillItem] = Field(default_factory=list)
     preferences: CareerPreferences
+    certifications: List[str] = Field(default_factory=list)
+    publications: List[str] = Field(default_factory=list)
     discovered_insights: Dict[str, List[str]] = Field(
         default_factory=dict,
         description="Keywords and competencies learned from target job market analysis"

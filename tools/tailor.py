@@ -70,6 +70,7 @@ class TailoredCV:
     experience: List[Dict[str, Any]]
     projects: List[Dict[str, Any]]
     education: List[Dict[str, Any]]
+    extras: List[str] = field(default_factory=list)
     matched: List[str] = field(default_factory=list)
     unverified: List[str] = field(default_factory=list)
 
@@ -191,6 +192,7 @@ def build_cv(
         experience=experience,
         projects=projects,
         education=education,
+        extras=[*profile.certifications, *profile.publications],
         matched=matched,
         unverified=unverified,
     )
@@ -244,6 +246,10 @@ def render_cv(cv: TailoredCV, font_pt: float = 10.0, margin_cm: float = 1.8) -> 
                 f"#cv_entry(title: {typst_str(edu['degree'])}, subtitle: {typst_str(edu['institution'])}, "
                 f"date: {typst_str(edu['period'])}, description: {topics})"
             )
+        out.append("")
+    if cv.extras:
+        out.append('#cv_section("Certifications & Publications")')
+        out.append(f"#list({', '.join(typst_str(x) for x in cv.extras)})")
     return "\n".join(out) + "\n"
 
 
