@@ -22,7 +22,6 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 PROMPTS_PATH = ROOT_DIR / "config" / "prompts.yaml"
-PROFILE_PATH = ROOT_DIR / "config" / "master_profile.yaml"
 
 from tools.db import (
     get_db,
@@ -34,6 +33,17 @@ from tools.db import (
     STATUS_IGNORED,
 )
 from tools.logger import get_logger, METRICS
+from tools.preferences import (
+    RULE_TEXT,
+    assess_work_authorization,
+    describe_preferences,
+    detect_employment_types,
+    is_unpaid,
+    load_candidate_context,
+    load_preferences,
+    reason_matches,
+)
+from tools.profile_schema import CareerPreferences
 from tools.ranker_schema import QuantumJobEvaluation
 
 logger = get_logger("ranker")
@@ -52,46 +62,109 @@ except Exception:
     pass
 
 
-def load_config() -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """Load evaluation prompt templates and candidate profile."""
-    prompts = {}
+def load_config(profile_path: Optional[Path] = None) -> Tuple[Dict[str, Any], CareerPreferences, str]:
+    """Prompt templates, the user's screening preferences and a short candidate description."""
+    prompts: Dict[str, Any] = {}
     if PROMPTS_PATH.exists():
         with open(PROMPTS_PATH, "r", encoding="utf-8") as f:
-            prompts = yaml.safe_load(f).get("ranker", {})
-
-    profile = {}
-    if PROFILE_PATH.exists():
-        with open(PROFILE_PATH, "r", encoding="utf-8") as f:
-            profile = yaml.safe_load(f).get("candidate", {})
-
-    return prompts, profile
+            prompts = (yaml.safe_load(f) or {}).get("ranker", {})
+    return prompts, load_preferences(profile_path), load_candidate_context(profile_path)
 
 
 HARDWARE_VETO_REASON = "VETO: Experimental hardware/wet-lab role (cryogenics/laser/cleanroom fabrication)."
 CITIZENSHIP_VETO_REASON = "VETO: Requires US citizenship or a security clearance."
 PHD_VETO_REASON = "VETO: Pure academic theoretical physics research without software focus."
+NON_ENGINEERING_VETO_REASON = "VETO: Not a software engineering role (sales, support, recruiting or operations)."
+MANAGEMENT_VETO_REASON = "VETO: Management role, not an individual-contributor engineering position."
+UNPAID_VETO_REASON = "VETO: Unpaid or volunteer position."
 RE_EVALUABLE_STATUSES = {STATUS_NEW, "DISCOVERED", STATUS_SHORTLISTED, STATUS_IGNORED}
 
 
-def normalize_evaluation(ev: QuantumJobEvaluation) -> QuantumJobEvaluation:
-    """Enforce the business rules on an LLM answer so the model cannot contradict them."""
-    updates: Dict[str, Any] = {}
-    if ev.is_experimental_hardware and not ev.should_veto:
-        updates.update(should_veto=True, veto_reason=ev.veto_reason or HARDWARE_VETO_REASON)
+def deterministic_screen(
+    prefs: CareerPreferences, title: str, location: str, description: str
+) -> Tuple[Optional[str], float, List[str]]:
+    """Rules that need no judgement, so the LLM cannot override them: citizenship, unpaid, type, authorization.
+
+    Returns (veto_reason, penalty_points, notes).
+    """
+    veto: Optional[str] = None
+    penalty = 0.0
+    notes: List[str] = []
+    employment = detect_employment_types(title, description)
+
+    holds_us = "US" in {c.upper() for c in prefs.work_authorization.citizenships}
+    if CITIZENSHIP_REQUIRED.search(description) and not holds_us:
+        setting = prefs.rules.citizenship_clearance
+        if setting.mode == "veto":
+            veto = veto or CITIZENSHIP_VETO_REASON
+        elif setting.mode == "penalty":
+            penalty += setting.penalty
+            notes.append("citizenship or clearance requirement")
+
+    if prefs.employment.paid_only and is_unpaid(title, description):
+        setting = prefs.rules.unpaid
+        if setting.mode == "veto":
+            veto = veto or UNPAID_VETO_REASON
+        elif setting.mode == "penalty":
+            penalty += setting.penalty
+            notes.append("unpaid position")
+
+    if not employment & set(prefs.employment.accepted_types):
+        veto = veto or f"VETO: Employment type {sorted(employment)} is not accepted."
+    else:
+        kind_penalty = max((prefs.employment.penalties.get(kind, 0.0) for kind in employment), default=0.0)
+        if kind_penalty:
+            penalty += kind_penalty
+            notes.append(f"employment type {sorted(employment)}")
+
+    auth = assess_work_authorization(prefs, location, description)
+    if auth.penalty > 0:
+        mode = prefs.rules.work_authorization.mode
+        if mode == "veto":
+            veto = veto or f"VETO: Work authorization ({auth.note})."
+        elif mode == "penalty":
+            penalty += auth.penalty
+            notes.append(f"work authorization: {auth.note}")
+    return veto, penalty, notes
+
+
+def normalize_evaluation(ev: QuantumJobEvaluation, prefs: Optional[CareerPreferences] = None) -> QuantumJobEvaluation:
+    """Make an LLM answer respect the user's rules: enforce the ones set to veto, lift vetoes for rules switched off."""
+    prefs = prefs or CareerPreferences()
+    rules = prefs.rules
+    vetoed, reason, score = ev.should_veto, ev.veto_reason, ev.overall_score
+
+    if ev.is_experimental_hardware and not vetoed and rules.hardware_lab.mode == "veto":
+        vetoed, reason = True, reason or HARDWARE_VETO_REASON
     elif (
-        ev.should_veto
+        vetoed
         and not ev.is_experimental_hardware
         and ev.is_software_role
         and ev.phd_requirement_analysis == "generic_hr_boilerplate"
-        and re.search(r"ph\.?d|doctorate", ev.veto_reason or "", re.IGNORECASE)
+        and re.search(r"ph\.?d|doctorate", reason or "", re.IGNORECASE)
     ):
-        updates.update(should_veto=False, veto_reason=None)
+        vetoed, reason = False, None
     elif (
-        not ev.should_veto
+        not vetoed
         and ev.phd_requirement_analysis == "strict_scientific_research"
         and not ev.is_software_role
+        and rules.research_phd.mode == "veto"
     ):
-        updates.update(should_veto=True, veto_reason=ev.veto_reason or PHD_VETO_REASON)
+        vetoed, reason = True, reason or PHD_VETO_REASON
+
+    if vetoed:
+        matching = [name for name in RULE_TEXT if reason_matches(name, reason)]
+        if ev.is_experimental_hardware:
+            matching = [n for n in matching if n == "hardware_lab"] or ["hardware_lab"]
+        if matching and all(getattr(rules, n).mode != "veto" for n in matching):
+            score -= max((getattr(rules, n).penalty for n in matching if getattr(rules, n).mode == "penalty"), default=0.0)
+            vetoed, reason = False, None
+
+    updates: Dict[str, Any] = {}
+    if (vetoed, reason) != (ev.should_veto, ev.veto_reason):
+        updates.update(should_veto=vetoed, veto_reason=reason)
+    if score != ev.overall_score:
+        updates["overall_score"] = max(0.0, round(score, 1))
     return ev.model_copy(update=updates) if updates else ev
 
 
@@ -108,12 +181,6 @@ SENIOR_TITLE = re.compile(r"\bsenior\b|\bsr\.?\b|\blead\b", re.IGNORECASE)
 CITIZENSHIP_REQUIRED = re.compile(
     r"u\.?s\.? citizen(?:ship)?s?\b(?! and)|security clearance|clearance (?:is )?required|"
     r"(?:secret|ts/sci|top secret) (?:access|clearance)|eligib\w+ for (?:a )?(?:secret|security clearance)",
-    re.IGNORECASE,
-)
-WORK_AUTH_RESTRICTED = re.compile(
-    r"(?:will not|does not|do not|unable to|cannot|can't) (?:provide )?(?:visa )?sponsor|not eligible for (?:visa|sponsorship)|"
-    r"legally authori[sz]ed to work in|must (?:currently )?(?:reside|live|be located) in|"
-    r"authori[sz]ed to work in the (?:u\.?s\.?|united states|uk|united kingdom|canada|eu)",
     re.IGNORECASE,
 )
 MIN_DESCRIPTION_CHARS = 100
@@ -152,14 +219,18 @@ def keyword_in(text: str, keyword: str) -> bool:
 
 
 def heuristic_quantum_eval(
-    title: str, company: str, description: str, location: str, is_remote: bool
+    title: str, company: str, description: str, location: str, is_remote: bool,
+    prefs: Optional[CareerPreferences] = None,
 ) -> QuantumJobEvaluation:
     """Deterministic fallback evaluator used when no LLM API key is configured."""
+    prefs = prefs or CareerPreferences()
     desc_lower = description.lower().replace("ph.d", "phd")
     title_lower = title.lower()
 
     is_hardware = any(hw in desc_lower for hw in HARDWARE_TRIGGERS) and not SOFTWARE_TITLE.search(title)
-    matched_skills = [kw for kw in SOFTWARE_KEYWORDS if keyword_in(desc_lower, kw)]
+    skill_terms = [k.lower() for k in (prefs.scoring.skill_keywords or SOFTWARE_KEYWORDS)]
+    domain_terms = [k.lower() for k in (prefs.scoring.domain_keywords or QUANTUM_KEYWORDS)]
+    matched_skills = [kw for kw in skill_terms if keyword_in(desc_lower, kw)]
     non_engineering = bool(NON_ENGINEERING_TITLE.search(title))
     management = bool(MANAGEMENT_TITLE.search(title))
     research_role = bool(RESEARCH_TITLE.search(title)) and not ENGINEER_TITLE.search(title)
@@ -176,39 +247,50 @@ def heuristic_quantum_eval(
     else:
         phd_analysis = "generic_hr_boilerplate"
 
-    veto_reason = None
-    if is_hardware:
-        veto_reason = HARDWARE_VETO_REASON
-    elif non_engineering:
-        veto_reason = "VETO: Not a software engineering role (sales, support, recruiting or operations)."
-    elif CITIZENSHIP_REQUIRED.search(description):
-        veto_reason = CITIZENSHIP_VETO_REASON
-    elif management:
-        veto_reason = "VETO: Management role, not an individual-contributor engineering position."
-    elif phd_analysis == "strict_scientific_research" and (phd_in_title or not is_software):
-        veto_reason = PHD_VETO_REASON
+    veto_reason: Optional[str] = None
+    penalties: List[float] = []
+    notes: List[str] = []
+
+    def apply(rule: str, triggered: bool, reason: str) -> None:
+        nonlocal veto_reason
+        if not triggered:
+            return
+        setting = getattr(prefs.rules, rule)
+        if setting.mode == "veto":
+            veto_reason = veto_reason or reason
+        elif setting.mode == "penalty":
+            penalties.append(setting.penalty)
+            notes.append(rule)
+
+    apply("hardware_lab", is_hardware, HARDWARE_VETO_REASON)
+    apply("non_engineering", non_engineering, NON_ENGINEERING_VETO_REASON)
+    screen_veto, screen_penalty, screen_notes = deterministic_screen(prefs, title, location, description)
+    veto_reason = veto_reason or screen_veto
+    penalties.append(screen_penalty)
+    notes.extend(screen_notes)
+    apply("management", management, MANAGEMENT_VETO_REASON)
+    apply("research_phd", phd_analysis == "strict_scientific_research" and (phd_in_title or not is_software), PHD_VETO_REASON)
     is_vetoed = veto_reason is not None
 
     software_score = saturate(len(matched_skills) + (1.5 if SOFTWARE_TITLE.search(title) else 0.0), 4.0)
-    quantum_hits = [kw for kw in QUANTUM_KEYWORDS if keyword_in(desc_lower, kw)]
-    quantum_score = saturate(len(quantum_hits) + (1.5 if "quantum" in title_lower else 0.0), 3.0)
+    quantum_hits = [kw for kw in domain_terms if keyword_in(desc_lower, kw)]
+    domain_in_title = any(keyword_in(title_lower, kw) for kw in domain_terms)
+    quantum_score = saturate(len(quantum_hits) + (1.5 if domain_in_title else 0.0), 3.0)
 
     if is_vetoed:
         overall = 2.0
     else:
-        base = software_score * 0.5 + quantum_score * 0.5
+        weight = prefs.scoring.domain_weight
+        base = software_score * (1.0 - weight) + quantum_score * weight
         if phd_analysis == "generic_hr_boilerplate":
             base += 0.5
         if is_remote:
-            base += 0.5
+            base += prefs.scoring.remote_bonus
         if STAFF_TITLE.search(title):
-            base -= 2.0
+            base -= prefs.seniority.staff_penalty
         elif SENIOR_TITLE.search(title):
-            base -= 1.0
-        if "intern" in title_lower:
-            base -= 2.0
-        if WORK_AUTH_RESTRICTED.search(description):
-            base -= 2.0
+            base -= prefs.seniority.senior_penalty
+        base -= sum(penalties)
         overall = max(0.0, min(10.0, round(base, 1)))
 
     missing = [k for k in ("Qiskit", "C++", "PennyLane", "Quantum Error Correction") if k.lower() not in desc_lower]
@@ -231,21 +313,24 @@ def heuristic_quantum_eval(
         reasoning=(
             f"Keyword analysis: {len(matched_skills)} software and {len(quantum_hits)} quantum terms matched. "
             f"PhD requirement classified as '{phd_analysis}'. Veto: {veto_reason or 'none'}."
+            + (f" Penalties: {', '.join(notes)}." if notes and not is_vetoed else "")
         ),
     )
 
 
 def evaluate_with_instructor(
     title: str, company: str, description: str, location: str, is_remote: bool,
-    system_prompt: str, user_template: str, profile: Dict[str, Any]
+    system_prompt: str, user_template: str, prefs: Optional[CareerPreferences] = None,
+    candidate: str = "",
 ) -> QuantumJobEvaluation:
     """Evaluate posting using Instructor-wrapped LLM client."""
+    prefs = prefs or CareerPreferences()
     api_key = os.environ.get("OPENAI_API_KEY")
     model_name = os.environ.get("AI_JOB_SEARCH_MODEL", "gpt-4o-mini")
 
     if not api_key:
         logger.info("OPENAI_API_KEY not set. Using built-in deterministic Quantum heuristic engine.")
-        return heuristic_quantum_eval(title, company, description, location, is_remote)
+        return heuristic_quantum_eval(title, company, description, location, is_remote, prefs)
 
     try:
         import instructor
@@ -253,6 +338,9 @@ def evaluate_with_instructor(
 
         client = instructor.from_openai(OpenAI(api_key=api_key))
 
+        system_prompt = system_prompt.replace("{{ candidate }}", candidate).replace(
+            "{{ preferences }}", describe_preferences(prefs)
+        )
         prompt_body = user_template.replace("{{ company }}", company)
         prompt_body = prompt_body.replace("{{ title }}", title)
         prompt_body = prompt_body.replace("{{ location }}", location)
@@ -269,10 +357,29 @@ def evaluate_with_instructor(
             ],
             temperature=0.1,
         )
-        return normalize_evaluation(evaluation)
+        evaluation = normalize_evaluation(evaluation, prefs)
+        veto, penalty, _ = deterministic_screen(prefs, title, location, description)
+        updates: Dict[str, Any] = {}
+        if veto and not evaluation.should_veto:
+            updates.update(should_veto=True, veto_reason=veto)
+        if penalty:
+            updates["overall_score"] = max(0.0, round(evaluation.overall_score - penalty, 1))
+        return evaluation.model_copy(update=updates) if updates else evaluation
     except Exception as e:
         logger.warning(f"LLM evaluation failed ({e}). Falling back to heuristic engine.")
-        return heuristic_quantum_eval(title, company, description, location, is_remote)
+        return heuristic_quantum_eval(title, company, description, location, is_remote, prefs)
+
+
+def veto_metric(ev: QuantumJobEvaluation) -> str:
+    """Funnel counter for a vetoed evaluation, chosen from the veto reason."""
+    reason = ev.veto_reason or ""
+    if reason == HARDWARE_VETO_REASON or (ev.is_experimental_hardware and not reason):
+        return "vetoed_hardware"
+    if reason == PHD_VETO_REASON:
+        return "vetoed_phd_strict"
+    if reason == CITIZENSHIP_VETO_REASON or "work authorization" in reason.lower():
+        return "vetoed_location"
+    return "vetoed_role"
 
 
 def run_ranker(
@@ -281,9 +388,13 @@ def run_ranker(
     dry_run: bool = False,
     db_path: Optional[Path] = None,
     reevaluate: bool = False,
+    profile_path: Optional[Path] = None,
+    prefs: Optional[CareerPreferences] = None,
 ) -> List[Dict[str, Any]]:
     """Evaluate pending jobs in job_search.db and transition states."""
-    prompts, profile = load_config()
+    prompts, loaded_prefs, candidate = load_config(profile_path)
+    prefs = prefs or loaded_prefs
+    threshold = prefs.shortlist_threshold
     system_prompt = prompts.get("system_prompt", "Evaluate job posting for Quantum SWE.")
     user_template = prompts.get("user_prompt_template", "Job: {{ company }} - {{ title }}\n{{ description }}")
 
@@ -333,23 +444,17 @@ def run_ranker(
                 is_remote=is_remote,
                 system_prompt=system_prompt,
                 user_template=user_template,
-                profile=profile,
+                prefs=prefs,
+                candidate=candidate,
             )
 
             METRICS.increment("evaluated_total")
 
             # Funnel metrics recording
             if eval_res.should_veto:
-                if eval_res.is_experimental_hardware:
-                    METRICS.increment("vetoed_hardware")
-                elif eval_res.phd_requirement_analysis == "strict_scientific_research":
-                    METRICS.increment("vetoed_phd_strict")
-                elif eval_res.veto_reason == CITIZENSHIP_VETO_REASON:
-                    METRICS.increment("vetoed_location")
-                else:
-                    METRICS.increment("vetoed_role")
+                METRICS.increment(veto_metric(eval_res))
                 METRICS.increment("ignored_total")
-            elif eval_res.overall_score >= 7.5:
+            elif eval_res.overall_score >= threshold:
                 METRICS.increment("shortlisted_total")
                 if eval_res.phd_requirement_analysis == "generic_hr_boilerplate":
                     METRICS.increment("phd_boilerplate_tolerated")
@@ -379,6 +484,7 @@ def run_ranker(
                     tailoring_recommendations=eval_res.tailoring_recommendations,
                     raw_eval=eval_res.model_dump(),
                     auto_update_status=job["status"] in RE_EVALUABLE_STATUSES,
+                    threshold=threshold,
                 )
 
             evaluated.append({
@@ -386,7 +492,7 @@ def run_ranker(
                 "company": company_name,
                 "title": title,
                 "score": eval_res.overall_score,
-                "status": STATUS_SHORTLISTED if (eval_res.overall_score >= 7.5 and not eval_res.should_veto) else STATUS_IGNORED,
+                "status": STATUS_SHORTLISTED if (eval_res.overall_score >= threshold and not eval_res.should_veto) else STATUS_IGNORED,
                 "veto_reason": eval_res.veto_reason,
                 "matched": eval_res.matched_skills,
             })
@@ -395,7 +501,7 @@ def run_ranker(
     shortlisted = [e for e in evaluated if e["status"] == STATUS_SHORTLISTED]
     if shortlisted:
         print("\n" + "★" * 65)
-        print("     NEWLY SHORTLISTED OPPORTUNITIES FOR TAILORING (Score >= 7.5)")
+        print(f"     NEWLY SHORTLISTED OPPORTUNITIES FOR TAILORING (Score >= {threshold})")
         print("★" * 65)
         for s in shortlisted:
             print(f"  • [{s['score']}/10] {s['company']} — {s['title']}")

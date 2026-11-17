@@ -182,7 +182,7 @@ class RepoConfigTests(unittest.TestCase):
         for r in regions:
             Country(r["country_indeed"])
         self.assertEqual(cfg["hours_old"], 120)
-        self.assertTrue(cfg["remote_only"])
+        self.assertNotIn("remote_only", cfg)
 
 
 if __name__ == "__main__":

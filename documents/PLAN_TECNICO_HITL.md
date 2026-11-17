@@ -185,7 +185,7 @@ class QuantumJobEvaluation(BaseModel):
 
 #### 2. Agente Adaptador de Documentos (Tailor - `tools/tailor.py`)
 - **Gatillo determinista:** Se activa únicamente cuando `overall_score >= 7.5` y el estado pasa a `SHORTLISTED`.
-- **Inyección dinámica de logros STAR:** Lee el perfil maestro (`config/master_profile.yaml`) y reorganiza los proyectos cuánticos y habilidades de software para resaltar exactamente las `matched_skills` de la vacante.
+- **Inyección dinámica de logros STAR:** Lee el perfil maestro (`profile/master_profile.yaml`) y reorganiza los proyectos cuánticos y habilidades de software para resaltar exactamente las `matched_skills` de la vacante.
 - **Control de Calidad Determinista:**
   - `tools/verify_layout.py`: Comprobación geométrica que impide desbordes de página (CV en 2 páginas exactas, carta en 1 página exacta).
   - `tools/verify_pdf.py`: Extracción con `pdftotext` para validar que el texto sea 100% procesable por los parsers de ATS.
@@ -269,7 +269,7 @@ Objetivo: Eliminar el esfuerzo repetitivo de rellenar formularios multipágina m
 - [x] Implementar comando CLI para evaluar vacantes en estado `NEW` y transicionar a `SHORTLISTED` o `IGNORED`.
 
 #### Sprint 4: Agente Adaptador de Documentos (Tailor con Score >= 7.5)
-- [x] Crear `config/master_profile.yaml` con la trayectoria y proyectos de Franco Raineri.
+- [x] Crear `profile/master_profile.yaml` con la trayectoria y proyectos de Franco Raineri.
 - [x] Implementar `tools/tailor.py`: selecciona vacantes `SHORTLISTED` con `score >= 7.5`, ajusta las secciones de CV y carta según las palabras clave de la oferta.
 - [x] Conectar la verificación automática con `verify_layout.py` y `verify_pdf.py`, dejando los PDFs validados en `documents/applications/<company>_<job>/` y pasando el estado a `READY_TO_APPLY`.
 

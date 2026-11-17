@@ -87,8 +87,8 @@ class FunnelMetrics:
         print(f"  • PhD Boilerplate Rescued (SWE Fit):   {data['phd_boilerplate_tolerated']}")
         print(f"  • Vetoed - Strict Academic Research:   {data['vetoed_phd_strict']}")
         print("-" * 65)
-        print(f"  ★ SHORTLISTED (Score >= 7.5):          {data['shortlisted_total']}")
-        print(f"  ✗ IGNORED (Score < 7.5 or Vetoed):     {data['ignored_total']}")
+        print(f"  ★ SHORTLISTED (>= threshold):           {data['shortlisted_total']}")
+        print(f"  ✗ IGNORED (below threshold or vetoed): {data['ignored_total']}")
         print(f"  ✓ Documents Tailored:                  {data['tailored_total']}")
         print(f"  🚀 Postulations Applied (HITL):        {data['applied_total']}")
         if data['errors_total'] > 0:

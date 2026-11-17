@@ -75,12 +75,92 @@ class SkillItem(BaseModel):
     )
 
 
+EmploymentType = Literal["full_time", "part_time", "internship", "contract"]
+RuleMode = Literal["veto", "penalty", "off"]
+
+
+class RuleSetting(BaseModel):
+    """How one screening rule affects a posting: veto it, subtract `penalty` points, or ignore the rule."""
+
+    mode: RuleMode = "veto"
+    penalty: float = Field(2.0, ge=0.0, le=10.0, description="Points subtracted when mode is 'penalty'")
+
+
+class ScreeningRules(BaseModel):
+    """One switch per screening rule. Defaults reproduce the original strict behaviour."""
+
+    hardware_lab: RuleSetting = Field(default_factory=RuleSetting, description="Wet-lab, cryogenics, cleanroom roles")
+    research_phd: RuleSetting = Field(default_factory=RuleSetting, description="Research-only roles that require a PhD")
+    non_engineering: RuleSetting = Field(default_factory=RuleSetting, description="Sales, support, recruiting, operations")
+    management: RuleSetting = Field(default_factory=RuleSetting, description="Manager, director and head-of roles")
+    citizenship_clearance: RuleSetting = Field(
+        default_factory=RuleSetting, description="Postings that demand US citizenship or a security clearance"
+    )
+    unpaid: RuleSetting = Field(default_factory=RuleSetting, description="Unpaid or volunteer positions")
+    work_authorization: RuleSetting = Field(
+        default_factory=lambda: RuleSetting(mode="penalty"),
+        description="Postings restricted to regions where the candidate cannot work without a visa",
+    )
+
+
+class WorkAuthorization(BaseModel):
+    """Where the candidate may work, so remote postings tied to a country can be judged."""
+
+    citizenships: List[str] = Field(default_factory=list, description="ISO codes, e.g. ['IT']")
+    current_country: Optional[str] = Field(None, description="ISO code of the country of residence, e.g. 'AR'")
+    authorized_regions: List[str] = Field(
+        default_factory=list,
+        description="Regions where no visa is needed. Country codes plus the groups 'EU' and 'EEA'.",
+    )
+    visa_possible_regions: List[str] = Field(
+        default_factory=list, description="Regions where the candidate would apply for a work visa"
+    )
+    visa_region_penalty: float = Field(1.0, ge=0.0, le=10.0)
+    unauthorized_region_penalty: float = Field(2.0, ge=0.0, le=10.0)
+    no_sponsorship_penalty: float = Field(2.0, ge=0.0, le=10.0)
+
+
+class EmploymentPreferences(BaseModel):
+    accepted_types: List[EmploymentType] = Field(
+        default_factory=lambda: ["full_time", "part_time", "internship", "contract"]
+    )
+    paid_only: bool = True
+    penalties: Dict[str, float] = Field(
+        default_factory=lambda: {"internship": 2.0},
+        description="Points subtracted per accepted employment type, e.g. {'internship': 0}",
+    )
+
+
+class SeniorityPreferences(BaseModel):
+    senior_penalty: float = Field(1.0, ge=0.0, le=10.0)
+    staff_penalty: float = Field(2.0, ge=0.0, le=10.0)
+
+
+class ScoringPreferences(BaseModel):
+    """What counts as a good fit. Leave the keyword lists unset to use the built-in quantum-software defaults."""
+
+    domain_keywords: Optional[List[str]] = Field(
+        None, description="Terms that define the target field, e.g. ['quantum', 'qiskit']"
+    )
+    skill_keywords: Optional[List[str]] = Field(None, description="Engineering skills that count as a match")
+    domain_weight: float = Field(
+        0.5, ge=0.0, le=1.0, description="Share of the score from field fit. 0 scores on engineering skills alone"
+    )
+    remote_bonus: float = Field(0.5, ge=0.0, le=5.0)
+
+
 class CareerPreferences(BaseModel):
     target_roles: List[str] = Field(default_factory=list)
     remote_only: bool = True
     salary_floor_usd: Optional[float] = None
     deal_breakers: List[str] = Field(default_factory=list)
     preferred_locations: List[str] = Field(default_factory=list)
+    shortlist_threshold: float = Field(7.5, ge=0.0, le=10.0, description="Minimum overall score to shortlist")
+    work_authorization: WorkAuthorization = Field(default_factory=WorkAuthorization)
+    employment: EmploymentPreferences = Field(default_factory=EmploymentPreferences)
+    seniority: SeniorityPreferences = Field(default_factory=SeniorityPreferences)
+    rules: ScreeningRules = Field(default_factory=ScreeningRules)
+    scoring: ScoringPreferences = Field(default_factory=ScoringPreferences)
 
 
 class ConsistencyReport(BaseModel):

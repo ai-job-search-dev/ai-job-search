@@ -353,6 +353,7 @@ def record_evaluation(
     gaps: Optional[List[str]] = None,
     raw_eval: Optional[Dict[str, Any]] = None,
     auto_update_status: bool = True,
+    threshold: float = 7.5,
 ) -> int:
     """Record evaluation scores and update job status (SHORTLISTED if score >= 7.5 and not vetoed)."""
     # Consolidate strengths/matched_skills
@@ -391,11 +392,11 @@ def record_evaluation(
 
     if auto_update_status:
         # Check threshold: support 0-10 scale (threshold 7.5) or 0-100 scale (threshold 75.0)
-        threshold = 7.5 if overall_score <= 10.0 else 75.0
+        cutoff = threshold if overall_score <= 10.0 else threshold * 10
         if veto_triggered:
             new_status = STATUS_IGNORED
             reason = veto_reason or "Veto triggered during evaluation"
-        elif overall_score >= threshold:
+        elif overall_score >= cutoff:
             new_status = STATUS_SHORTLISTED
             reason = None
         else:

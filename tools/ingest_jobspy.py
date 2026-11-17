@@ -29,6 +29,7 @@ CONFIG_PATH = ROOT_DIR / "config" / "portals.yaml"
 from tools.db import check_company_cooldown, get_db, init_db, upsert_job
 from tools.logger import METRICS, get_logger
 from tools.posting_guard import guard
+from tools.preferences import load_preferences
 
 logger = get_logger("ingest_jobspy")
 
@@ -166,10 +167,11 @@ def run_jobspy_ingestion(
         return {"total": 0, "new": 0, "refreshed": 0}
 
     config = load_config(config_path)
+    prefs = load_preferences()
     sites = [s.lower() for s in (site_names or config.get("sites", ["linkedin", "indeed"]))]
     limit = results_wanted or config.get("results_wanted", 20)
     hours = hours_old or config.get("hours_old", 72)
-    remote_only = is_remote if is_remote is not None else config.get("remote_only", config.get("is_remote", True))
+    remote_only = is_remote if is_remote is not None else config.get("remote_only", prefs.remote_only)
     delay = float(config.get("delay_seconds", 4))
     fetch_linkedin = bool(config.get("linkedin_fetch_description", True))
     keywords = [str(k) for k in config.get("require_keywords", [])]

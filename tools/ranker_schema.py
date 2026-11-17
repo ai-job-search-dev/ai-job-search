@@ -18,7 +18,7 @@ class QuantumJobEvaluation(BaseModel):
         ...,
         ge=0.0,
         le=10.0,
-        description="Overall compatibility score from 0.0 to 10.0. Scores >= 7.5 are shortlisted for tailoring.",
+        description="Overall compatibility score from 0.0 to 10.0. Scores at or above the user's shortlist threshold are shortlisted for tailoring.",
     )
     software_fit_score: float = Field(
         ...,

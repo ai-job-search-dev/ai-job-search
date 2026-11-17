@@ -439,13 +439,15 @@ def tailor_job(
 def run_tailor(
     limit: Optional[int] = None,
     job_id: Optional[int] = None,
-    min_score: float = SCORE_THRESHOLD,
+    min_score: Optional[float] = None,
     dry_run: bool = False,
     db_path: Optional[Path] = None,
     profile_path: Optional[Path] = None,
     out_root: Path = APPLICATIONS_DIR,
 ) -> List[Dict[str, Any]]:
     profile = load_profile(profile_path or DEFAULT_PROFILE_FILE)
+    if min_score is None:
+        min_score = profile.preferences.shortlist_threshold
     report = profile.audit_consistency()
     if not report.is_valid:
         raise ValueError(f"Master profile failed audit: {report.errors}")
@@ -477,7 +479,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate tailored CV and cover letter for SHORTLISTED jobs")
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--job-id", type=int, default=None)
-    parser.add_argument("--min-score", type=float, default=SCORE_THRESHOLD)
+    parser.add_argument("--min-score", type=float, default=None, help="Defaults to the profile shortlist_threshold")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--profile", type=Path, default=None)
     args = parser.parse_args()

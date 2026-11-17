@@ -32,7 +32,7 @@ jobspy:
   hours_old: 120
   # A posting is stored only if its title or description contains one of these (drops "Account Manager" noise).
   require_keywords: ["quantum", "qiskit", "qubit"]
-  remote_only: true          # keep only remote postings (hybrid and on-site are dropped)
+  # remote_only is read from profile/master_profile.yaml (preferences.remote_only); set it here only to override.
   linkedin_fetch_description: true   # LinkedIn returns no description otherwise, so the ranker would score blind
   delay_seconds: 4           # pause between queries to avoid blocks
   description_format: "markdown"
