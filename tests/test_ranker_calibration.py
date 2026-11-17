@@ -72,6 +72,14 @@ class HeuristicCalibrationTests(unittest.TestCase):
         self.assertTrue(keyword_in("we use git, python.", "git"))
         self.assertTrue(keyword_in("c++ and rust", "c++"))
 
+    def test_work_authorization_restriction_is_penalised_not_vetoed(self):
+        base = evaluate("Quantum Software Engineer")
+        for text in ("We will not sponsor visas.", "Candidates must be legally authorized to work in the United States.",
+                     "You must reside in Canada."):
+            ev = evaluate("Quantum Software Engineer", GOOD_DESC + " " + text)
+            self.assertFalse(ev.should_veto, text)
+            self.assertEqual(round(base.overall_score - ev.overall_score, 1), 2.0, text)
+
     def test_internship_is_penalised(self):
         self.assertLess(evaluate("Quantum Software Intern").overall_score,
                         evaluate("Quantum Software Engineer").overall_score)
@@ -108,6 +116,24 @@ class RerankTests(unittest.TestCase):
         self.assertNotEqual(statuses[ignored], STATUS_NEW)
         self.assertEqual(results[0]["status"], "SHORTLISTED")
         self.assertNotEqual(statuses[ignored], STATUS_IGNORED)
+
+
+class MissingDescriptionTests(unittest.TestCase):
+    def test_jobs_without_a_usable_description_are_left_new(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "t.db"
+            init_db(db)
+            with get_db(db) as conn:
+                empty, _ = upsert_job(conn, "Quantum Software Engineer", "Acme", "https://x/1", "jobspy:linkedin",
+                                      "Remote", True, "", "")
+                full, _ = upsert_job(conn, "Quantum Software Engineer", "Beta", "https://x/2", "jobspy:linkedin",
+                                     "Remote", True, GOOD_DESC, GOOD_DESC)
+            with mock.patch.dict("os.environ", {"OPENAI_API_KEY": ""}):
+                results = ranker.run_ranker(db_path=db)
+            self.assertEqual([r["job_id"] for r in results], [full])
+            with get_db(db) as conn:
+                status = conn.execute("SELECT status FROM jobs WHERE id = ?", (empty,)).fetchone()[0]
+            self.assertEqual(status, STATUS_NEW)
 
 
 class ConfigHandlingTests(unittest.TestCase):

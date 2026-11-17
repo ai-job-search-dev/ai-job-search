@@ -124,7 +124,7 @@ class StructuredLogger:
                 "message": message,
                 **extra_data,
             }
-            print(json.dumps(entry), file=sys.stderr if lvl >= logging.WARNING else sys.stdout)
+            print(json.dumps(entry), file=sys.stderr if lvl >= logging.WARNING else sys.stdout, flush=True)
         else:
             # Pretty console format with ANSI colors
             colors = {
@@ -138,7 +138,7 @@ class StructuredLogger:
             color = colors.get(level_name, "")
             extra_str = f" | {json.dumps(extra_data)}" if extra_data else ""
             out = f"{color}[{timestamp[:19]}] [{level_name:<7}] [{self.name}] {message}{extra_str}{reset}"
-            print(out, file=sys.stderr if lvl >= logging.WARNING else sys.stdout)
+            print(out, file=sys.stderr if lvl >= logging.WARNING else sys.stdout, flush=True)
 
     def debug(self, message: str, **kwargs: Any) -> None:
         self._log("DEBUG", message, kwargs)

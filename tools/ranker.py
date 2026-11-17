@@ -110,6 +110,13 @@ CITIZENSHIP_REQUIRED = re.compile(
     r"(?:secret|ts/sci|top secret) (?:access|clearance)|eligib\w+ for (?:a )?(?:secret|security clearance)",
     re.IGNORECASE,
 )
+WORK_AUTH_RESTRICTED = re.compile(
+    r"(?:will not|does not|do not|unable to|cannot|can't) (?:provide )?(?:visa )?sponsor|not eligible for (?:visa|sponsorship)|"
+    r"legally authori[sz]ed to work in|must (?:currently )?(?:reside|live|be located) in|"
+    r"authori[sz]ed to work in the (?:u\.?s\.?|united states|uk|united kingdom|canada|eu)",
+    re.IGNORECASE,
+)
+MIN_DESCRIPTION_CHARS = 100
 RESEARCH_TITLE = re.compile(r"scientist|researcher|research (?:fellow|associate)|postdoc", re.IGNORECASE)
 ENGINEER_TITLE = re.compile(r"engineer|developer|programmer", re.IGNORECASE)
 SOFTWARE_TITLE = re.compile(r"software|developer|compiler|\bsdk\b|algorithm|\bcloud\b|backend|full[- ]?stack|\bml\b|machine learning", re.IGNORECASE)
@@ -199,6 +206,8 @@ def heuristic_quantum_eval(
         elif SENIOR_TITLE.search(title):
             base -= 1.0
         if "intern" in title_lower:
+            base -= 2.0
+        if WORK_AUTH_RESTRICTED.search(description):
             base -= 2.0
         overall = max(0.0, min(10.0, round(base, 1)))
 
@@ -311,6 +320,10 @@ def run_ranker(
             location = job["location"] or ""
             is_remote = bool(job["is_remote"])
             desc = job["cleaned_description"] or job["raw_description"] or ""
+            if len(desc.strip()) < MIN_DESCRIPTION_CHARS and not specific_job_id:
+                logger.warning(f"No usable description, left as NEW: {company_name} - {title}")
+                METRICS.increment("skipped_no_description")
+                continue
 
             eval_res = evaluate_with_instructor(
                 title=title,
