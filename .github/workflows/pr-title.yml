@@ -1,0 +1,20 @@
+name: PR title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-title:
+    name: Conventional Commit title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - name: Check the title with commitizen
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: uvx --from commitizen==4.19.3 cz check --message "$TITLE"

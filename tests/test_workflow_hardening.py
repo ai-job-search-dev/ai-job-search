@@ -3,13 +3,14 @@
 - Every `actions/checkout` sets `persist-credentials: false`. Otherwise the job
   token stays in `.git/config` for every later step, including the CLI code a
   pull request brings (`artipacked`).
-- A matrix value that comes from repository content - `cli-checks` discovers
-  `matrix.tool` from directory names, which a pull request controls - never
-  appears expanded inside a `run:` script (`template-injection`).
+- A value a pull request controls never appears expanded inside a `run:`
+  script (`template-injection`): `matrix.tool`, which `cli-checks` discovers
+  from directory names, and the PR title, which `pr-title` checks.
 """
 import unittest
 from pathlib import Path
 
+UNTRUSTED = ("${{ matrix.tool }}", "${{ github.event.pull_request.title }}")
 WORKFLOWS = sorted((Path(__file__).resolve().parent.parent / ".github" / "workflows").glob("*.yml"))
 
 
@@ -41,7 +42,7 @@ class WorkflowHardeningTests(unittest.TestCase):
                 with self.subTest(workflow=path.name, line=i + 1):
                     self.assertIn("persist-credentials: false", block)
 
-    def test_discovered_matrix_values_stay_out_of_run_scripts(self):
+    def test_pull_request_values_stay_out_of_run_scripts(self):
         for path in WORKFLOWS:
             lines = path.read_text(encoding="utf-8").splitlines()
             run_keys = None  # indent of the active `run:` key, None outside one
@@ -54,8 +55,9 @@ class WorkflowHardeningTests(unittest.TestCase):
                     script = stripped.split("run:", 1)[1]
                 else:
                     script = line if run_keys is not None else ""
-                with self.subTest(workflow=path.name, line=i):
-                    self.assertNotIn("${{ matrix.tool }}", script)
+                for value in UNTRUSTED:
+                    with self.subTest(workflow=path.name, line=i, value=value):
+                        self.assertNotIn(value, script)
 
 if __name__ == "__main__":
     unittest.main()
