@@ -44,13 +44,20 @@ a hard no, not a gap to smooth over. -->
 Hyderabad, India (Remote)
 **Scope (user correction, 2026-11-12):** leads a team and collaborates with tooling teams; does NOT lead whole projects. A senior engineering manager and a strategic lead own overall project direction. Never write "led the program", "owned delivery of the project" or similar.
 **Project detail (from the user's internal Turing CV, `cv/main_turing_internal.tex`):** Amazon Agentic (Tau-bench) - led 20 members, 150+ datasets in 5 days, highest team throughput; Anthropic TAIGA (SWE-bench) - led an 8-member team, 230+ team instances, created 24+ and reviewed 175+; Meta Hopfield ACC - led up to 10 members, 400+ datasets, resolved policy clarifications; with tooling teams, improved AutoQA feedback and ACC review workflows, found trainer task-claim loopholes, and worked on tooling feature enhancements and environment issue fixes (user-confirmed 2026-11-12).
-- Lead a team of up to 20 members on LLM and AI agent evaluation for Amazon T-Bench, owning the team's execution and evaluation quality.
-- Led RLHF trainer teams on SWE-bench and coding evaluation projects for Anthropic and Meta models, contributing to 1,500+ datasets and evaluations.
-- Drove dataset creation and AutoQA workflow improvements by translating evaluation quality gaps and operational bottlenecks into actionable engineering requirements.
+**Master CV bullets (user-supplied wording, 2026-11-18; prefer these over older phrasings):**
+- Led a 20-member team delivering τ-bench (Amazon T-Bench / Tau-bench) LLM and AI agent evaluation programs, owning execution and evaluation quality.
+- Led teams of up to 10 engineers building SWE-bench-style coding benchmarks for two frontier AI labs (Anthropic and Meta; name them only where NDA-safe), injecting bugs into real repositories; delivered 1,500+ datasets and evaluations.
+- Designed 1-7 milestone coding tasks with prompts and hints, scoring agents across harnesses (Claude Code, OpenCode and others) on correctness, completion and code style.
+- Co-led data-quality improvements with the tooling team, defining dataset and AutoQA tooling requirements and hardening task-assignment controls.
 - Partnered with platform and tooling teams on Evals and Rubric Validator workflows, contributing to a 30% improvement in dataset review throughput.
 
 ### Engineering Manager - Fynd (Shopsense Retail Technologies Ltd.) (Oct 2022 - Sep 2025)
 Mumbai, India
+**Master CV wording (user-supplied, 2026-11-18; prefer these two over the older first and last bullets below):**
+- Led a 19-engineer Cart & Payments team across Fynd's in-store POS, online storefronts and Jio commerce, driving a 40% increase in checkout conversion. (StoreOS = Fynd's in-store POS.)
+- Scaled the team from 5 to 19 engineers, promoting 6 and developing 3 into team leads, while cutting release cycle time by 40%. (The user dropped "hiring about 10" and the 60% productivity figure from this bullet; both facts remain true.)
+
+Older wording:
 - Led a 19-engineer Cart and Payments team across StoreOS, Fynd, and Jio Platform, driving a 40% increase in checkout conversion.
 - Architected and built a payment extension ecosystem using FastAPI and Node.js, with SDKs for partner developers enabling sellers to install 40+ payment gateways.
 - Led 5 engineers across ML, backend, and data to build Gauze.md from scratch, developing cardiovascular AI with LLM and RAG workflows and ECG/ECHO analysis.

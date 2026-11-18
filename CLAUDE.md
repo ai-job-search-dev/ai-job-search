@@ -31,10 +31,13 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 ### Professional Experience
 - **Engineering Manager-2** (Oct 2025 - Present) - **Turing** (Hyderabad, Remote)
   - Leads a team of up to 20 on LLM and AI agent evaluation for Amazon T-Bench (team lead only: a senior engineering manager and a strategic lead own overall project direction); collaborates with tooling teams
-  - Leads RLHF trainer teams (up to 10 members) on SWE-bench and coding evaluation projects for Anthropic and Meta models (1,500+ datasets and evaluations)
+  - Led teams of up to 10 engineers building SWE-bench-style coding benchmarks for Anthropic and Meta (bug injection into real repositories; 1,500+ datasets and evaluations)
+  - Designed 1-7 milestone coding tasks with prompts and hints; scored agents across harnesses (Claude Code, OpenCode and others) on correctness, completion and code style
+  - Co-led data-quality improvements with the tooling team (dataset and AutoQA tooling requirements, task-assignment controls)
   - Evals and Rubric Validator workflow improvements: 30% higher dataset review throughput
 - **Engineering Manager** (Oct 2022 - Sep 2025) - **Fynd (Shopsense Retail Technologies Ltd.)** (Mumbai)
-  - Led a 19-engineer Cart and Payments team across StoreOS, Fynd and Jio Platform: 40% increase in checkout conversion, 25% transaction growth
+  - Led a 19-engineer Cart & Payments team across Fynd's in-store POS (StoreOS), online storefronts and Jio commerce: 40% increase in checkout conversion, 25% transaction growth
+  - Scaled the team from 5 to 19 engineers, promoting 6 and developing 3 into team leads
   - Built a payment extension ecosystem (FastAPI, Node.js, partner SDKs) with 40+ payment gateways
   - Led 5 engineers building Gauze.md (cardiovascular AI, LLM/RAG, ECG/ECHO) from scratch; drove an agentic commerce copilot (LangGraph) automating ~75% of support workflows
   - 60% team productivity gain, 40% shorter release cycles; closed GDPR and SOC2 gaps
