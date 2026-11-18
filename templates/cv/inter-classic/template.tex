@@ -47,26 +47,37 @@
 % ---------- header (name uppercase, regular weight; contact line small, pipe-separated, links underlined) ----------
 \begin{center}
   {\fontsize{26}{30}\selectfont\color{cvblue} [YOUR_NAME_UPPERCASE]}\par
+  \vspace{2pt}
+  % target role: the title a recruiter scans for first
+  {\fontsize{11}{13}\selectfont\bfseries [TARGET_ROLE]}\par
   \vspace{4pt}
   {\fontsize{8.5}{11}\selectfont
   [YOUR_ADDRESS]\sep [YOUR_PHONE]\sep
   \href{mailto:[YOUR_EMAIL]}{\underline{[YOUR_EMAIL]}}\sep
   \href{[YOUR_LINKEDIN_URL]}{\underline{[YOUR_LINKEDIN_URL]}}\par
   \href{[YOUR_GITHUB_URL]}{\underline{[YOUR_GITHUB_URL]}}\sep
-  \href{[YOUR_BLOG_URL]}{\underline{[YOUR_BLOG_URL]}}\par}
+  \href{[YOUR_BLOG_URL]}{\underline{[YOUR_BLOG_URL]}}\par
+  % Europe CVs keep this line. India CVs delete it (no work-authorisation or relocation line).
+  \vspace{3pt}
+  {\fontsize{9}{11}\selectfont\textbf{Work authorization:} [WORK_AUTHORIZATION]. \textbf{Open to relocation:} [TARGET_COUNTRIES].\par}}
 \end{center}
 \vspace{-6pt}
 
 \section*{Summary}
+% 3-4 sentences, 60-80 words, no "I": title + years + speciality; team size; top results with numbers; current role
 [SUMMARY_PARAGRAPH]
 
-\section*{Core Competencies}
-\begin{itemize}
-  \item \textbf{[COMPETENCY_AREA]}: [EVIDENCE_AND_SKILLS]
-\end{itemize}
+% Optional: Core Competencies. EM CVs omit it and put a Leadership line in Skills instead.
+% \section*{Core Competencies}
+% \begin{itemize}
+%   % short keyword phrases; no metrics repeated from the experience section
+%   % EM CVs: People Leadership line names practices (hiring, team growth, career development), not numbers
+%   \item \textbf{[COMPETENCY_AREA]}: [KEYWORD_PHRASES]
+% \end{itemize}
 
 \section*{Work Experience}
 
+% Engineering-first ordering: lead with the engineering or system work, then people leadership
 \company{[COMPANY_1]}
 \role{[TITLE_1]}{[LOCATION_1]}{[START] - [END]}
 \begin{itemize}
@@ -80,6 +91,9 @@
   \item [BULLET]
 \end{itemize}
 
+% Do not add a "Progressed from X to Y" line; list each role with its own title and dates.
+% Keep each short older role together on one page: \needspace before its \company line.
+
 \company{[COMPANY_2]}
 \role{[TITLE_2]}{[LOCATION_2]}{[START] - [END]}
 \begin{itemize}
@@ -90,14 +104,23 @@
 {\raggedright
 \begin{itemize}
   \item \textbf{[CATEGORY]}: [SKILLS]
+  % EM CVs: leadership line last, after the technical categories
+  \item \textbf{Leadership}: [LEADERSHIP_SKILLS]
 \end{itemize}\par}
 
 \section*{Education}
 \edu{[UNIVERSITY]}{[START] - [END]}{[DEGREE]}{[CITY, COUNTRY]}
 
-\section*{Certifications}
+% Use "Certifications" only for exam credentials (add year and credential ID).
+% Courses that are not exams go under "Courses".
+\section*{[CERTIFICATIONS_OR_COURSES]}
 \begin{itemize}
-  \item [CERTIFICATION]: [ISSUER]
+  \item [CERTIFICATION_OR_COURSE]: [ISSUER], [YEAR]
+\end{itemize}
+
+\section*{Languages}
+\begin{itemize}
+  \item [LANGUAGE]: [LEVEL]
 \end{itemize}
 
 \end{document}

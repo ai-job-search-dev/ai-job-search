@@ -16,7 +16,8 @@ framework_version: 1.1.1
 - **Blog:** https://logsv.medium.com/
 - **Personal site:** https://codensolve.wordpress.com/
 - **Status:** Employed - Engineering Manager-2 at Turing (since Oct 2025)
-- **Constraints:** None fixed. Based in Hyderabad; open to remote, hybrid, relocation anywhere in India (Hyderabad, Bangalore, Pune, Gurgaon, Mumbai) and abroad (exploring Luxembourg and Germany; would need visa sponsorship)
+- **Constraints:** None fixed. Based in Hyderabad; open to remote, hybrid, relocation anywhere in India (Hyderabad, Bangalore, Pune, Gurgaon, Mumbai) and abroad (exploring Germany, Netherlands, Ireland and Luxembourg; would need visa sponsorship)
+- **Compensation:** Current CTC 62 LPA (INR); expected CTC at least 70 LPA (INR) for India roles. For roles abroad, compare on net take-home and cost of living, not a direct conversion.
 
 ### Languages
 <!-- Every language you can work in professionally, with your honest level. Used by the
@@ -97,7 +98,8 @@ Gurgaon, India
 
 ### Programming & Engineering
 - **Languages:** Python, Go, JavaScript (Node.js backend)
-- **Not in profile:** frontend (only very basic React.js knowledge), Android, iOS/mobile, Java/Kotlin. Heavily backend-focused - never present frontend or mobile skills in applications.
+- **Basic Java:** hands-on basic Java experience (user-confirmed 2026-11-17). Not production Java/Spring; never present it as production Java or Spring experience.
+- **Not in profile:** C#/.NET (no experience, user-confirmed 2026-11-17), frontend (only very basic React.js knowledge), Android, iOS/mobile, Kotlin. Heavily backend-focused - never present frontend or mobile skills in applications.
 - **Backend & Frameworks:** Node.js, FastAPI, Django, Express, REST APIs, GraphQL
 - **Distributed Systems & Architecture:** Microservices, Kafka, Temporal, Event-Driven Architecture
 - **AI/LLM Engineering:** LLM Evaluation, AI Agents, LangGraph, RAG, MCP, OpenAI, Vertex AI, LangSmith
@@ -116,6 +118,8 @@ Gurgaon, India
 
 ### Software & Tools
 - **Cloud & Infrastructure:** AWS, GCP, Kubernetes, Docker, Terraform
+- **CI/CD & DevOps:** GitHub Actions, Jenkins (user-confirmed 2026-11-17)
+- **Code quality & testing:** SonarQube (user-confirmed 2026-11-17)
 - **Observability:** Prometheus, Grafana, New Relic, Sentry, Jaeger, ELK
 
 ## Certifications

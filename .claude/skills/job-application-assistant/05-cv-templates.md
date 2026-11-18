@@ -397,7 +397,7 @@ Cut the lowest-total-score line first, regardless of which section it sits in.
 ## Market-Specific Sections (candidate preference)
 
 - **India roles:** omit the **Languages**, **Honors and Awards** and **References** sections. English and Hindi are assumed in the Indian market, and the space goes to experience instead.
-- **Roles outside India** (Germany, Luxembourg, elsewhere): **keep the Languages section** (English full professional proficiency, Hindi native) - abroad it answers the language question recruiters screen on first. Honors and Awards and References stay optional there.
+- **Roles outside India** (Germany, Netherlands, Ireland, Luxembourg, elsewhere): **keep the Languages section** (English full professional proficiency) - abroad it answers the language question recruiters screen on first. Honors and Awards and References stay optional there.
 - When removing these sections leaves page 2 more than a third empty, restore the most posting-relevant bullets cut earlier rather than leaving the page short.
 
 ## Recommended Section Order

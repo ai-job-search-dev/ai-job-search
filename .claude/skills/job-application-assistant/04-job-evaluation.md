@@ -62,7 +62,7 @@ How well do the required/preferred skills align with the candidate's capabilitie
 
 **Strong match areas:** Python, Node.js, FastAPI, Go; microservices, Kafka, event-driven architecture; payments, cart and checkout systems; high-traffic distributed systems (2M+ RPM, 99.95%); LLM/agent evaluation, AI agents, LangGraph, RAG; AWS/GCP; engineering leadership (teams up to 20)
 **Moderate match areas:** Django, GraphQL, Temporal; Kubernetes, Terraform; data engineering (BigQuery, CDC, Dataflow); observability stacks; healthcare AI; compliance (GDPR, SOC2)
-**Weak match areas:** Java / Spring Boot / Kotlin (not a target stack: a role whose core requirement is Java/JVM is a weak technical match - score it in the 40-59 band unless the posting says Java is optional), Frontend (only very basic React.js; no real frontend experience), Android/iOS/mobile (none), full-stack roles (a posting that needs real frontend or mobile ownership is a weak technical match - 40-59 band; an EM role whose team is mainly frontend/mobile, or that requires frontend/mobile technical depth, also scores in that band; an EM role with a mixed team where backend is the core is judged normally but the frontend/mobile part is listed as a gap), ML research and model training/fine-tuning at scale, Scala/Spark big-data, Rust/C++ systems programming, embedded
+**Weak match areas:** C#/.NET (no experience; a role whose core requirement is C#/.NET is a weak technical match and scores in the 40-59 band or lower, depending on how much of the rest of the stack matches), Kotlin, Spring Boot, and a role whose core requirement is Java/JVM (not a target stack; the candidate has only basic Java experience, so a Java-core role is a weak technical match and scores in the 40-59 band unless the posting says Java is optional). A posting that lists Java as one option among several, or as optional, is judged on its other requirements, Frontend (only very basic React.js; no real frontend experience), Android/iOS/mobile (none), full-stack roles (a posting that needs real frontend or mobile ownership is a weak technical match - 40-59 band; an EM role whose team is mainly frontend/mobile, or that requires frontend/mobile technical depth, also scores in that band; an EM role with a mixed team where backend is the core is judged normally but the frontend/mobile part is listed as a gap), ML research and model training/fine-tuning at scale, Scala/Spark big-data, Rust/C++ systems programming, embedded
 
 ### 2. Experience Match (0-100)
 Does work history align with what they're looking for? Match on the function and nature of the work performed, not the literal job title - a "Data Consultant" and a "Data Scientist" role can be functionally identical.
@@ -93,7 +93,7 @@ Does the role and company culture match the behavioral profile?
 ### 4. Location & Logistics (Pass/Fail + Notes)
 - Within commute range: PASS
 - Remote with occasional office: PASS
-- Requires relocation: PASS within India (open to any city); PASS for Germany or Luxembourg **if visa sponsorship is available**; FLAG other countries (discuss with user)
+- Requires relocation: PASS within India (open to any city); PASS for Germany, Luxembourg, the Netherlands or Ireland **if visa sponsorship is available**; FLAG other countries (discuss with user)
 - Frequent international travel: FLAG (discuss with user)
 
 ### 5. Career Alignment & Motivation (0-100)
@@ -109,7 +109,7 @@ Does this role advance career goals and contain tasks that energize?
 **Career goals:**
 - Hands-on technical leadership: Engineering Manager / Senior EM / Head of Engineering, or Staff / Principal Engineer
 - Building and scaling products in AI/agentic systems, payments/fintech, commerce, health-tech or gaming
-- Larger ownership and scope; explore international roles (Germany, Luxembourg)
+- Larger ownership and scope; explore international roles (Germany, Netherlands, Ireland, Luxembourg)
 
 **Motivation filter:** Evaluate not just whether you *can* do the tasks, but whether the tasks will *energize* you. Consider:
 - Tasks that energize: building products, scaling systems, backend development, solving complex technical problems, owning outcomes end to end, developing people
@@ -117,7 +117,7 @@ Does this role advance career goals and contain tasks that energize?
 - Non-task factors: leadership style, department culture, company values, degree of autonomy
 
 **Life situation alignment:** Consider personal constraints:
-- **Security**: Currently employed (Turing), so can be selective. Current CTC 60 LPA (INR); expected CTC **at least 70 LPA (INR)** for India roles. If a posting's stated range tops out below 70 LPA, FLAG it as below expectations (not an automatic reject). Most postings list no salary: do not penalise silence. For Germany/Luxembourg, judge on net take-home and cost of living rather than a straight INR conversion.
+- **Security**: Currently employed (Turing), so can be selective. Current CTC 62 LPA (INR); expected CTC **at least 70 LPA (INR)** for India roles. If a posting's stated range tops out below 70 LPA, FLAG it as below expectations (not an automatic reject). Most postings list no salary: do not penalise silence. For Germany/Luxembourg, judge on net take-home and cost of living rather than a straight INR conversion.
 - **Flexibility**: Open to remote, hybrid or onsite; relocation within India or abroad
 - **Professional development**: Larger ownership, hands-on leadership, applied AI / agentic systems
 

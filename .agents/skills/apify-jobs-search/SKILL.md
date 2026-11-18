@@ -63,7 +63,7 @@ Flags:
 
   | Board | State | Market | ~20 results |
   |---|---|---|---|
-  | `indeed` | enabled, verified by a run | India; `--country DE` / `LU` for Germany and Luxembourg | $0.12 |
+  | `indeed` | enabled, verified by a run | India; `--country DE` / `LU` / `NL` / `IE` for Germany, Luxembourg, the Netherlands and Ireland | $0.12 |
   | `glassdoor` | enabled, verified by a run; strict title match | India, Germany (`--country` via `countryMap`); Mid-senior/Director, full-time | $0.008 |
   | `foundit` | enabled, verified by a run | India (Monster India); 8+ years experience, server-side recency; many rows syndicated from LinkedIn | $0.125 |
   | `instahyre` | enabled, verified by a run; no posting date | India tech; keyword filter over the backend-development feed | $0.023 |

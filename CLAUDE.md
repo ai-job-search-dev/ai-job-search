@@ -12,7 +12,7 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 
 ### Identity
 - **Name:** Vikas Kumar
-- **Location:** Hyderabad, India (open to relocation anywhere in India and abroad - exploring Luxembourg and Germany; also open to remote and hybrid)
+- **Location:** Hyderabad, India (open to relocation anywhere in India and abroad - exploring Germany, Netherlands, Ireland and Luxembourg; also open to remote and hybrid)
 - **Contact:** +91 9137724770 | vikas.mca.jnu@gmail.com | https://linkedin.com/in/logsv/ | https://github.com/logsv | https://logsv.medium.com/
 - **Languages:**
   | Language | Level |
@@ -22,7 +22,7 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 - **CV language:** English
 
 - **Status:** Employed - Engineering Manager-2 at Turing (since Oct 2025)
-- **Compensation:** Current CTC 60 LPA (INR); expected CTC at least 70 LPA (INR, India). For roles abroad, compare on net take-home and cost of living, not a direct conversion.
+- **Compensation:** Current CTC 62 LPA (INR); expected CTC at least 70 LPA (INR, India). For roles abroad, compare on net take-home and cost of living, not a direct conversion.
 - **LinkedIn headline:** "Engineering Manager | Backend & Distributed Systems | Applied AI & Agentic Systems | Payments at Scale (2M+ RPM) | Ex-Fynd, Ex-ShopClues"
 
 ### Education
@@ -31,7 +31,7 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 ### Professional Experience
 - **Engineering Manager-2** (Oct 2025 - Present) - **Turing** (Hyderabad, Remote)
   - Leads a team of up to 20 on LLM and AI agent evaluation for Amazon T-Bench (team lead only: a senior engineering manager and a strategic lead own overall project direction); collaborates with tooling teams
-  - Leads RLHF trainer teams on SWE-bench and coding evaluation projects for Anthropic and Meta models (1,500+ datasets and evaluations)
+  - Leads RLHF trainer teams (up to 10 members) on SWE-bench and coding evaluation projects for Anthropic and Meta models (1,500+ datasets and evaluations)
   - Evals and Rubric Validator workflow improvements: 30% higher dataset review throughput
 - **Engineering Manager** (Oct 2022 - Sep 2025) - **Fynd (Shopsense Retail Technologies Ltd.)** (Mumbai)
   - Led a 19-engineer Cart and Payments team across StoreOS, Fynd and Jio Platform: 40% increase in checkout conversion, 25% transaction growth
@@ -50,8 +50,9 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 - **Primary:** Python, Node.js, FastAPI, Go; microservices, Kafka, event-driven architecture; high-traffic payments and commerce systems; LLM evaluation, AI agents, LangGraph, RAG
 - **Secondary:** Django, Express, GraphQL, Temporal; PostgreSQL, MySQL, Redis, MongoDB, Elasticsearch, pgvector; BigQuery, CDC, Dataflow
 - **Domain:** Payments, checkout and commerce platforms; LLM/agent evaluation (SWE-bench, RLHF); healthcare AI; GDPR/SOC2 compliance; engineering leadership (teams up to 20)
-- **Not a fit:** frontend (only very basic React.js), Android, iOS/mobile, Java/Kotlin. Heavily backend-focused engineer and leader.
-- **Software:** AWS, GCP, Kubernetes, Docker, Terraform; Prometheus, Grafana, New Relic, Sentry, Jaeger, ELK; OpenAI, Vertex AI, LangSmith, MCP
+- **Basic Java:** hands-on basic Java experience (user-confirmed 2026-11-17); not production Java/Spring work. Java is a partial match, not a core stack.
+- **Not a fit:** C#/.NET (no experience), frontend (only very basic React.js), Android, iOS/mobile, Kotlin; Java as a core stack is a partial match only. Heavily backend-focused engineer and leader.
+- **Software:** AWS, GCP, Kubernetes, Docker, Terraform; GitHub Actions, Jenkins, SonarQube; Prometheus, Grafana, New Relic, Sentry, Jaeger, ELK; OpenAI, Vertex AI, LangSmith, MCP
 
 ### Certifications
 - AI Engineer for Developers (DataCamp); AWS Cloud Practitioner CLF-C02 (DataCamp); AWS Boto in Python (DataCamp); Generative AI for Everyone (DeepLearning.AI); RAG with LangChain; Multi-Agent Systems with LangGraph; Python
@@ -82,13 +83,13 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 ### Target Roles
 - Engineering Manager / Senior Engineering Manager, Head / Director of Engineering
 - Staff / Principal Engineer (backend, payments, platform, AI)
-- Abroad (Germany, Luxembourg): Staff/Principal Backend Engineer (Payments) and Engineering Manager - Payments/Platform/AI lead
+- Abroad (Germany, Netherlands, Ireland, Luxembourg): Staff/Principal Backend Engineer (Payments) and Engineering Manager - Payments/Platform/AI lead
 
 ### Deal-breakers
 - Roles that require a language not listed above (e.g. German or French as a job condition)
 - Roles abroad that require EU citizenship or existing work rights with no visa sponsorship
 - Soft negative (flag, not reject): pure people-management roles with no technical ownership
-- Soft negative (flag, not reject): Java/Spring Boot/Kotlin-centric roles - not a target stack
+- Soft negative (flag, not reject): Java/Spring Boot/Kotlin-centric roles - not a target stack; roles where Java is one option among several (or optional) are judged normally
 - Soft negative (flag, not reject): full-stack, frontend or mobile (Android/iOS) roles, and EM roles whose team or requirements are frontend/mobile-heavy - backend only
 - India roles with a stated compensation below 70 LPA (flag; do not reject postings that list no salary)
 
