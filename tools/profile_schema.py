@@ -34,6 +34,7 @@ class EducationEntry(BaseModel):
     period: str
     thesis: Optional[str] = None
     key_topics: List[str] = Field(default_factory=list)
+    completed: Optional[bool] = Field(None, description="False for a degree still in progress; None means decide from the period dates")
 
 
 class WorkExperienceEntry(BaseModel):

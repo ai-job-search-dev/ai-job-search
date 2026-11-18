@@ -328,12 +328,89 @@ class FieldClassificationTests(unittest.TestCase):
         self.assertEqual([(f["index"], f["value"]) for f in fills], [(0, "Ada"), (3, "/tmp/cv.pdf")])
         self.assertEqual(left, ["Favorite color", "Cover letter", "Visa"])
 
-    def test_module_never_clicks_or_presses_keys(self):
+    def test_module_only_clicks_dropdown_helpers_and_never_submits(self):
+        import inspect
         source = Path(browser_apply.__file__).read_text(encoding="utf-8")
         code = "\n".join(l for l in source.splitlines() if not l.lstrip().startswith(("#", '"""')))
-        for forbidden in (".click(", ".press(", ".dispatch_event(", ".check(", "requestSubmit", ".submit("):
+        for forbidden in (".press(", ".dispatch_event(", ".check(", "requestSubmit", ".submit(", ".tap(", "keyboard."):
             self.assertNotIn(forbidden, code)
+        clickers = {name for name, fn in inspect.getmembers(browser_apply, inspect.isfunction) if ".click(" in inspect.getsource(fn)}
+        self.assertEqual(clickers, {"_open_combo", "_click_option"})
+        self.assertIn("role=\"option\"", inspect.getsource(browser_apply._click_option) + browser_apply.OPTION_SELECTOR)
 
+    def test_education_and_country_fields_are_filled_but_sensitive_questions_never(self):
+        answers = {"country": "Argentina", "school": "Universidad Internacional de La Rioja", "degree": "master",
+                   "end_month": "February", "end_year": "2025", "city": "Tandil", "location": "Tandil, Buenos Aires, Argentina"}
+        fields = [
+            {"index": 0, "tag": "input", "type": "text", "descriptor": "Country* Country* country off", "value": "", "role": "combobox"},
+            {"index": 1, "tag": "input", "type": "text", "descriptor": "School School school--0 off", "value": "", "role": "combobox"},
+            {"index": 2, "tag": "input", "type": "text", "descriptor": "Degree Degree degree--0 off", "value": "", "role": "combobox"},
+            {"index": 3, "tag": "input", "type": "number", "descriptor": "End date year End date year end-year--0", "value": ""},
+            {"index": 4, "tag": "input", "type": "text", "descriptor": "Are you legally authorized to work in the country for which you are applying?", "value": "", "role": "combobox"},
+            {"index": 5, "tag": "input", "type": "text", "descriptor": "Will you now or in the future require sponsorship for employment visa status", "value": "", "role": "combobox"},
+            {"index": 6, "tag": "input", "type": "text", "descriptor": "Gender Gender gender off", "value": "", "role": "combobox"},
+            {"index": 7, "tag": "select", "type": "select-one", "descriptor": "Country", "value": "", "options": ["Italy", "Argentina"]},
+        ]
+        fills, left = browser_apply.plan_fills(fields, answers, None, None)
+        filled = {f["index"]: (f["kind"], f["key"]) for f in fills}
+        self.assertEqual(filled[0], ("combo", "country"))
+        self.assertEqual(filled[1], ("combo", "school"))
+        self.assertEqual(filled[2], ("combo", "degree"))
+        self.assertEqual(filled[3], ("text", "end_year"))
+        for index in (4, 5, 6):
+            self.assertNotIn(index, filled)
+        self.assertEqual(len(left), 4)  # the three sensitive questions and the second Country field, already answered
+
+    def test_native_select_picks_the_matching_option_only(self):
+        fields = [{"index": 0, "tag": "select", "type": "select-one", "descriptor": "Country", "value": "", "options": ["Italy", "Argentina"]}]
+        fills, _ = browser_apply.plan_fills(fields, {"country": "Argentina"}, None, None)
+        self.assertEqual((fills[0]["kind"], fills[0]["value"]), ("select", "Argentina"))
+        fills, left = browser_apply.plan_fills(fields, {"country": "Chile"}, None, None)
+        self.assertEqual(fills, [])
+        self.assertEqual(len(left), 1)
+
+    def test_option_matching_never_guesses(self):
+        pick = browser_apply.pick_option
+        self.assertEqual(pick(["Tandilt, Morocco", "Tandil, Buenos Aires, Argentina"], "location", "Tandil, Buenos Aires, Argentina"), 1)
+        self.assertIsNone(pick(["Tandilt, Morocco", "Tandil, Jharkhand, India"], "location", "Tandil, Buenos Aires, Argentina"))
+        self.assertEqual(pick(["Bachelor's Degree", "Master's Degree"], "degree", "master"), 1)
+        self.assertIsNone(pick(["Aberystwyth University", "Oxford University"], "school", "Universidad Internacional de La Rioja"))
+        self.assertEqual(pick(["Universidad Internacional de La Rioja (UNIR)"], "school", "Universidad Internacional de La Rioja"), 0)
+        self.assertEqual(pick(["January", "February"], "end_month", "February"), 1)
+
+    def test_education_uses_the_highest_completed_degree_never_one_in_progress(self):
+        from datetime import date
+        profile = make_profile()
+        profile.education = [
+            EducationEntry(degree="Master's Degree, Quantum Computing", institution="UNIR", period="2025-03 - 2026-09", completed=False),
+            EducationEntry(degree="Master's Degree, Computer Software Engineering", institution="UNIR", period="2025-02"),
+            EducationEntry(degree="Software Systems Engineer, Computer Science", institution="UNCPBA", period="2018-03 - 2023-05"),
+        ]
+        picked = browser_apply.pick_education(profile, today=date(2026, 11, 18))
+        self.assertEqual((picked["degree"], picked["end_year"], picked["end_month"]), ("master", "2025", "February"))
+        self.assertEqual(picked["discipline"], "Computer Software Engineering")
+
+    def test_combo_selection_clicks_only_an_option_and_leaves_no_match_empty(self):
+        class Page:
+            def __init__(self, options):
+                self.options, self.clicked, self.typed = options, [], []
+            def click(self, selector): self.clicked.append(selector)
+            def fill(self, selector, text): self.typed.append(text)
+            def wait_for_timeout(self, ms): pass
+            def get_attribute(self, selector, name): return "listbox-1"
+            def eval_on_selector_all(self, selector, script): return self.options
+            def evaluate(self, script): pass
+            class _L:
+                def __init__(self, page, selector): self.page, self.selector = page, selector
+                def nth(self, i): self.page.picked = (self.selector, i); return self
+                def click(self): self.page.clicked.append("option")
+            def locator(self, selector): return Page._L(self, selector)
+        page = Page(["Italy", "Argentina"])
+        self.assertTrue(browser_apply.fill_combo(page, "#country", "country", "Argentina"))
+        self.assertEqual(page.picked, ('[id="listbox-1"] [role="option"]', 1))
+        empty = Page(["Italy"])
+        self.assertFalse(browser_apply.fill_combo(empty, "#country", "country", "Argentina"))
+        self.assertEqual(empty.typed[-1], "")
 
 class FakePage:
     def __init__(self, fields, html="<html></html>"):

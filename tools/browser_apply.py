@@ -6,8 +6,11 @@ identity fields and uploads the tailored CV, then STOPS. The candidate reviews t
 and clicks Submit personally; only then does typing `applied` at the prompt record the
 application and start the 30-day company cooldown.
 
-This module never clicks anything, never presses keys, never solves CAPTCHAs, and never
-answers free-text, dropdown, radio or checkbox questions (visa, sponsorship, EEO).
+It also fills country, city, school, degree, discipline and graduation date from the profile, including
+dropdowns: it types into the dropdown and clicks an option only when exactly one option clearly matches, and
+leaves the field empty otherwise. The only clicks are on dropdown inputs and their options. It never clicks
+Submit or any button, never presses keys, never solves CAPTCHAs, and never answers visa, authorization,
+sponsorship, relocation, salary, referral, demographic or free-text questions; those stay for the human.
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ import re
 import sys
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+from typing import Sequence, Any, Callable, Dict, Iterator, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
@@ -49,8 +52,23 @@ FIELD_PATTERNS: List[Tuple[str, "re.Pattern[str]"]] = [
     ("first_name", re.compile(r"first[\s_-]*name|given[\s_-]*name|\bfname\b", re.I)),
     ("last_name", re.compile(r"last[\s_-]*name|family[\s_-]*name|surname|\blname\b", re.I)),
     ("full_name", re.compile(r"full[\s_-]*name|^\s*name\b|\byour[\s_-]*name", re.I)),
+    ("country", re.compile(r"\bcountry\b", re.I)),
+    ("school", re.compile(r"\bschool\b|\buniversity\b|\binstitution\b", re.I)),
+    ("degree", re.compile(r"\bdegree\b", re.I)),
+    ("discipline", re.compile(r"\bdiscipline\b|field[\s_-]*of[\s_-]*study|\bmajor\b", re.I)),
+    ("end_month", re.compile(r"(?:end|graduation)[\s_-]*(?:date)?[\s_-]*month", re.I)),
+    ("end_year", re.compile(r"(?:end|graduation)[\s_-]*(?:date)?[\s_-]*year", re.I)),
     ("location", re.compile(r"\bcity\b|\blocation\b|where.*(?:based|located)|current[\s_-]*location", re.I)),
 ]
+# Fields that depend on a short, plain label; a long question that merely mentions a country or a degree is never one.
+NARROW_KEYS = {"country", "school", "degree", "discipline", "end_month", "end_year"}
+MAX_NARROW_CHARS = 45
+# Questions this tool must never answer, whatever else the label contains.
+SENSITIVE = re.compile(
+    r"authori[sz]|visa|sponsor|work permit|right to work|relative|friend|disab|veteran|gender|ethnic|race\b|racial|hispanic|latino|"
+    r"pronoun|criminal|convict|salary|compensation|notice period|relocat|purple|referr",
+    re.I,
+)
 
 ID_NOISE = re.compile(
     r"(?<![0-9a-f])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![0-9a-f])|https?://\S+|\bquestion_\d+\b", re.IGNORECASE
@@ -98,6 +116,8 @@ COLLECT_FIELDS_JS = """
       type: (el.type || '').toLowerCase(),
       descriptor: labelFor(el),
       value: el.value || '',
+      role: el.getAttribute('role') || '',
+      options: el.tagName.toLowerCase() === 'select' ? Array.from(el.options).map(o => o.text.trim()) : [],
     });
   });
   return out;
@@ -133,6 +153,56 @@ def split_name(full_name: str) -> Tuple[str, str]:
     return parts[0], " ".join(parts[1:])
 
 
+MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+DEGREE_LEVELS = (
+    ("doctor", 4, r"ph\.?d|doctor"),
+    ("master", 3, r"master|m\.?sc|m[aá]ster|maestr"),
+    ("bachelor", 2, r"bachelor|b\.?sc|licenciad|grado|engineer|ingenier"),
+    ("associate", 1, r"associate|tecnic|technician"),
+)
+DEGREE_SYNONYMS = {
+    "doctor": ["Doctor of Philosophy (PhD)", "Doctor of Philosophy", "PhD", "Doctorate"],
+    "master": ["Master's Degree", "Master's", "Masters", "Master of Science", "MSc", "Master"],
+    "bachelor": ["Bachelor's Degree", "Bachelor's", "Bachelors", "Bachelor of Science", "BSc", "Bachelor"],
+    "associate": ["Associate's Degree", "Associate's", "Associate"],
+}
+FILLER_WORDS = {"de", "la", "el", "of", "the", "and", "y", "del", "universidad", "university"}
+
+
+def _fold(text: str) -> str:
+    import unicodedata
+    plain = "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", " ", plain.casefold()).strip()
+
+
+def pick_education(profile: MasterProfile, today: Optional[Any] = None) -> Dict[str, str]:
+    """The highest completed degree, as the values application forms ask for. In-progress degrees are never used."""
+    from datetime import date
+    today = today or date.today()
+    best: Optional[Tuple[int, Tuple[int, int], Any, str, Tuple[int, int]]] = None
+    for entry in profile.education:
+        if entry.completed is False:
+            continue
+        ends = re.findall(r"(\d{4})(?:-(\d{2}))?", entry.period)
+        if not ends:
+            continue
+        year, month = int(ends[-1][0]), int(ends[-1][1] or 12)
+        if (year, month) > (today.year, today.month):
+            continue
+        level, rank = next(((name, r) for name, r, pat in DEGREE_LEVELS if re.search(pat, entry.degree, re.I)), (None, 0))
+        if level is None:
+            continue
+        candidate = (rank, (year, month), entry, level, (year, month))
+        if best is None or candidate[:2] > best[:2]:
+            best = candidate
+    if best is None:
+        return {}
+    _, _, entry, level, (year, month) = best
+    discipline = entry.degree.split(",", 1)[1].strip() if "," in entry.degree else ""
+    return {"school": entry.institution, "degree": level, "discipline": discipline,
+            "end_month": MONTHS[month - 1], "end_year": str(year)}
+
+
 def build_answers(profile: MasterProfile) -> Dict[str, str]:
     ident = profile.identity
     first, last = split_name(ident.name)
@@ -146,18 +216,19 @@ def build_answers(profile: MasterProfile) -> Dict[str, str]:
         "github": ident.github or "",
         "portfolio": ident.portfolio or ident.github or "",
         "location": ident.location,
+        "city": ident.location.split(",")[0].strip(),
+        "country": ident.location.split(",")[-1].strip() if "," in ident.location else "",
     }
+    answers.update(pick_education(profile))
     return {k: v for k, v in answers.items() if v}
 
 
 def classify_field(descriptor: str, tag: str = "input", input_type: str = "text") -> Optional[str]:
     """Map a form field to a profile key, or None when it needs a human."""
-    if tag == "select" or input_type in SKIP_INPUT_TYPES:
-        return None
-    if tag == "textarea":
+    if input_type in SKIP_INPUT_TYPES or tag == "textarea":
         return None
     descriptor = re.sub(r"\s+", " ", ID_NOISE.sub(" ", descriptor)).strip()
-    if "?" in descriptor or len(descriptor) > MAX_LABEL_CHARS:
+    if "?" in descriptor or len(descriptor) > MAX_LABEL_CHARS or SENSITIVE.search(descriptor):
         return None
     if input_type == "file":
         for key, pattern in FIELD_PATTERNS:
@@ -174,6 +245,59 @@ def classify_field(descriptor: str, tag: str = "input", input_type: str = "text"
         if pattern.search(descriptor):
             return key
     return None
+
+
+OPTION_SELECTOR = '[role="option"]'
+
+
+def option_candidates(key: str, value: str) -> List[str]:
+    return DEGREE_SYNONYMS.get(value, [value]) if key == "degree" else [value]
+
+
+def _token_hit(token: str, option_tokens: List[str]) -> bool:
+    return any(t == token or (len(token) >= 6 and t.startswith(token[:6])) for t in option_tokens)
+
+
+def pick_option(options: Sequence[str], key: str, value: str) -> Optional[int]:
+    """Index of the option that is clearly the wanted one, or None. Never guesses between loose matches."""
+    folded = [_fold(o) for o in options]
+    if key == "location":
+        parts = [_fold(x) for x in value.split(",") if x.strip()]
+        if len(parts) < 2:
+            return None
+        city, country = parts[0], parts[-1]
+        hits = [i for i, opt in enumerate(folded) if opt.split(" ")[: len(city.split())] == city.split() and opt.endswith(country)]
+        return hits[0] if hits else None
+    wanted = [_fold(c) for c in option_candidates(key, value) if c]
+    for cand in wanted:
+        for i, opt in enumerate(folded):
+            if opt == cand:
+                return i
+    for cand in wanted:
+        hits = [i for i, opt in enumerate(folded) if opt and (opt.startswith(cand) or cand in opt)]
+        if hits:
+            return min(hits, key=lambda i: len(folded[i]))
+    if key in ("school", "discipline"):
+        tokens = [t for t in _fold(value).split() if t not in FILLER_WORDS and len(t) > 2]
+        need = len(tokens) if key == "school" else max(2, -(-len(tokens) * 6 // 10))
+        if len(tokens) >= (1 if key == "school" else 2):
+            scored = []
+            for i, opt in enumerate(folded):
+                parts = opt.split()
+                if sum(1 for t in tokens if _token_hit(t, parts)) >= need:
+                    scored.append((len(opt), i))
+            if scored:
+                return min(scored)[1]
+    return None
+
+
+def combo_queries(key: str, value: str) -> List[str]:
+    queries = [value.split(",")[0].strip()] if key == "location" else [value]
+    if key == "school":
+        distinct = [t for t in value.split() if _fold(t) not in FILLER_WORDS and len(t) > 3]
+        if distinct:
+            queries.append(max(distinct, key=len))
+    return queries
 
 
 def plan_fills(
@@ -199,13 +323,22 @@ def plan_fills(
                 left.append(label)
             continue
         if f.get("tag") == "select":
+            if key and key in answers and key not in used:
+                choice = pick_option(f.get("options") or [], key, answers[key])
+                if choice is not None:
+                    used.add(key)
+                    fills.append({"index": f["index"], "kind": "select", "key": key, "label": label, "value": f["options"][choice]})
+                    continue
             left.append(label)
             continue
         if f.get("value"):
             continue
         if key and key in answers and key not in used:
             used.add(key)
-            fills.append({"index": f["index"], "kind": "text", "key": key, "value": answers[key]})
+            if f.get("role") == "combobox":
+                fills.append({"index": f["index"], "kind": "combo", "key": key, "label": label, "value": answers[key]})
+            else:
+                fills.append({"index": f["index"], "kind": "text", "key": key, "label": label, "value": answers[key]})
         else:
             left.append(label)
     return fills, left
@@ -222,21 +355,69 @@ def form_recognised(fields: List[Dict[str, Any]]) -> bool:
     return bool(keys & {"email", "first_name", "full_name", "resume_file"})
 
 
+def _open_combo(page: Any, selector: str) -> None:
+    page.click(selector)
+
+
+def _option_selector(page: Any, selector: str) -> str:
+    """Options of this combobox only; pages can hold other role=option lists, such as phone country codes."""
+    try:
+        controls = page.get_attribute(selector, "aria-controls")
+    except Exception:
+        controls = None
+    return f'[id="{controls}"] {OPTION_SELECTOR}' if controls else f".select__menu {OPTION_SELECTOR}"
+
+
+def _click_option(page: Any, options_selector: str, index: int) -> None:
+    page.locator(options_selector).nth(index).click()
+
+
+def fill_combo(page: Any, selector: str, key: str, value: str) -> bool:
+    """Type into a dropdown and pick the matching option; leaves it empty when no option is clearly right."""
+    for query in combo_queries(key, value):
+        _open_combo(page, selector)
+        page.fill(selector, query)
+        options: List[str] = []
+        options_selector = _option_selector(page, selector)
+        for _ in range(6):
+            page.wait_for_timeout(500)
+            try:
+                options = page.eval_on_selector_all(options_selector, "els => els.map(e => e.innerText.trim())")
+            except Exception:
+                options = []
+            if options:
+                break
+        index = pick_option(options, key, value)
+        if index is not None:
+            _click_option(page, options_selector, index)
+            return True
+    page.fill(selector, "")
+    page.evaluate("document.activeElement && document.activeElement.blur()")
+    return False
+
+
 def apply_fills(page: Any, fills: List[Dict[str, Any]]) -> int:
+    """Fill what the plan lists. Each fill gets `done` set, so the caller can report what is left for the human."""
     done = 0
     for fill in fills:
         selector = f'[data-aja-idx="{fill["index"]}"]'
+        fill["done"] = False
         try:
             if fill["kind"] == "file":
                 page.set_input_files(selector, fill["value"])
+            elif fill["kind"] == "select":
+                page.select_option(selector, label=fill["value"])
+            elif fill["kind"] == "combo":
+                if not fill_combo(page, selector, fill["key"], fill["value"]):
+                    logger.info(f"No clear option for {fill['key']}={fill['value']!r}; left for you.")
+                    continue
             else:
                 page.fill(selector, fill["value"])
+            fill["done"] = True
             done += 1
         except Exception as exc:
             logger.warning(f"Could not fill {fill['key']}: {exc}")
     return done
-
-
 def human_checkpoint(
     summary: str,
     input_fn: Callable[[str], str] = input,
@@ -335,6 +516,8 @@ def run_apply(
             fields = page.evaluate(COLLECT_FIELDS_JS)
             fills, left = plan_fills(fields, answers, app["cv_path"], app["cover_letter_path"])
             filled = apply_fills(page, fills)
+            left += [f.get("label") or f["key"] for f in fills if not f.get("done")]
+            fills = [f for f in fills if f.get("done")]
             summary = [
                 f"  Job:      {app['company_name']} - {app['title']}",
                 f"  Filled:   {filled} field(s) ({', '.join(f['key'] for f in fills) or 'none'})",
