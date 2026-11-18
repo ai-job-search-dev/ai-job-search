@@ -43,6 +43,7 @@ from tools.preferences import (
     is_unpaid,
     load_candidate_context,
     load_preferences,
+    onsite_abroad_effect,
     reason_matches,
 )
 from tools.profile_schema import CareerPreferences
@@ -78,6 +79,7 @@ CITIZENSHIP_VETO_REASON = "VETO: Requires US citizenship or a security clearance
 PHD_VETO_REASON = "VETO: Pure academic theoretical physics research without software focus."
 NON_ENGINEERING_VETO_REASON = "VETO: Not a software engineering role (sales, support, recruiting or operations)."
 MANAGEMENT_VETO_REASON = "VETO: Management role, not an individual-contributor engineering position."
+ONSITE_ABROAD_VETO_REASON = "VETO: On-site role abroad and the candidate will not relocate."
 UNPAID_VETO_REASON = "VETO: Unpaid or volunteer position."
 FREE_TEXT_VETO_PENALTY = 1.5  # a model veto that names none of the configured rules is advice, not a rule
 NON_PHD_VETO_CAUSE = re.compile(r"on-?site|in-?person|relocat|location|hybrid|office|work[- ]?permit", re.IGNORECASE)
@@ -326,6 +328,12 @@ def heuristic_quantum_eval(
     penalties.append(screen_penalty)
     notes.extend(screen_notes)
     apply("management", management, MANAGEMENT_VETO_REASON)
+    abroad_veto, abroad_penalty = onsite_abroad_effect(prefs, location, is_remote)
+    if abroad_veto:
+        veto_reason = veto_reason or ONSITE_ABROAD_VETO_REASON
+    elif abroad_penalty:
+        penalties.append(abroad_penalty)
+        notes.append("on-site abroad, no relocation")
     apply("research_phd", phd_analysis == "strict_scientific_research" and (phd_in_title or not is_software), PHD_VETO_REASON)
     is_vetoed = veto_reason is not None
 
@@ -418,6 +426,9 @@ def evaluate_with_instructor(
     evaluation = normalize_evaluation(evaluation, prefs)
     evaluation = evaluation.model_copy(update={"matched_skills": supported_skills(evaluation.matched_skills, description)})
     veto, penalty, _ = deterministic_screen(prefs, title, location, description)
+    abroad_veto, abroad_penalty = onsite_abroad_effect(prefs, location, is_remote)
+    veto = veto or (ONSITE_ABROAD_VETO_REASON if abroad_veto else None)
+    penalty += abroad_penalty
     updates: Dict[str, Any] = {}
     if veto and not evaluation.should_veto:
         updates.update(should_veto=True, veto_reason=veto)

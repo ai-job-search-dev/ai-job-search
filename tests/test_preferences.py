@@ -307,6 +307,34 @@ class LlmNormalizationTests(unittest.TestCase):
         self.assertFalse(normalize_evaluation(raw, italian_in_argentina()).should_veto)
 
 
+class OnsiteAbroadTests(unittest.TestCase):
+    def prefs(self, **kw):
+        base = italian_in_argentina()
+        base.relocation = kw.pop("relocation", False)
+        for k, v in kw.items():
+            setattr(base.rules, k, v)
+        return base
+
+    def test_onsite_abroad_is_penalised_when_the_candidate_will_not_relocate(self):
+        veto, penalty = prefmod.onsite_abroad_effect(self.prefs(), "Delft, NL", False)
+        self.assertEqual((veto, penalty), (False, 3.0))
+
+    def test_remote_home_country_unknown_and_relocation_cases_are_untouched(self):
+        p = self.prefs()
+        for location, remote in (("Remote, EU", False), ("Buenos Aires, Argentina", False), ("Delft, NL", True), ("", False), ("Delft, NL", None)):
+            self.assertEqual(prefmod.onsite_abroad_effect(p, location, remote), (False, 0.0), (location, remote))
+        self.assertEqual(prefmod.onsite_abroad_effect(self.prefs(relocation=True), "Delft, NL", False), (False, 0.0))
+
+    def test_rule_can_veto_or_be_switched_off(self):
+        from tools.profile_schema import RuleSetting
+        self.assertEqual(prefmod.onsite_abroad_effect(self.prefs(onsite_abroad=RuleSetting(mode="veto")), "Delft, NL", False), (True, 0.0))
+        self.assertEqual(prefmod.onsite_abroad_effect(self.prefs(onsite_abroad=RuleSetting(mode="off")), "Delft, NL", False), (False, 0.0))
+
+    def test_prompt_tells_the_model_the_candidate_will_not_relocate(self):
+        self.assertIn("will NOT relocate", prefmod.describe_preferences(self.prefs()))
+        self.assertNotIn("will NOT relocate", prefmod.describe_preferences(self.prefs(relocation=True)))
+
+
 class PromptTests(unittest.TestCase):
     def test_prompt_reflects_the_configuration(self):
         text = prefmod.describe_preferences(italian_in_argentina())

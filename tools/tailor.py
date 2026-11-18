@@ -139,8 +139,22 @@ def relevance(text: str, keywords: Sequence[str]) -> int:
     )
 
 
+TITLE_HINTS = {
+    "Quantum Computing": ("quantum", "qubit", "qiskit"),
+    "Frontend & UI": ("frontend", "front-end", "front end", "full stack", "full-stack", "fullstack", "ui", "web", "angular", "typescript", "react"),
+    "Backend & APIs": ("backend", "back-end", "back end", "api", "platform", "server"),
+    "AI & Machine Learning": ("machine learning", "ml", "ai", "deep learning", "data scientist"),
+    "Cloud & DevOps": ("devops", "cloud", "infrastructure", "sre", "platform"),
+}
+
+
+def title_boost(category: str, title: str) -> int:
+    lowered = f" {title.casefold()} "
+    return 1 if any(re.search(rf"(?<![a-z]){re.escape(h)}(?![a-z])", lowered) for h in TITLE_HINTS.get(category, ())) else 0
+
+
 def build_cv(
-    profile: MasterProfile, matched_skills: Sequence[str], max_projects: int = MAX_PROJECTS
+    profile: MasterProfile, matched_skills: Sequence[str], max_projects: int = MAX_PROJECTS, job_title: str = ""
 ) -> TailoredCV:
     matched, unverified = split_verified(profile, matched_skills)
     matched_keys = {m.casefold() for m in matched}
@@ -152,7 +166,7 @@ def build_cv(
     for category, names in groups.items():
         names = sorted(names, key=lambda n: n.casefold() not in matched_keys)
         ordered_groups.append((category, names))
-    ordered_groups.sort(key=lambda g: -sum(1 for n in g[1] if n.casefold() in matched_keys))
+    ordered_groups.sort(key=lambda g: (-title_boost(g[0], job_title), -sum(1 for n in g[1] if n.casefold() in matched_keys)))
 
     experience = []
     for exp in profile.experience:
@@ -184,7 +198,9 @@ def build_cv(
     ]
 
     education = [
-        {"degree": e.degree, "institution": e.institution, "period": e.period, "topics": e.key_topics}
+        {"degree": e.degree, "institution": e.institution,
+         "period": re.sub(r"\s*-\s*\d{4}(?:-\d{2})?$", " - Present", e.period) if e.completed is False else e.period,
+         "topics": e.key_topics}
         for e in profile.education
     ]
     ident = profile.identity
@@ -303,7 +319,7 @@ def compile_typst(source: Path, output: Path) -> None:
 
 
 def compile_cv_to_fit(
-    profile: MasterProfile, matched_skills: Sequence[str], source: Path, output: Path
+    profile: MasterProfile, matched_skills: Sequence[str], source: Path, output: Path, job_title: str = ""
 ) -> TailoredCV:
     """Try the layout ladder and keep the first setting with at most MAX_CV_PAGES and no layout problems."""
     import contextlib
@@ -316,7 +332,7 @@ def compile_cv_to_fit(
     best: Optional[Tuple[int, Tuple[float, float, int]]] = None
     for setting in FIT_LADDER:
         font_pt, margin_cm, max_projects = setting
-        cv = build_cv(profile, matched_skills, max_projects=max_projects)
+        cv = build_cv(profile, matched_skills, max_projects=max_projects, job_title=job_title)
         source.write_text(render_cv(cv, font_pt, margin_cm), encoding="utf-8")
         compile_typst(source, output)
         if extract_text_layer(output)[1] > MAX_CV_PAGES:
@@ -330,7 +346,7 @@ def compile_cv_to_fit(
     if best is None:
         best = (0, FIT_LADDER[-1])
     font_pt, margin_cm, max_projects = best[1]
-    cv = build_cv(profile, matched_skills, max_projects=max_projects)
+    cv = build_cv(profile, matched_skills, max_projects=max_projects, job_title=job_title)
     source.write_text(render_cv(cv, font_pt, margin_cm), encoding="utf-8")
     compile_typst(source, output)
     return cv
@@ -392,7 +408,7 @@ def tailor_job(
     matched_in = parse_json_list(job["matched_skills"])
     missing = parse_json_list(job["missing_keywords"])
 
-    cv = build_cv(profile, matched_in)
+    cv = build_cv(profile, matched_in, job_title=job["title"])
     if cv.unverified:
         logger.warning(f"Skills requested by ranker but not in profile were left out: {cv.unverified}", job_id=job_id)
 
@@ -411,7 +427,7 @@ def tailor_job(
     paragraphs = build_cover_letter(profile, company, job["title"], cv.matched, missing, cv, remote=bool(job["is_remote"]))
     letter_typ.write_text(render_letter(profile, paragraphs), encoding="utf-8")
     cv_pdf, letter_pdf = folder / "cv.pdf", folder / "cover_letter.pdf"
-    cv = compile_cv_to_fit(profile, matched_in, cv_typ, cv_pdf)
+    cv = compile_cv_to_fit(profile, matched_in, cv_typ, cv_pdf, job_title=job["title"])
     compile_typst(letter_typ, letter_pdf)
 
     ats_ok, layout_ok, messages = verify_documents(cv_pdf, letter_pdf, profile)

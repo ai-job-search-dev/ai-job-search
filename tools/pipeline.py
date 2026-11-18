@@ -365,7 +365,8 @@ def prepare_applications(
                 "score": row["overall_score"] if row else None, "location": row["location"] if row else "",
                 "folder": res.get("folder", ""), "url": url, "messages": res.get("messages", []),
                 "host_ok": bool(url) and host_allowed(url),
-                "command": f"python3 tools/browser_apply.py --job-id {res['job_id']}" if ready else "",
+                "command": f"python3 tools/browser_apply.py --job-id {res['job_id']}" if ready and bool(url) and host_allowed(url) else "",
+                "manual": ready and not (bool(url) and host_allowed(url)),
             })
     folder = Path(reports_dir) if reports_dir else REPORTS_DIR
     folder.mkdir(parents=True, exist_ok=True)
@@ -387,6 +388,8 @@ def render_packets(packets: List[Dict[str, Any]]) -> str:
         if p["command"]:
             lines.append(f"- Pre-fill the form (you review and press Submit): `{p['command']}`"
                          + ("" if p["host_ok"] else " **host not in the approved list: add --allow-host <host>**"))
+        elif p.get("manual"):
+            lines.append(f"- Documents are ready, but this posting is not on an auto-fill ATS (job board or login wall). Apply by hand at {p['url']}")
         else:
             lines.append("- Not ready: fix the notes above, then tailor this job again.")
         lines.append("")
@@ -399,11 +402,13 @@ def render_prepare_summary(outcome: Dict[str, Any]) -> str:
         return "No shortlisted jobs were waiting to be tailored."
     lines = [f"\n{len(packets)} application(s) prepared:"]
     for p in packets:
-        mark = "READY" if p["command"] else p["status"]
+        mark = "READY" if p["command"] else ("MANUAL" if p.get("manual") else p["status"])
         lines.append(f"  [{mark}] #{p['job_id']} {p['company']} - {p['title']}  ({p['score']}/10)")
         lines.append(f"      {p['folder']}")
         if p["command"]:
-            lines.append(f"      {p['command']}" + ("" if p["host_ok"] else "   (needs --allow-host)"))
+            lines.append(f"      {p['command']}")
+        elif p.get("manual"):
+            lines.append(f"      apply by hand: {p['url']}")
         for m in p["messages"]:
             lines.append(f"      ! {m}")
     lines.append(f"Report: {outcome['report']}")

@@ -12,7 +12,7 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Tuple, Any, Dict, List, Optional, Set
 
 import yaml
 
@@ -77,6 +77,7 @@ RULE_TEXT = {
     "citizenship_clearance": ("postings that require US citizenship or a security clearance", r"citizen|clearance|itar|export"),
     "unpaid": ("unpaid or volunteer positions", r"unpaid|volunteer|no compensation|without pay"),
     "work_authorization": ("postings restricted to regions where the candidate cannot work without a visa", r"visa|authori[sz]|sponsor|reside"),
+    "onsite_abroad": ("on-site or hybrid postings outside the candidate's country, when they will not relocate", r"on-?site|in-?office|hybrid|relocat"),
 }
 
 
@@ -177,6 +178,21 @@ def load_candidate_context(path: Optional[Path] = None) -> str:
     return "\n".join(lines)
 
 
+def onsite_abroad_effect(prefs: CareerPreferences, location: str, is_remote: Optional[bool]) -> Tuple[bool, float]:
+    """(veto, penalty) for an on-site posting abroad when the candidate will not relocate."""
+    setting = prefs.rules.onsite_abroad
+    home = (prefs.work_authorization.current_country or "").upper()
+    place = (location or "").strip()
+    if prefs.relocation or setting.mode == "off" or is_remote is not False or not home or not place:
+        return False, 0.0
+    if re.search(r"remote|anywhere|worldwide|work from home", place, re.IGNORECASE):
+        return False, 0.0
+    rx = COUNTRY_REGEX.get(home)
+    if rx is not None and rx.search(place):
+        return False, 0.0
+    return (True, 0.0) if setting.mode == "veto" else (False, setting.penalty)
+
+
 def describe_preferences(prefs: CareerPreferences) -> str:
     """Plain-text rules for the LLM prompt, generated so the prompt can never disagree with the config."""
     wa, emp = prefs.work_authorization, prefs.employment
@@ -192,6 +208,11 @@ def describe_preferences(prefs: CareerPreferences) -> str:
         f"Employment types accepted: {', '.join(emp.accepted_types)}; "
         + ("only paid positions." if emp.paid_only else "unpaid positions are acceptable.")
     )
+    if not prefs.relocation:
+        lines.append(
+            f"The candidate will NOT relocate. On-site or hybrid postings outside {wa.current_country or 'their country'} "
+            "should score much lower; fully remote postings are fine."
+        )
     lines.append(f"Seniority: penalise senior titles by {prefs.seniority.senior_penalty} and staff/principal by {prefs.seniority.staff_penalty} points.")
     lines.append(f"Shortlist threshold: overall_score >= {prefs.shortlist_threshold}.")
     if prefs.scoring.domain_keywords:

@@ -64,6 +64,7 @@ class SkillItem(BaseModel):
     category: Literal[
         "Quantum Computing",
         "Software Engineering",
+        "Frontend & UI",
         "Backend & APIs",
         "Architecture & Distributed Systems",
         "Cloud & DevOps",
@@ -103,6 +104,10 @@ class ScreeningRules(BaseModel):
     work_authorization: RuleSetting = Field(
         default_factory=lambda: RuleSetting(mode="penalty"),
         description="Postings restricted to regions where the candidate cannot work without a visa",
+    )
+    onsite_abroad: RuleSetting = Field(
+        default_factory=lambda: RuleSetting(mode="penalty", penalty=3.0),
+        description="On-site or hybrid postings outside the candidate's country; only applies when relocation is false",
     )
 
 

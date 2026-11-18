@@ -91,6 +91,18 @@ class TailorContentTests(unittest.TestCase):
         self.assertEqual(tailor.slugify("../../Evil Co/ Ltd."), "evil-co-ltd")
         self.assertEqual(tailor.slugify("***"), "x")
 
+    def test_skill_groups_follow_the_job_title_and_in_progress_degrees_read_as_present(self):
+        from tools.profile_schema import SkillItem
+        profile = make_profile()
+        profile.skills += [SkillItem(name="Angular", category="Frontend & UI"), SkillItem(name="Qiskit2", category="Quantum Computing")]
+        profile.education[0].completed = False
+        profile.education[0].period = "2025-03 - 2026-09"
+        ui = tailor.build_cv(profile, ["Python"], job_title="Full Stack Engineer")
+        quantum = tailor.build_cv(profile, ["Python"], job_title="Quantum Software Engineer")
+        self.assertEqual(ui.skill_groups[0][0], "Frontend & UI")
+        self.assertEqual(quantum.skill_groups[0][0], "Quantum Computing")
+        self.assertEqual(ui.education[0]["period"], "2025-03 - Present")
+
     def test_cover_letter_does_not_advertise_gaps_or_repeat_the_summary(self):
         profile = make_profile()
         cv = tailor.build_cv(profile, ["Python"])
