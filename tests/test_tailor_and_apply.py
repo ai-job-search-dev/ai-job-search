@@ -91,12 +91,33 @@ class TailorContentTests(unittest.TestCase):
         self.assertEqual(tailor.slugify("../../Evil Co/ Ltd."), "evil-co-ltd")
         self.assertEqual(tailor.slugify("***"), "x")
 
-    def test_cover_letter_omits_skills_already_in_profile_from_gaps(self):
+    def test_cover_letter_does_not_advertise_gaps_or_repeat_the_summary(self):
         profile = make_profile()
         cv = tailor.build_cv(profile, ["Python"])
         text = " ".join(tailor.build_cover_letter(profile, "Acme", "QSE", cv.matched, ["Python", "C++"], cv))
-        self.assertIn("C++", text)
-        self.assertNotIn("deepen my experience with Python", text)
+        self.assertNotIn("C++", text)
+        self.assertNotIn(profile.summary, text)
+        self.assertIn("I am applying for the QSE position at Acme.", text)
+
+    def test_cover_letter_uses_approved_lines_and_only_claims_profile_skills(self):
+        profile = make_profile()
+        profile.projects[1].letter_line = "I built Quantum Bench in Qiskit to compare noise models on small VQE problems."
+        profile.experience[0].letter_line = "At Acme, I build the REST APIs behind a quantum workflow tool."
+        paragraphs = tailor.build_cover_letter(profile, "Acme", "QSE", ["Qiskit", "Python", "Rust"], [], tailor.build_cv(profile, ["Qiskit"]))
+        text = " ".join(paragraphs)
+        self.assertIn("I built Quantum Bench in Qiskit", text)
+        self.assertIn("I build the REST APIs", text)
+        self.assertNotIn("Rust", text)
+        self.assertIn("The posting mentions Qiskit and Python", text)
+
+    def test_cover_letter_offers_relocation_only_for_on_site_roles_when_enabled(self):
+        profile = make_profile()
+        cv = tailor.build_cv(profile, ["Python"])
+        profile.preferences.relocation = True
+        on_site = " ".join(tailor.build_cover_letter(profile, "Acme", "QSE", cv.matched, [], cv, remote=False))
+        remote = " ".join(tailor.build_cover_letter(profile, "Acme", "QSE", cv.matched, [], cv, remote=True))
+        self.assertIn("ready to relocate", on_site)
+        self.assertNotIn("relocate", remote)
 
     def test_parse_json_list(self):
         self.assertEqual(tailor.parse_json_list('["a", "b"]'), ["a", "b"])
@@ -192,7 +213,9 @@ class DbLifecycleTests(unittest.TestCase):
 
 @unittest.skipUnless(HAS_TYPST, "typst not installed")
 class TailorEndToEndTests(unittest.TestCase):
+    @mock.patch.dict(os.environ)
     def test_tailor_job_produces_verified_pdfs(self):
+        os.environ.pop("OPENAI_API_KEY", None)
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             db = tmp / "t.db"
@@ -244,7 +267,7 @@ class RankerNormalizationTests(unittest.TestCase):
 
     def test_non_phd_veto_is_kept(self):
         ev = normalize_evaluation(self._ev(
-            should_veto=True, veto_reason="On-site in Zurich only", phd_requirement_analysis="generic_hr_boilerplate"))
+            should_veto=True, veto_reason="Requires a security clearance", phd_requirement_analysis="generic_hr_boilerplate"))
         self.assertTrue(ev.should_veto)
 
     def test_strict_research_non_software_is_vetoed(self):

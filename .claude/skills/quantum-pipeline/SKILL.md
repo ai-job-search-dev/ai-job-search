@@ -59,6 +59,7 @@ Never put real personal data in a tracked file. `profile/master_profile.yaml`, `
 | Re-print recent shortlist            | `python tools/pipeline.py digest --hours 48`                                               |
 | One ingestion source                 | `python tools/ingest_ats.py`, `ingest_jobspy.py`, `ingest_crawl.py`                        |
 | Rank manually                        | `python tools/ranker.py --limit 20` (`--job-id N`, `--dry-run`)                            |
+| Prepare applications for the best shortlisted jobs | `python tools/pipeline.py prepare --limit 3` (`--job-id N`, `--redo` to rebuild)    |
 | Tailor shortlisted jobs              | `python tools/tailor.py --job-id N` (`--dry-run`, `--min-score`)                           |
 | List jobs ready to apply             | `python tools/browser_apply.py --list`                                                     |
 | Pre-fill an application              | `python tools/browser_apply.py --job-id N`                                                 |
@@ -75,6 +76,8 @@ Start every new session with `pipeline.py status`, and run `--dry-run` before an
 1. `python tools/pipeline.py run --dry-run`, show the user the estimate.
 2. On approval, `python tools/pipeline.py run --max-cost <cap>`.
 3. Read the digest. Report the shortlist and any failed sources. Do not tailor automatically.
+
+**Prepare applications in one step.** `python3 tools/pipeline.py prepare --limit 3` tailors the CV and cover letter for the best shortlisted jobs and writes `reports/applications-<time>.md` with each posting, its documents and the exact `browser_apply.py` command. `run --prepare N` does the same right after ranking. The cover letter is assembled from the `letter_line` sentences you approved in the master profile, never from free text.
 
 **Tailor and apply one job.**
 

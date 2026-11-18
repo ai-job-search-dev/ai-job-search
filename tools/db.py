@@ -14,7 +14,7 @@ import unicodedata
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Sequence, Any, Dict, List, Optional, Tuple
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
@@ -642,9 +642,10 @@ def _start_company_cooldown(
 
 
 def get_shortlisted_for_tailoring(
-    conn: sqlite3.Connection, min_score: float = 7.5, limit: Optional[int] = None
+    conn: sqlite3.Connection, min_score: float = 7.5, limit: Optional[int] = None,
+    statuses: Sequence[str] = (STATUS_SHORTLISTED,),
 ) -> List[sqlite3.Row]:
-    """SHORTLISTED, non-vetoed jobs with their latest evaluation, best score first."""
+    """Non-vetoed jobs in `statuses` (default SHORTLISTED) with their latest evaluation, best score first."""
     sql = """
         SELECT j.*, c.name AS company_name, e.overall_score, e.matched_skills,
                e.missing_keywords, e.tailoring_recommendations
@@ -653,10 +654,10 @@ def get_shortlisted_for_tailoring(
         JOIN evaluations e ON e.id = (
             SELECT MAX(id) FROM evaluations WHERE job_id = j.id
         )
-        WHERE j.status = ? AND e.veto_triggered = 0 AND e.overall_score >= ?
+        WHERE j.status IN ({marks}) AND e.veto_triggered = 0 AND e.overall_score >= ?
         ORDER BY e.overall_score DESC, j.id ASC
-    """
-    params: list = [STATUS_SHORTLISTED, min_score]
+    """.format(marks=",".join("?" for _ in statuses))
+    params: list = [*statuses, min_score]
     if limit:
         sql += " LIMIT ?"
         params.append(int(limit))

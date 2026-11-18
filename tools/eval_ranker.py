@@ -97,6 +97,7 @@ def run(labels: Path, use_llm: bool, repeat: int, db_path: Optional[Path], min_a
         rows.append({"id": job["id"], "title": job["title"][:46], "expect": case["expect"], "vetoed": vetoed, "scores": scores,
                      "ok": passes(case["expect"], vetoed, min(scores) if case["expect"] == "shortlist" else max(scores), threshold),
                      "spread": round(max(scores) - min(scores), 1), "unsupported": unsupported})
+        print(f"  evaluated {job['id']} ({len(rows)} done, {time.time() - started:.0f}s)", file=sys.stderr, flush=True)
     judged = [r for r in rows if r["ok"] is not None]
     correct = sum(1 for r in judged if r["ok"])
     print(f"Threshold {threshold}  |  scorer: {'model + keywords' if use_llm else 'keywords'}  |  repeat: {repeat if use_llm else 1}")

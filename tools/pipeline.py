@@ -326,6 +326,90 @@ def run_pipeline(
     return report
 
 
+def prepare_applications(
+    limit: Optional[int] = 3,
+    job_ids: Optional[List[int]] = None,
+    min_score: Optional[float] = None,
+    db_path: Optional[Path] = None,
+    profile_path: Optional[Path] = None,
+    reports_dir: Optional[Path] = None,
+    out_root: Optional[Path] = None,
+    redo: bool = False,
+) -> Dict[str, Any]:
+    """Tailor a CV and cover letter for the best shortlisted jobs and list what is ready to submit.
+
+    Nothing is sent. Each ready job comes with the exact `browser_apply.py` command; the human still reviews
+    the form and clicks Submit.
+    """
+    from tools.browser_apply import application_url, host_allowed
+    from tools.tailor import APPLICATIONS_DIR, run_tailor
+
+    root = Path(out_root) if out_root else APPLICATIONS_DIR
+    results: List[Dict[str, Any]] = []
+    if job_ids:
+        for job_id in job_ids:
+            results += run_tailor(job_id=job_id, min_score=min_score, db_path=db_path, profile_path=profile_path, out_root=root, redo=redo)
+    else:
+        results = run_tailor(limit=limit, min_score=min_score, db_path=db_path, profile_path=profile_path, out_root=root, redo=redo)
+    packets: List[Dict[str, Any]] = []
+    with get_db(db_path) as conn:
+        for res in results:
+            row = conn.execute(
+                "SELECT j.url, j.portal, j.location, e.overall_score FROM jobs j "
+                "LEFT JOIN evaluations e ON e.id = (SELECT MAX(id) FROM evaluations WHERE job_id = j.id) WHERE j.id = ?",
+                (res["job_id"],)).fetchone()
+            url = application_url(row["url"], row["portal"] or "") if row else ""
+            ready = res["status"] == "READY_TO_APPLY"
+            packets.append({
+                "job_id": res["job_id"], "company": res["company"], "title": res["title"], "status": res["status"],
+                "score": row["overall_score"] if row else None, "location": row["location"] if row else "",
+                "folder": res.get("folder", ""), "url": url, "messages": res.get("messages", []),
+                "host_ok": bool(url) and host_allowed(url),
+                "command": f"python3 tools/browser_apply.py --job-id {res['job_id']}" if ready else "",
+            })
+    folder = Path(reports_dir) if reports_dir else REPORTS_DIR
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"applications-{datetime.now().strftime('%Y%m%d-%H%M%S')}.md"
+    path.write_text(render_packets(packets), encoding="utf-8")
+    return {"packets": packets, "report": path}
+
+
+def render_packets(packets: List[Dict[str, Any]]) -> str:
+    if not packets:
+        return "No shortlisted jobs were waiting to be tailored.\n"
+    lines = [f"# Applications prepared ({len(packets)})", ""]
+    for p in packets:
+        lines += [f"## [{p['score']}/10] #{p['job_id']} {p['company']} - {p['title']}", "",
+                  f"- Status: {p['status']}", f"- Location: {p['location'] or 'n/a'}", f"- Posting: {p['url']}",
+                  f"- Documents: `{p['folder']}` (cv.pdf, cover_letter.pdf)"]
+        if p["messages"]:
+            lines.append("- Notes: " + "; ".join(p["messages"]))
+        if p["command"]:
+            lines.append(f"- Pre-fill the form (you review and press Submit): `{p['command']}`"
+                         + ("" if p["host_ok"] else " **host not in the approved list: add --allow-host <host>**"))
+        else:
+            lines.append("- Not ready: fix the notes above, then tailor this job again.")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def render_prepare_summary(outcome: Dict[str, Any]) -> str:
+    packets = outcome["packets"]
+    if not packets:
+        return "No shortlisted jobs were waiting to be tailored."
+    lines = [f"\n{len(packets)} application(s) prepared:"]
+    for p in packets:
+        mark = "READY" if p["command"] else p["status"]
+        lines.append(f"  [{mark}] #{p['job_id']} {p['company']} - {p['title']}  ({p['score']}/10)")
+        lines.append(f"      {p['folder']}")
+        if p["command"]:
+            lines.append(f"      {p['command']}" + ("" if p["host_ok"] else "   (needs --allow-host)"))
+        for m in p["messages"]:
+            lines.append(f"      ! {m}")
+    lines.append(f"Report: {outcome['report']}")
+    return "\n".join(lines)
+
+
 def plan_run(opts: Options, db_path: Optional[Path] = None, profile_path: Optional[Path] = None) -> Dict[str, Any]:
     """What a run would do, without touching the network or writing anything."""
     path = resolve_db_path(db_path)
@@ -448,7 +532,13 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--refresh-stale", action="store_true", help="Also re-score evaluations made under older preferences")
     run.add_argument("--close-stale-days", type=int, default=None, help="Close postings no ingestion has seen for N days")
     run.add_argument("--jobspy-max-queries", type=int, default=None)
+    run.add_argument("--prepare", type=int, default=None, metavar="N", help="After ranking, tailor documents for the best N shortlisted jobs")
     run.add_argument("--dry-run", action="store_true")
+    prepare = sub.add_parser("prepare", help="Tailor documents for the best shortlisted jobs and list what is ready to apply")
+    prepare.add_argument("--limit", type=int, default=3, help="How many shortlisted jobs to prepare (best score first)")
+    prepare.add_argument("--job-id", type=int, action="append", default=None, help="Prepare this job (repeatable)")
+    prepare.add_argument("--min-score", type=float, default=None)
+    prepare.add_argument("--redo", action="store_true", help="Also re-tailor jobs already TAILORED or READY_TO_APPLY")
     sub.add_parser("status", help="Show runs, counts, LLM spend and backups")
     digest = sub.add_parser("digest", help="Print shortlisted jobs evaluated recently")
     digest.add_argument("--hours", type=float, default=24.0)
@@ -459,6 +549,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "status":
         safe_print(render_status())
+        return 0
+    if args.command == "prepare":
+        try:
+            safe_print(render_prepare_summary(prepare_applications(args.limit, args.job_id, args.min_score, redo=args.redo)))
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
         return 0
     if args.command == "digest":
         init_db()
@@ -481,6 +578,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"error: {exc}. If it crashed, delete the .pipeline.lock file beside the database.", file=sys.stderr)
         return 2
     safe_print(render_summary(report))
+    if args.prepare and report.exit_code == 0:
+        safe_print(render_prepare_summary(prepare_applications(args.prepare)))
     METRICS.print_summary()
     return report.exit_code
 

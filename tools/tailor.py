@@ -24,7 +24,11 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+from tools.cover_letter import compose_letter, review_letter
 from tools.db import (
+    STATUS_READY_TO_APPLY,
+    STATUS_SHORTLISTED,
+    STATUS_TAILORED,
     get_db,
     get_shortlisted_for_tailoring,
     init_db,
@@ -265,32 +269,10 @@ def build_cover_letter(
     matched: Sequence[str],
     missing: Sequence[str],
     cv: TailoredCV,
+    remote: bool = True,
 ) -> List[str]:
-    skills = ", ".join(matched[:5]) if matched else "Python and software engineering"
-    paragraphs = [
-        f"Dear {company} hiring team,",
-        f"I am applying for the {job_title} role at {company}. {profile.summary}",
-        f"The strongest overlap with this role is {skills}. "
-        + (
-            f"In my role as {cv.experience[0]['role']}, a representative result: {cv.experience[0]['bullets'][0].rstrip('.')}."
-            if cv.experience and cv.experience[0]["bullets"]
-            else ""
-        ),
-    ]
-    if cv.projects:
-        top = cv.projects[0]
-        paragraphs.append(
-            f"Outside of work I built {top['name']}: {top['description'].rstrip('.')}."
-        )
-    verified_missing = [m for m in missing if m.casefold() not in verified_skill_index(profile)]
-    if verified_missing:
-        paragraphs.append(
-            f"I am keen to deepen my experience with {', '.join(verified_missing[:3])}, which this role calls for."
-        )
-    paragraphs.append(
-        "I would welcome the chance to discuss how I can contribute to your team. Thank you for your time and consideration."
-    )
-    return [p.strip() for p in paragraphs if p.strip()]
+    """Letter paragraphs built from approved profile lines; see tools/cover_letter.py."""
+    return compose_letter(profile, company, job_title, matched, remote=remote)
 
 
 def render_letter(profile: MasterProfile, paragraphs: Sequence[str]) -> str:
@@ -389,6 +371,15 @@ def verify_documents(
     return ats_ok, layout_ok, messages
 
 
+def review_letter_with_model(conn: Any, profile: MasterProfile, paragraphs: Sequence[str]) -> Optional[Dict[str, Any]]:
+    """Advisory model review of the finished letter. None when no model is configured."""
+    from tools.llm import LLMGateway, llm_configured
+
+    if not llm_configured():
+        return None
+    return review_letter(profile, paragraphs, LLMGateway(conn, use_cache=True))
+
+
 def tailor_job(
     conn: Any,
     job: Any,
@@ -417,15 +408,19 @@ def tailor_job(
     for lib in ("cv_lib.typ",):
         shutil.copy(TEMPLATES_DIR / lib, folder / lib)
     cv_typ, letter_typ = folder / "cv.typ", folder / "cover_letter.typ"
-    letter_typ.write_text(
-        render_letter(profile, build_cover_letter(profile, company, job["title"], cv.matched, missing, cv)),
-        encoding="utf-8",
-    )
+    paragraphs = build_cover_letter(profile, company, job["title"], cv.matched, missing, cv, remote=bool(job["is_remote"]))
+    letter_typ.write_text(render_letter(profile, paragraphs), encoding="utf-8")
     cv_pdf, letter_pdf = folder / "cv.pdf", folder / "cover_letter.pdf"
     cv = compile_cv_to_fit(profile, matched_in, cv_typ, cv_pdf)
     compile_typst(letter_typ, letter_pdf)
 
     ats_ok, layout_ok, messages = verify_documents(cv_pdf, letter_pdf, profile)
+    review = review_letter_with_model(conn, profile, paragraphs)
+    if review is not None:
+        (folder / "letter_review.json").write_text(json.dumps(review, indent=2), encoding="utf-8")
+        result["letter_review"] = review
+        if not review.get("reads_naturally", True) or review.get("problems") or review.get("claims_not_in_profile"):
+            messages.append("Letter review raised points, read letter_review.json before applying")
     record_tailored_documents(
         conn, job_id, str(cv_pdf), str(letter_pdf), ats_verified=ats_ok, layout_verified=layout_ok,
         notes="; ".join(messages) or None,
@@ -444,7 +439,9 @@ def run_tailor(
     db_path: Optional[Path] = None,
     profile_path: Optional[Path] = None,
     out_root: Path = APPLICATIONS_DIR,
+    redo: bool = False,
 ) -> List[Dict[str, Any]]:
+    """Tailor SHORTLISTED jobs. `redo` also re-tailors TAILORED and READY_TO_APPLY ones, never APPLIED."""
     profile = load_profile(profile_path or DEFAULT_PROFILE_FILE)
     if min_score is None:
         min_score = profile.preferences.shortlist_threshold
@@ -457,7 +454,8 @@ def run_tailor(
     init_db(db_path)
     results: List[Dict[str, Any]] = []
     with get_db(db_path) as conn:
-        jobs = get_shortlisted_for_tailoring(conn, min_score=min_score, limit=None if job_id else limit)
+        statuses = (STATUS_SHORTLISTED, STATUS_TAILORED, STATUS_READY_TO_APPLY) if redo else (STATUS_SHORTLISTED,)
+        jobs = get_shortlisted_for_tailoring(conn, min_score=min_score, limit=None if job_id else limit, statuses=statuses)
         if job_id:
             jobs = [j for j in jobs if int(j["id"]) == job_id]
         if not jobs:
@@ -481,12 +479,13 @@ if __name__ == "__main__":
     parser.add_argument("--job-id", type=int, default=None)
     parser.add_argument("--min-score", type=float, default=None, help="Defaults to the profile shortlist_threshold")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--redo", action="store_true", help="Also re-tailor jobs already TAILORED or READY_TO_APPLY")
     parser.add_argument("--profile", type=Path, default=None)
     args = parser.parse_args()
     try:
         outcome = run_tailor(
             limit=args.limit, job_id=args.job_id, min_score=args.min_score,
-            dry_run=args.dry_run, profile_path=args.profile,
+            dry_run=args.dry_run, profile_path=args.profile, redo=args.redo,
         )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)

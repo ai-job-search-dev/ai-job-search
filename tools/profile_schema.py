@@ -45,6 +45,7 @@ class WorkExperienceEntry(BaseModel):
     is_current: bool = False
     achievements: List[str] = Field(default_factory=list, description="Action-oriented bullet points")
     skills_used: List[str] = Field(default_factory=list, description="Technologies applied")
+    letter_line: Optional[str] = Field(None, description="One first-person sentence you approved for cover letters")
     star_examples: List[STARExample] = Field(default_factory=list)
 
 
@@ -54,6 +55,7 @@ class ProjectEntry(BaseModel):
     repo_url: Optional[str] = None
     technologies: List[str] = Field(default_factory=list)
     impact_highlights: List[str] = Field(default_factory=list)
+    letter_line: Optional[str] = Field(None, description="One first-person sentence you approved for cover letters")
 
 
 class SkillItem(BaseModel):
@@ -153,6 +155,7 @@ class CareerPreferences(BaseModel):
     target_roles: List[str] = Field(default_factory=list)
     remote_only: bool = True
     salary_floor_usd: Optional[float] = None
+    relocation: bool = Field(False, description="Willing to relocate for an on-site role")
     deal_breakers: List[str] = Field(default_factory=list)
     preferred_locations: List[str] = Field(default_factory=list)
     shortlist_threshold: float = Field(7.5, ge=0.0, le=10.0, description="Minimum overall score to shortlist")
