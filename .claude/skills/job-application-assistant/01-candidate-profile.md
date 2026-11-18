@@ -46,8 +46,8 @@ Hyderabad, India (Remote)
 **Project detail (from the user's internal Turing CV, `cv/main_turing_internal.tex`):** Amazon Agentic (Tau-bench) - led 20 members, 150+ datasets in 5 days, highest team throughput; Anthropic TAIGA (SWE-bench) - led an 8-member team, 230+ team instances, created 24+ and reviewed 175+; Meta Hopfield ACC - led up to 10 members, 400+ datasets, resolved policy clarifications; with tooling teams, improved AutoQA feedback and ACC review workflows, found trainer task-claim loopholes, and worked on tooling feature enhancements and environment issue fixes (user-confirmed 2026-11-12).
 **Master CV bullets (user-supplied wording, 2026-11-18; prefer these over older phrasings):**
 - Led a 20-member team delivering τ-bench (Amazon T-Bench / Tau-bench) LLM and AI agent evaluation programs, owning execution and evaluation quality.
-- Led teams of up to 10 engineers building SWE-bench-style coding benchmarks for two frontier AI labs (Anthropic and Meta; name them only where NDA-safe), injecting bugs into real repositories; delivered 1,500+ datasets and evaluations.
-- Designed 1-7 milestone coding tasks with prompts and hints, scoring agents across harnesses (Claude Code, OpenCode and others) on correctness, completion and code style.
+- Led teams of up to 10 engineers building SWE-bench coding benchmarks for two frontier AI labs (Anthropic and Meta; name them only where NDA-safe), injecting bugs into real repositories; delivered 1,500+ datasets and evaluations.
+- Directed engineers in designing 1-7 milestone coding tasks, scoring agents across harnesses (OpenCode and others) on correctness, agent behavior and code style. (User revision 2026-11-18: directed the design rather than designing personally; Claude Code deliberately not named as a harness.)
 - Co-led data-quality improvements with the tooling team, defining dataset and AutoQA tooling requirements and hardening task-assignment controls.
 - Partnered with platform and tooling teams on Evals and Rubric Validator workflows, contributing to a 30% improvement in dataset review throughput.
 
@@ -55,7 +55,7 @@ Hyderabad, India (Remote)
 Mumbai, India
 **Master CV wording (user-supplied, 2026-11-18; prefer these two over the older first and last bullets below):**
 - Led a 19-engineer Cart & Payments team across Fynd's in-store POS, online storefronts and Jio commerce, driving a 40% increase in checkout conversion. (StoreOS = Fynd's in-store POS.)
-- Scaled the team from 5 to 19 engineers, promoting 6 and developing 3 into team leads, while cutting release cycle time by 40%. (The user dropped "hiring about 10" and the 60% productivity figure from this bullet; both facts remain true.)
+- Scaled the team from 5 to 19 engineers, promoting 10 and developing 4 into team leads, while cutting release cycle time by 40%. (Counts corrected by the user 2026-11-18: 10 promoted, 4 developed into team leads; earlier 6 and 3 were wrong. The user dropped "hiring about 10" and the 60% productivity figure from this bullet; both facts remain true.)
 
 Older wording:
 - Led a 19-engineer Cart and Payments team across StoreOS, Fynd, and Jio Platform, driving a 40% increase in checkout conversion.
@@ -109,7 +109,7 @@ Gurgaon, India
 - **Not in profile:** C#/.NET (no experience, user-confirmed 2026-11-17), frontend (only very basic React.js knowledge), Android, iOS/mobile, Kotlin. Heavily backend-focused - never present frontend or mobile skills in applications.
 - **Backend & Frameworks:** Node.js, FastAPI, Django, Express, REST APIs, GraphQL
 - **Distributed Systems & Architecture:** Microservices, Kafka, Temporal, Event-Driven Architecture
-- **AI/LLM Engineering:** LLM Evaluation, AI Agents, LangGraph, RAG, MCP, OpenAI, Vertex AI, LangSmith
+- **AI/LLM Engineering:** LLM Evaluation, Prompt Engineering (user-confirmed 2026-11-18), AI Agents, LangGraph, RAG, MCP, OpenAI, Vertex AI, LangSmith
 - **Databases & Storage:** PostgreSQL, MySQL, Redis, MongoDB, Elasticsearch, pgvector
 - **Data Engineering:** BigQuery, CDC, Dataflow, Datastream
 - **Basic knowledge only (user-confirmed 2026-11-12):** Pandas, NumPy, Apache Spark. List them only in a skills line labelled "(basic)"; never claim them in experience bullets.
@@ -131,6 +131,7 @@ Gurgaon, India
 
 ## Certifications
 - AI Engineer for Developers - DataCamp
+- Engineering Management and Leadership - Udemy (user-confirmed 2026-11-18; list second, right after AI Engineer for Developers)
 - AWS Cloud Practitioner (CLF-C02) - DataCamp
 - AWS Boto in Python - DataCamp
 - Generative AI for Everyone - DeepLearning.AI

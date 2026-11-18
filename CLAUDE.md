@@ -31,13 +31,13 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 ### Professional Experience
 - **Engineering Manager-2** (Oct 2025 - Present) - **Turing** (Hyderabad, Remote)
   - Leads a team of up to 20 on LLM and AI agent evaluation for Amazon T-Bench (team lead only: a senior engineering manager and a strategic lead own overall project direction); collaborates with tooling teams
-  - Led teams of up to 10 engineers building SWE-bench-style coding benchmarks for Anthropic and Meta (bug injection into real repositories; 1,500+ datasets and evaluations)
-  - Designed 1-7 milestone coding tasks with prompts and hints; scored agents across harnesses (Claude Code, OpenCode and others) on correctness, completion and code style
+  - Led teams of up to 10 engineers building SWE-bench coding benchmarks for Anthropic and Meta (bug injection into real repositories; 1,500+ datasets and evaluations)
+  - Directed engineers in designing 1-7 milestone coding tasks; scored agents across harnesses (OpenCode and others) on correctness, agent behavior and code style
   - Co-led data-quality improvements with the tooling team (dataset and AutoQA tooling requirements, task-assignment controls)
   - Evals and Rubric Validator workflow improvements: 30% higher dataset review throughput
 - **Engineering Manager** (Oct 2022 - Sep 2025) - **Fynd (Shopsense Retail Technologies Ltd.)** (Mumbai)
   - Led a 19-engineer Cart & Payments team across Fynd's in-store POS (StoreOS), online storefronts and Jio commerce: 40% increase in checkout conversion, 25% transaction growth
-  - Scaled the team from 5 to 19 engineers, promoting 6 and developing 3 into team leads
+  - Scaled the team from 5 to 19 engineers, promoting 10 and developing 4 into team leads
   - Built a payment extension ecosystem (FastAPI, Node.js, partner SDKs) with 40+ payment gateways
   - Led 5 engineers building Gauze.md (cardiovascular AI, LLM/RAG, ECG/ECHO) from scratch; drove an agentic commerce copilot (LangGraph) automating ~75% of support workflows
   - 60% team productivity gain, 40% shorter release cycles; closed GDPR and SOC2 gaps
@@ -50,7 +50,7 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 - **Software Engineer** (Nov 2014 - Mar 2015) - **ShopClues** (Gurgaon) - e-commerce logistics and order management
 
 ### Technical Skills
-- **Primary:** Python, Node.js, FastAPI, Go; microservices, Kafka, event-driven architecture; high-traffic payments and commerce systems; LLM evaluation, AI agents, LangGraph, RAG
+- **Primary:** Python, Node.js, FastAPI, Go; microservices, Kafka, event-driven architecture; high-traffic payments and commerce systems; LLM evaluation, prompt engineering, AI agents, LangGraph, RAG
 - **Secondary:** Django, Express, GraphQL, Temporal; PostgreSQL, MySQL, Redis, MongoDB, Elasticsearch, pgvector; BigQuery, CDC, Dataflow
 - **Domain:** Payments, checkout and commerce platforms; LLM/agent evaluation (SWE-bench, RLHF); healthcare AI; GDPR/SOC2 compliance; engineering leadership (teams up to 20)
 - **Basic Java:** hands-on basic Java experience (user-confirmed 2026-11-17); not production Java/Spring work. Java is a partial match, not a core stack.
@@ -58,7 +58,7 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 - **Software:** AWS, GCP, Kubernetes, Docker, Terraform; GitHub Actions, Jenkins, SonarQube; Prometheus, Grafana, New Relic, Sentry, Jaeger, ELK; OpenAI, Vertex AI, LangSmith, MCP
 
 ### Certifications
-- AI Engineer for Developers (DataCamp); AWS Cloud Practitioner CLF-C02 (DataCamp); AWS Boto in Python (DataCamp); Generative AI for Everyone (DeepLearning.AI); RAG with LangChain; Multi-Agent Systems with LangGraph; Python
+- AI Engineer for Developers (DataCamp); Engineering Management and Leadership (Udemy); AWS Cloud Practitioner CLF-C02 (DataCamp); AWS Boto in Python (DataCamp); Generative AI for Everyone (DeepLearning.AI); RAG with LangChain; Multi-Agent Systems with LangGraph; Python
 
 ### Publications
 - None. Writes technical blog posts at https://logsv.medium.com/

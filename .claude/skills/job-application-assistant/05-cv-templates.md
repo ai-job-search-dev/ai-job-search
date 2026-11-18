@@ -167,16 +167,27 @@ This is the most important section to customize. It appears right after `\makecv
 
 Write 5-7 lines that function as an "elevator pitch": a concise, compelling introduction explaining why you're qualified for *this specific role*. Focus on what the employer gains from hiring you.
 
+**Hard limit: 75 words maximum** (user guardrail, 2026-11-18). Count the words before writing the file; if a tailored summary goes over 75, cut the weakest clause rather than compressing the wording. This applies to every CV, general or tailored, in every template.
+
 When the role sits outside your home domain, **lead with the domain-transfer argument** - the one or two sentences connecting your background to their problem (e.g. wave physics to radar signal processing) belong in the profile statement's opening, not buried in the cover letter. It is the strongest card a domain-changer holds; play it first.
 
 **Create 2-3 profile statement templates for your main role types:**
 
 <!-- SETUP: These are populated based on your background -->
 **For Engineering Manager (backend / payments / AI) roles:**
-> Engineering Manager with 12+ years of experience building large-scale commerce and payment systems, backend services, and AI/LLM products. Led teams of up to 20 engineers, driving technical execution, improving team productivity, and delivering business impact, including a 40% increase in checkout conversion. Strong in backend architecture, high-traffic systems, event-driven microservices, LLM evaluation workflows, and agentic AI systems.
+> Hands-on Engineering Manager building backend, distributed systems and AI/LLM products, with 12 years of engineering experience and 4 years leading teams of up to 20. At Fynd, scaled a Cart & Payments team from 5 to 19 engineers and delivered a 40% checkout conversion gain on services handling 2M+ RPM. Drove a LangGraph support copilot automating ~75% of support workflows and a cardiovascular LLM/RAG platform. Now lead AI agent and coding-benchmark evaluation teams at Turing.
+>
+> (User-approved EM summary, 2026-11-18; 75 words, at the cap. Use as the base for EM CVs and tailor from it.)
 
 **For Applied AI / LLM engineering leadership roles:**
-> Engineering leader with 12+ years in backend and distributed systems, now focused on applied AI. Currently leading a 20-engineer team delivering LLM and AI agent evaluation programs (SWE-bench, RLHF, Amazon T-Bench) at Turing; previously built an agentic commerce copilot with LangGraph automating ~75% of support workflows and led a 0-to-1 cardiovascular AI product using LLM/RAG workflows at Fynd.
+> Engineering leader with 12 years in backend and distributed systems, now focused on applied AI. At Turing, lead a 20-member team on τ-bench AI agent evaluation and teams of up to 10 engineers building SWE-bench coding benchmarks for two frontier AI labs. At Fynd, drove a LangGraph support copilot automating ~75% of support workflows and led 5 engineers building a cardiovascular LLM/RAG product from scratch.
+>
+> (Updated 2026-11-18 to current facts; 65 words. NDA-safe: no client names.)
+
+**For Staff / Principal backend engineer roles:**
+> Backend engineer and architect with 12 years building distributed systems, platforms and AI products. Architected services at 2M+ RPM, 99.95% availability and 75ms p95, and as an engineering manager still designed and built a partner SDK and extension ecosystem with 40+ integrations. Leads through architecture ownership and technical direction across teams. Now direct the design of agentic coding benchmarks at Turing for two frontier AI labs, scoring AI agents across multiple harnesses.
+>
+> (Current Staff summary, as in `cv/main_europe_staff_software_engineer.tex`, 2026-11-18; 72 words. Staff CVs carry no headcount bullet.)
 
 Statements labeled *[Used for: <company>_<role>]* were extracted from archived application drafts by `/setup` Path A. They are **phrasing references, never fact sources**: when drafting from one, every factual claim still comes from `01-candidate-profile.md` - a past tailored draft does not vouch for its own accuracy.
 
@@ -396,7 +407,7 @@ Cut the lowest-total-score line first, regardless of which section it sits in.
 
 ## Market-Specific Sections (candidate preference)
 
-- **India roles:** omit the **Languages**, **Honors and Awards** and **References** sections. English and Hindi are assumed in the Indian market, and the space goes to experience instead.
+- **India roles:** omit the **Languages**, **Honors and Awards** and **References** sections (user guardrail, reconfirmed 2026-11-18: never add a Languages section to an India CV, general or tailored). English and Hindi are assumed in the Indian market, and the space goes to experience instead.
 - **Roles outside India** (Germany, Netherlands, Ireland, Luxembourg, elsewhere): **keep the Languages section** (English full professional proficiency) - abroad it answers the language question recruiters screen on first. Honors and Awards and References stay optional there.
 - When removing these sections leaves page 2 more than a third empty, restore the most posting-relevant bullets cut earlier rather than leaving the page short.
 
