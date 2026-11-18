@@ -110,6 +110,8 @@ python3 tools/pipeline.py run --skip-ingest --dry-run
 tools/local_llm.sh stop
 ```
 
+Measured on 29 postings: the 7B model is a useful second opinion but not a sole scorer. Its scores come in coarse steps (0, 1.5, 2.5, 3.5, 4.5, 6.5, 7.5), near-identical roles can get opposite vetoes, it applies free-text deal-breakers such as "on-site" loosely, and it lists the candidate's skills as matches even when the posting does not mention them (`supported_skills` in `tools/ranker.py` now drops those). Hardware, citizenship and non-engineering vetoes agreed with the heuristic. Prompt-injection text in a posting did not change any outcome. Review a shortlist from this model by hand before tailoring.
+
 Local scores are on a different scale than the keyword heuristic and than OpenAI models, and the first call after `start` takes about 30 seconds while the model loads. Cost is zero, so `--max-cost` is irrelevant; use `--limit` to bound time. Re-run `tools/local_llm.sh verify` after changing the profile or upgrading Ollama.
 
 ## Configuration map

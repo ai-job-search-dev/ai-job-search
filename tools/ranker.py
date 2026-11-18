@@ -258,6 +258,18 @@ def keyword_in(text: str, keyword: str) -> bool:
     return re.search(r"(?<![a-z0-9+#])" + re.escape(keyword) + r"(?![a-z0-9+#])", text) is not None
 
 
+def supported_skills(claimed: List[str], description: str) -> List[str]:
+    """Keep only the skills the posting itself mentions; a model tends to list the candidate's skills instead."""
+    text = (description or "").lower()
+    kept: List[str] = []
+    for skill in claimed:
+        term = skill.strip().lower()
+        forms = {term, term.rstrip("s"), term + "s"} - {""}
+        if any(keyword_in(text, form) for form in forms) and skill not in kept:
+            kept.append(skill)
+    return kept
+
+
 def heuristic_quantum_eval(
     title: str, company: str, description: str, location: str, is_remote: bool,
     prefs: Optional[CareerPreferences] = None,
@@ -399,6 +411,7 @@ def evaluate_with_instructor(
         return heuristic("llm_error")
 
     evaluation = normalize_evaluation(evaluation, prefs)
+    evaluation = evaluation.model_copy(update={"matched_skills": supported_skills(evaluation.matched_skills, description)})
     veto, penalty, _ = deterministic_screen(prefs, title, location, description)
     updates: Dict[str, Any] = {}
     if veto and not evaluation.should_veto:

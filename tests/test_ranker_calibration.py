@@ -44,6 +44,22 @@ class HeuristicCalibrationTests(unittest.TestCase):
             self.assertTrue(ev.should_veto, title)
             self.assertLess(ev.overall_score, 7.5, title)
 
+    def test_llm_matched_skills_are_limited_to_what_the_posting_mentions(self):
+        from types import SimpleNamespace
+        from tools.ranker_schema import QuantumJobEvaluation
+        claimed = ["Python", "Qiskit", "ServiceNow", "React", "CI/CD", "APIs"]
+        answer = QuantumJobEvaluation(
+            overall_score=7.0, software_fit_score=7.0, quantum_fit_score=7.0, is_software_role=True,
+            is_experimental_hardware=False, phd_requirement_analysis="not_required", should_veto=False,
+            matched_skills=claimed, reasoning="x")
+        gateway = SimpleNamespace(
+            evaluate=lambda messages, model, job_id=None: (answer, SimpleNamespace(model="m", cache_hit=False)),
+            summary=SimpleNamespace(notes=[], errors=0))
+        ev = ranker.evaluate_with_instructor(
+            "Quantum Software Engineer", "Acme", "We use Python, CI/CD pipelines and a REST API for our qubits.",
+            "Remote", True, "{{ candidate }}{{ preferences }}", "{{ description }}", gateway=gateway)
+        self.assertEqual(ev.matched_skills, ["Python", "CI/CD", "APIs"])
+
     def test_negated_or_preferred_clearance_is_not_a_veto(self):
         for text in ("No security clearance required.", "A security clearance is not required.",
                      "We do not require a security clearance."):
