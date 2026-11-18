@@ -1,5 +1,5 @@
 ---
-framework_version: 1.4.8
+framework_version: 1.4.9
 ---
 
 # CV Templates and Tailoring Guide
@@ -75,7 +75,8 @@ Expected output: `Output written on main_<company>_<role>.pdf (2 pages, ...)`. A
 \address{[YOUR_ADDRESS]}{}{}
 \phone[mobile]{[YOUR_PHONE]}
 \email{[YOUR_EMAIL]}
-\extrainfo{\href{[YOUR_LINKEDIN_URL]}{LinkedIn}, \href{[YOUR_GITHUB_URL]}{GitHub}}
+% Print the URLs as visible text: link text alone ("LinkedIn") never reaches the ATS text layer.
+\extrainfo{\href{[YOUR_LINKEDIN_URL]}{[YOUR_LINKEDIN_URL]} \textbar{} \href{[YOUR_GITHUB_URL]}{[YOUR_GITHUB_URL]}}
 
 \begin{document}
 \makecvtitle
