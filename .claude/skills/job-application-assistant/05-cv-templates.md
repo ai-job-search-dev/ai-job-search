@@ -75,8 +75,8 @@ Expected output: `Output written on main_<company>_<role>.pdf (2 pages, ...)`. A
 \address{[YOUR_ADDRESS]}{}{}
 \phone[mobile]{[YOUR_PHONE]}
 \email{[YOUR_EMAIL]}
-% Print the URLs as visible text: link text alone ("LinkedIn") never reaches the ATS text layer.
-\extrainfo{\href{[YOUR_LINKEDIN_URL]}{[YOUR_LINKEDIN_URL]} \textbar{} \href{[YOUR_GITHUB_URL]}{[YOUR_GITHUB_URL]}}
+% Print the URLs as visible text: a hyperlink's target URL is not in the PDF text layer, so an ATS sees only the link text.
+\extrainfo{\urlstyle{same}\href{[YOUR_LINKEDIN_URL]}{\nolinkurl{[YOUR_LINKEDIN_URL]}} \textbar{} \href{[YOUR_GITHUB_URL]}{\nolinkurl{[YOUR_GITHUB_URL]}}}
 
 \begin{document}
 \makecvtitle
@@ -284,7 +284,7 @@ Extraction tries **pypdf** first (`pip install pypdf`, BSD license), then Popple
 
 What to check in the extraction:
 
-- **Contact details as literal text.** The stock template's fontawesome contact icons extract as glyph names (`MOBILE-ALT`, `Envelope`) - harmless noise, because the actual address and number are printed beside them. The failure mode is a contact detail carried *only* by an icon or a hyperlink (like the `LinkedIn` link text, whose URL is not in the text layer): invisible to an ATS. The email address must always appear as printed text.
+- **Contact details as literal text.** The stock template's fontawesome contact icons extract as glyph names (`MOBILE-ALT`, `Envelope`) - harmless noise, because the actual address and number are printed beside them. The failure mode is a contact detail carried *only* by an icon or a hyperlink (a link whose visible text is a word like `LinkedIn`: the URL lives only in the link target, which is not in the text layer): invisible to an ATS. The email address must always appear as printed text.
 - **No garbled output.** `(cid:NNN)` markers or `�` characters mean a font is embedded without a Unicode mapping - an ATS sees the same garbage. This shows up with unusual fonts in custom templates, not with the stock moderncv setup under lualatex.
 - **Reading order.** The stock banking style is single-column, so extraction order matches visual order. Custom templates (via `/add-template`) with sidebars or multi-column layouts can interleave unrelated lines; if extraction order is scrambled, the user is trading ATS compatibility for looks and should be told.
 - **Keyword coverage.** Match the posting's required/preferred terms against the extracted text, in the posting's language. Prefer the posting's exact term over a synonym when it is truthfully applicable - ATS matching is often literal. Never add a keyword the profile does not support. `verify_pdf.py --contains` folds both sides for whitespace, Unicode normalization (NFC) and LaTeX's typographic substitutions before comparing - `'` reaches the text layer as U+2019 and `--` as U+2013, so `--contains "Master's degree"` and `--contains "2016-2024"` match what the template actually renders. The dumped `.txt` is never folded: it is the raw layer the ATS sees, which is why the date-range check below reads the dump, not `--contains`.
