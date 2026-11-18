@@ -60,6 +60,43 @@ class HeuristicCalibrationTests(unittest.TestCase):
             "Remote", True, "{{ candidate }}{{ preferences }}", "{{ description }}", gateway=gateway)
         self.assertEqual(ev.matched_skills, ["Python", "CI/CD", "APIs"])
 
+    def _model_answer(self, **overrides):
+        from tools.ranker_schema import QuantumJobEvaluation
+        base = dict(overall_score=8.0, software_fit_score=8.0, quantum_fit_score=8.0, is_software_role=True,
+                    is_experimental_hardware=False, phd_requirement_analysis="not_required", should_veto=False,
+                    matched_skills=["Python"], reasoning="x")
+        base.update(overrides)
+        return QuantumJobEvaluation(**base)
+
+    def _run_with_model(self, answer, title="Quantum Software Engineer", description=GOOD_DESC):
+        from types import SimpleNamespace
+        gateway = SimpleNamespace(
+            evaluate=lambda messages, model, job_id=None: (answer, SimpleNamespace(model="m", cache_hit=False)),
+            summary=SimpleNamespace(notes=[], errors=0))
+        return ranker.evaluate_with_instructor(title, "Acme", description, "Remote", True,
+                                               "{{ candidate }}{{ preferences }}", "{{ description }}", gateway=gateway)
+
+    def test_model_score_is_averaged_with_the_keyword_score(self):
+        keyword = evaluate("Quantum Software Engineer").overall_score
+        ev = self._run_with_model(self._model_answer(overall_score=3.5))
+        self.assertAlmostEqual(ev.overall_score, round((3.5 + keyword) / 2, 1), places=1)
+        self.assertIn("Blended", ev.reasoning)
+
+    def test_a_model_veto_that_names_no_configured_rule_becomes_a_penalty(self):
+        ev = self._run_with_model(self._model_answer(should_veto=True, veto_reason="The role requires on-site work in Oxford"))
+        self.assertFalse(ev.should_veto)
+        self.assertLess(ev.overall_score, self._run_with_model(self._model_answer()).overall_score)
+
+    def test_a_model_veto_for_a_configured_rule_is_kept(self):
+        ev = self._run_with_model(self._model_answer(should_veto=True, veto_reason="Requires a security clearance"))
+        self.assertTrue(ev.should_veto)
+
+    def test_keyword_hardware_veto_applies_even_when_the_model_misses_it(self):
+        description = "Maintain the dilution refrigerator and cryostat for our qubits. Some Python scripting."
+        ev = self._run_with_model(self._model_answer(), title="Platform Engineer", description=description)
+        self.assertTrue(ev.should_veto)
+        self.assertEqual(ev.veto_reason, HARDWARE_VETO_REASON)
+
     def test_negated_or_preferred_clearance_is_not_a_veto(self):
         for text in ("No security clearance required.", "A security clearance is not required.",
                      "We do not require a security clearance."):

@@ -79,6 +79,7 @@ PHD_VETO_REASON = "VETO: Pure academic theoretical physics research without soft
 NON_ENGINEERING_VETO_REASON = "VETO: Not a software engineering role (sales, support, recruiting or operations)."
 MANAGEMENT_VETO_REASON = "VETO: Management role, not an individual-contributor engineering position."
 UNPAID_VETO_REASON = "VETO: Unpaid or volunteer position."
+FREE_TEXT_VETO_PENALTY = 1.5  # a model veto that names none of the configured rules is advice, not a rule
 NON_PHD_VETO_CAUSE = re.compile(r"on-?site|in-?person|relocat|location|hybrid|office|work[- ]?permit", re.IGNORECASE)
 
 
@@ -176,6 +177,10 @@ def normalize_evaluation(ev: QuantumJobEvaluation, prefs: Optional[CareerPrefere
         if matching and all(getattr(rules, n).mode != "veto" for n in matching):
             score -= max((getattr(rules, n).penalty for n in matching if getattr(rules, n).mode == "penalty"), default=0.0)
             vetoed, reason = False, None
+
+    if vetoed and not ev.is_experimental_hardware and not any(reason_matches(name, reason) for name in RULE_TEXT):
+        score -= FREE_TEXT_VETO_PENALTY
+        vetoed, reason = False, None
 
     updates: Dict[str, Any] = {}
     if (vetoed, reason) != (ev.should_veto, ev.veto_reason):
@@ -420,7 +425,32 @@ def evaluate_with_instructor(
         updates["overall_score"] = max(0.0, round(evaluation.overall_score - penalty, 1))
     if info is not None:
         info.update(source="llm", model=call.model, cache_hit=call.cache_hit)
-    return evaluation.model_copy(update=updates) if updates else evaluation
+    result = evaluation.model_copy(update=updates) if updates else evaluation
+    keyword = heuristic_quantum_eval(title, company, description, location, is_remote, prefs)
+    return blend_with_heuristic(result, keyword, prefs)
+
+
+def blend_with_heuristic(
+    llm_eval: QuantumJobEvaluation, keyword_eval: QuantumJobEvaluation, prefs: CareerPreferences
+) -> QuantumJobEvaluation:
+    """Average the model's score with the keyword score and apply the keyword hardware veto the model can miss.
+
+    A small local model scores in coarse steps and can rate near-identical postings very differently; the
+    keyword score is stable, so the average keeps the model's judgement without its swings.
+    """
+    if llm_eval.should_veto:
+        return llm_eval
+    if keyword_eval.should_veto and keyword_eval.veto_reason == HARDWARE_VETO_REASON and prefs.rules.hardware_lab.mode == "veto":
+        return llm_eval.model_copy(update={
+            "should_veto": True, "veto_reason": HARDWARE_VETO_REASON, "is_experimental_hardware": True,
+        })
+    if keyword_eval.should_veto:
+        return llm_eval
+    blended = round((llm_eval.overall_score + keyword_eval.overall_score) / 2, 1)
+    return llm_eval.model_copy(update={
+        "overall_score": blended,
+        "reasoning": f"{llm_eval.reasoning} [Blended: model {llm_eval.overall_score}, keywords {keyword_eval.overall_score}.]",
+    })
 
 
 def veto_metric(ev: QuantumJobEvaluation) -> str:

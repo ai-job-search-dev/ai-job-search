@@ -179,7 +179,7 @@ class LLMGateway:
             raise
 
         parsed, completion = self.client.chat.completions.create_with_completion(
-            model=self.model, response_model=response_model, messages=messages, temperature=0.1, max_retries=2,
+            model=self.model, response_model=response_model, messages=messages, temperature=0.0, seed=7, max_retries=2,
         )
         usage = getattr(completion, "usage", None)
         prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
