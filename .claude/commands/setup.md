@@ -277,7 +277,7 @@ Ask about:
 - Location (city, country)
 - Phone, email, LinkedIn, GitHub
 - What languages they work in professionally, and roughly what level in each (native, fluent, conversational, a CEFR letter like B2 - whatever's natural for them to describe, doesn't need to be precise). Worth explaining why: a posting requiring a language they don't list at all gets auto-excluded later by the Language Gate, while one asking for a higher level in a language they do list gets flagged for their own judgment instead of silently passed or rejected - so it's worth being honest here rather than optimistic.
-- Work authorization in the country (or countries) they are applying in: citizen or permanent resident, or holding a permit or visa (which type, and any expiry or start date). Then ask the question application forms ask: "Will you now or in the future require visa sponsorship?" Record the answer as written, for example "Citizen, no sponsorship needed" or "Requires visa sponsorship now or in the future". Worth explaining why: the Eligibility Gate in `04-job-evaluation.md` reads this to drop postings that require citizenship or refuse sponsorship before any scoring or drafting, and to flag postings that are silent on it. If a permit also limits *hours* or *start date*, record those dates too; the gate keeps them as a separate check.
+- Work authorization in the country (or countries) they are applying in: citizen or permanent resident, or holding a permit or visa (which type, and any expiry or start date). Then ask the question application forms ask: "Will you now or in the future require visa sponsorship?" Record the answer as written, for example "Citizen, no sponsorship needed" or "Requires visa sponsorship now or in the future". If they apply in more than one country, record one entry per country (for example "Country A: citizen, no sponsorship needed; Country B: requires visa sponsorship"), since the gate checks the status for the posting's country. Worth explaining why: the Eligibility Gate in `04-job-evaluation.md` reads this to drop postings that require citizenship or refuse sponsorship before any scoring or drafting, and to flag postings that are silent on it. If a permit also limits *hours* or *start date*, record those dates too; Step 3 item 4 writes them into `04-job-evaluation.md` as a second gate.
 - Current employment status
 - Family/commute constraints (if any)
 
@@ -369,6 +369,8 @@ Replace all `[PLACEHOLDER]` tokens with the user's actual information. Keep the 
 ### 2. Populate `01-candidate-profile.md` *(Path B and C; skip if Path A populated it)*
 Write the full candidate profile with structured sections: Identity (including Languages, with levels, and Work authorization), Education, Professional Experience, Independent Projects, Technical Skills, Publications, Awards, References.
 
+Whichever path ran, check the **Work authorization** line: Path A asks for it as a Step A7 follow-up, after its file writes, so if the line still holds `[YOUR_WORK_AUTHORIZATION]`, replace it with the answer. The Eligibility Gate reads it.
+
 ### 3. Populate `02-behavioral-profile.md` *(Path B and C; skip if Path A populated it)*
 Write the behavioral profile based on assessment results or synthesized answers.
 
@@ -379,6 +381,8 @@ Replace skill match areas with the user's actual skills:
 - Weak match areas: [skills they lack]
 
 Update career goals and motivation filters with their actual preferences.
+
+Whichever path ran, if the candidate's permit limits *hours* or *start date*, add a second gate under the Eligibility Gate section with the specific limits and dates, kept separate from the eligibility question.
 
 ### 5. Update `05-cv-templates.md` *(Path B and C; skip if Path A populated it)*
 Add role-specific profile statement templates based on their background, and personalise the contact block inside the file's LaTeX template: replace `[FIRST_NAME]`, `[LAST_NAME]`, `[YOUR_ADDRESS]`, `[YOUR_PHONE]`, `[YOUR_EMAIL]`, `[YOUR_LINKEDIN_URL]` and `[YOUR_GITHUB_URL]` (and `[YOUR_NAME]` in the PDF title) with their actual details. Check this block whichever path ran - Path A extracts profile statements from documents, not the contact block. `/apply` builds every tailored CV from this template, so a placeholder left here reaches a compiled document.

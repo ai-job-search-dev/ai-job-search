@@ -8,6 +8,9 @@ framework_version: 1.2.0
 <!-- After running /setup, all sections will be filled with your actual information -->
 
 ## Identity
+<!-- Work authorization: your status in each country you apply in, and your answer to "Will you
+now or in the future require visa sponsorship?". One entry per country if you apply in more than
+one. Read by the Eligibility Gate in 04-job-evaluation.md. -->
 - **Name:** [YOUR_NAME]
 - **Location:** [YOUR_ADDRESS]
 - **Phone:** [YOUR_PHONE]
@@ -15,7 +18,7 @@ framework_version: 1.2.0
 - **LinkedIn:** [YOUR_LINKEDIN_URL]
 - **GitHub:** [YOUR_GITHUB_URL]
 - **Status:** [YOUR_EMPLOYMENT_STATUS]
-- **Work authorization:** [YOUR_WORK_AUTHORIZATION] <!-- e.g. "Citizen, no sponsorship needed" or "Requires visa sponsorship now or in the future"; read by the Eligibility Gate in 04-job-evaluation.md -->
+- **Work authorization:** [YOUR_WORK_AUTHORIZATION]
 - **Constraints:** [YOUR_COMMUTE_OR_LOCATION_CONSTRAINTS]
 
 ### Languages
