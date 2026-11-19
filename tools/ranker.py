@@ -347,6 +347,12 @@ def heuristic_quantum_eval(
     else:
         weight = prefs.scoring.domain_weight
         base = software_score * (1.0 - weight) + quantum_score * weight
+        for track in prefs.scoring.tracks:
+            terms = [k.lower() for k in track.keywords]
+            hits = sum(1 for kw in terms if keyword_in(desc_lower, kw))
+            in_title = any(keyword_in(title_lower, kw) for kw in terms)
+            track_score = saturate(hits + (1.5 if in_title else 0.0), 3.0)
+            base = max(base, software_score * (1.0 - track.weight) + track_score * track.weight)
         if phd_analysis == "generic_hr_boilerplate":
             base += 0.5
         if is_remote:

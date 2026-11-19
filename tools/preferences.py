@@ -220,6 +220,11 @@ def describe_preferences(prefs: CareerPreferences) -> str:
             f"Target field: {', '.join(prefs.scoring.domain_keywords)}. Field fit accounts for "
             f"{round(prefs.scoring.domain_weight * 100)}% of the score and engineering skills for the rest."
         )
+    for track in prefs.scoring.tracks:
+        lines.append(
+            f"Also a target: {track.name} ({', '.join(track.keywords)}). A posting that fits this track well scores like a "
+            f"field match; use the better of the two fits."
+        )
     lines.append("Screening rules:")
     for name, (label, _) in RULE_TEXT.items():
         setting: RuleSetting = getattr(prefs.rules, name)

@@ -144,6 +144,14 @@ class SeniorityPreferences(BaseModel):
     staff_penalty: float = Field(2.0, ge=0.0, le=10.0)
 
 
+class ScoringTrack(BaseModel):
+    """An additional target field. A posting is scored on the best-fitting track."""
+
+    name: str
+    keywords: List[str]
+    weight: float = Field(0.4, ge=0.0, le=1.0, description="Share of the score from fit with this track")
+
+
 class ScoringPreferences(BaseModel):
     """What counts as a good fit. Leave the keyword lists unset to use the built-in quantum-software defaults."""
 
@@ -155,6 +163,7 @@ class ScoringPreferences(BaseModel):
         0.5, ge=0.0, le=1.0, description="Share of the score from field fit. 0 scores on engineering skills alone"
     )
     remote_bonus: float = Field(0.5, ge=0.0, le=5.0)
+    tracks: List[ScoringTrack] = Field(default_factory=list, description="Other target fields, for example frontend TypeScript work")
 
 
 class CareerPreferences(BaseModel):
