@@ -167,6 +167,9 @@ def build_cv(
         names = sorted(names, key=lambda n: n.casefold() not in matched_keys)
         ordered_groups.append((category, names))
     ordered_groups.sort(key=lambda g: (-title_boost(g[0], job_title), -sum(1 for n in g[1] if n.casefold() in matched_keys)))
+    focus = ordered_groups[0][0] if ordered_groups and (
+        title_boost(ordered_groups[0][0], job_title) or any(n.casefold() in matched_keys for n in ordered_groups[0][1])
+    ) else "default"
 
     experience = []
     for exp in profile.experience:
@@ -206,13 +209,13 @@ def build_cv(
     ident = profile.identity
     return TailoredCV(
         name=ident.name,
-        title=ident.title,
+        title=profile.headlines.get(focus) or profile.headlines.get("default") or ident.title,
         email=ident.email,
         phone=ident.phone or "",
         location=ident.location,
         linkedin=ident.linkedin or "",
         github=ident.github or "",
-        summary=profile.summary,
+        summary=profile.summary_variants.get(focus) or profile.summary,
         skill_groups=ordered_groups,
         experience=experience,
         projects=projects,

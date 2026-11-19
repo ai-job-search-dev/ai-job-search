@@ -203,6 +203,8 @@ class MasterProfile(BaseModel):
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     identity: CandidateIdentity
     summary: str
+    headlines: Dict[str, str] = Field(default_factory=dict, description="CV headline per skill category; 'default' is the fallback")
+    summary_variants: Dict[str, str] = Field(default_factory=dict, description="Approved summary per skill category; 'default' is `summary`")
     education: List[EducationEntry] = Field(default_factory=list)
     experience: List[WorkExperienceEntry] = Field(default_factory=list)
     projects: List[ProjectEntry] = Field(default_factory=list)
@@ -238,6 +240,7 @@ class MasterProfile(BaseModel):
             *(s for exp in self.experience for s in exp.skills_used),
             *(p.description for p in self.projects),
             *(t for p in self.projects for t in p.technologies),
+            *(t for e in self.education for t in e.key_topics),
         ]).lower()
 
         for skill in self.skills:

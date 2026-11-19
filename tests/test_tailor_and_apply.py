@@ -103,6 +103,19 @@ class TailorContentTests(unittest.TestCase):
         self.assertEqual(quantum.skill_groups[0][0], "Quantum Computing")
         self.assertEqual(ui.education[0]["period"], "2025-03 - Present")
 
+    def test_headline_and_summary_follow_the_job_and_fall_back_to_the_defaults(self):
+        from tools.profile_schema import SkillItem
+        profile = make_profile()
+        profile.skills += [SkillItem(name="Angular", category="Frontend & UI")]
+        profile.headlines = {"default": "Software Engineer", "Quantum Computing": "Software Engineer | Quantum", "Frontend & UI": "Frontend Engineer"}
+        profile.summary_variants = {"Quantum Computing": "Quantum-first summary."}
+        quantum = tailor.build_cv(profile, ["Qiskit"], job_title="Quantum Software Engineer")
+        ui = tailor.build_cv(profile, ["Angular"], job_title="Front End Developer")
+        other = tailor.build_cv(profile, [], job_title="Office Assistant")
+        self.assertEqual((quantum.title, quantum.summary), ("Software Engineer | Quantum", "Quantum-first summary."))
+        self.assertEqual((ui.title, ui.summary), ("Frontend Engineer", profile.summary))
+        self.assertEqual((other.title, other.summary), ("Software Engineer", profile.summary))
+
     def test_cover_letter_does_not_advertise_gaps_or_repeat_the_summary(self):
         profile = make_profile()
         cv = tailor.build_cv(profile, ["Python"])
