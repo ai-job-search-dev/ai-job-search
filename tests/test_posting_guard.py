@@ -17,6 +17,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -562,7 +563,7 @@ class Urls(GuardFixture):
         self.assertIn("1 hidden block and 3 hidden URLs removed", first)
 
     def test_hidden_attribute_entity_decoding(self):
-        html = "<div hidden><a href=\"https://tracker.evil.example/beacon?a=1&amp;b=2\">Portal</a></div>"
+        html = "<p>Apply.</p><div hidden><a href=\"https://tracker.evil.example/beacon?a=1&amp;b=2\">Portal</a></div>"
         code, out, err = self.run_main("--html", "--json", stdin_text=html)
         self.assertEqual(code, 0, err)
         f = self.findings_of(out)
@@ -985,6 +986,36 @@ class EmptyInputTests(GuardFixture):
         self.assertEqual(code, 1, err)
         self.assertFalse(out_file.exists())
         self.assertNotIn("saved=", out)
+
+    def test_html_shell_with_benign_hidden_block_is_refused(self):
+        shell2 = self.write(
+            "shell2.html",
+            '<html><body><div id="root"></div><div style="display:none">Loading</div><script>var a=1</script></body></html>',
+        )
+        code, out, err = self.run_main("--in", str(shell2), "--html", "--json")
+        self.assertEqual(code, 1, err)
+        self.assertTrue(out.startswith(posting_guard.NO_TEXT_VERDICT), out.splitlines()[0])
+        self.assertEqual(self.text_of(out).strip(), "")
+        f = self.findings_of(out)
+        self.assertEqual(f["hidden_blocks"], ["Loading"])
+        self.assertEqual(f["verdict"], posting_guard.NO_TEXT_VERDICT)
+
+    def test_refused_run_removes_existing_out_file(self):
+        out_file = self.tmp / "out.txt"
+        out_file.write_text("OLD POSTING TEXT\n", encoding="utf-8")
+        empty_file = self.write("empty.html", "")
+        code, out, err = self.run_main("--in", str(empty_file), "--text", "--out", str(out_file))
+        self.assertEqual(code, 1, err)
+        self.assertFalse(out_file.exists())
+        self.assertNotIn("saved=", out)
+
+    def test_refused_run_reports_error_when_out_cannot_be_removed(self):
+        out_file = self.tmp / "out.txt"
+        empty_file = self.write("empty.html", "")
+        with patch.object(Path, "unlink", side_effect=OSError("Permission denied")):
+            code, out, err = self.run_main("--in", str(empty_file), "--text", "--out", str(out_file))
+        self.assertEqual(code, 2)
+        self.assertIn("cannot remove output: Permission denied", err)
 
 
 if __name__ == "__main__":

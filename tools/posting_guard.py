@@ -510,7 +510,7 @@ def guard(raw: str, mode: str):
     hidden_text = "\n".join([hidden_text, *tf["invisible_text"]])
     findings = {"hidden_blocks": hidden_blocks, **tf, **scan(text, hidden_text)}
     verdict_line = verdict(findings)
-    if not text and verdict_line == "posting_guard: clean":
+    if not text and not verdict_line.startswith("posting_guard: ⚠"):
         findings["verdict"] = NO_TEXT_VERDICT
     else:
         findings["verdict"] = verdict_line
@@ -588,6 +588,12 @@ def main(argv=None) -> int:
             args.out.parent.mkdir(parents=True, exist_ok=True)
             args.out.write_text(cleaned + "\n", encoding="utf-8")
             print(f"saved={args.out}")
+        else:
+            try:
+                args.out.unlink(missing_ok=True)
+            except OSError as exc:
+                print(f"posting_guard: cannot remove output: {exc}", file=sys.stderr)
+                return 2
     else:
         print("--- text ---")
         print(cleaned)
