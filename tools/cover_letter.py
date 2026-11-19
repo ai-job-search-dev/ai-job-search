@@ -88,8 +88,8 @@ def choose_evidence(profile: MasterProfile, matched: Sequence[str], title: str =
     if not ranked:
         return []
     chosen = [ranked[0]]
-    others = [i for i in ranked[1:] if i.kind != ranked[0].kind]
-    rest = [i for i in ranked[1:] if i.kind == ranked[0].kind]
+    others = [i for i in ranked[1:] if i.kind != ranked[0].kind and _score(i, matched, title) > 0]
+    rest = [i for i in ranked[1:] if i not in others]
     for item in others + rest:
         if len(chosen) == MAX_EVIDENCE:
             break
