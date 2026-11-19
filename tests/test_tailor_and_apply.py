@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from tools import browser_apply, cover_letter, tailor
@@ -457,7 +458,7 @@ class FieldClassificationTests(unittest.TestCase):
         for forbidden in (".press(", ".dispatch_event(", ".check(", "requestSubmit", ".submit(", ".tap(", "keyboard."):
             self.assertNotIn(forbidden, code)
         clickers = {name for name, fn in inspect.getmembers(browser_apply, inspect.isfunction) if ".click(" in inspect.getsource(fn)}
-        self.assertEqual(clickers, {"_open_combo", "_click_option"})
+        self.assertEqual(clickers, {"_open_combo", "_click_option", "_click_submit"})
         self.assertIn("role=\"option\"", inspect.getsource(browser_apply._click_option) + browser_apply.OPTION_SELECTOR)
 
     def test_education_and_country_fields_are_filled_but_sensitive_questions_never(self):
@@ -636,6 +637,117 @@ class RunApplyTests(unittest.TestCase):
         out = browser_apply.run_apply(other, db_path=self.db, profile_path=self.profile_path,
                                       input_fn=lambda _: "applied", page_factory=self.factory)
         self.assertEqual(out, "blocked")
+
+    def _submit_page(self, content="<html>Thank you for applying</html>", fields=None):
+        page = self.page
+        page.fields = fields if fields is not None else page.fields
+        page.submitted = 0
+        page.content = lambda: content
+        page.url = "https://job-boards.greenhouse.io/embed/job_app?for=acme"
+        page.get_by_role = lambda role, name=None: SimpleNamespace(click=lambda: setattr(page, "submitted", page.submitted + 1))
+        page.screenshot = lambda path=None: None
+        return page
+
+    def _run_submit(self, **kw):
+        review = {"verdict": "send", "checks": [], "model": None}
+        return browser_apply.run_apply(
+            self.job_id, db_path=self.db, profile_path=self.profile_path, input_fn=lambda _: "skip", page_factory=self.factory,
+            preflight_fn=lambda *a, **k: review, **kw)
+
+    def test_nothing_is_submitted_without_the_flag_or_the_exact_company_name(self):
+        page = self._submit_page()
+        self.assertEqual(self._run_submit(), "pending")
+        self.assertEqual(self._run_submit(submit=True, confirm_company="Wrong Co"), "pending")
+        self.assertEqual(page.submitted, 0)
+        self.assertEqual(self._status(), STATUS_READY_TO_APPLY)
+
+    def test_submit_goes_through_only_when_every_gate_passes_and_is_recorded_on_confirmation(self):
+        page = self._submit_page()
+        self.assertEqual(self._run_submit(submit=True, confirm_company="acme quantum"), "applied")
+        self.assertEqual(page.submitted, 1)
+        self.assertEqual(self._status(), STATUS_APPLIED)
+
+    def test_required_fields_nobody_filled_block_the_submit(self):
+        page = self._submit_page(fields=[
+            {"index": 0, "tag": "input", "type": "text", "descriptor": "First name", "value": "", "required": True},
+            {"index": 1, "tag": "input", "type": "file", "descriptor": "Resume", "value": "", "required": True},
+            {"index": 2, "tag": "input", "type": "checkbox", "descriptor": "I consent to the background check*", "value": "", "required": True},
+        ])
+        self.assertEqual(self._run_submit(submit=True, confirm_company="Acme Quantum"), "pending")
+        self.assertEqual(page.submitted, 0)
+
+    def test_failed_preflight_checks_and_hold_block_the_submit_but_model_fix_needs_an_explicit_flag(self):
+        page = self._submit_page()
+        gates = browser_apply.submission_gates
+        fields = page.fields
+        ok = {"verdict": "send", "checks": [], "model": None}
+        self.assertEqual(gates("Acme", "Acme", fields, [], ok, True), [])
+        self.assertTrue(gates("Acme", "Acme", fields, [], {"verdict": "fix", "checks": ["ELIGIBILITY: tied to Canada"], "model": None}, True))
+        self.assertTrue(gates("Acme", "Acme", fields, [], {"verdict": "hold", "checks": [], "model": {"fit": "weak"}}, True))
+        fix = {"verdict": "fix", "checks": [], "model": {"fit": "fair"}}
+        self.assertTrue(gates("Acme", "Acme", fields, [], fix, True))
+        self.assertEqual(gates("Acme", "Acme", fields, [], fix, True, allow_model_fix=True), [])
+        self.assertTrue(gates("Acme", "Acme", fields, [], None, True))
+
+    def test_a_submit_without_a_confirmation_page_leaves_the_job_pending(self):
+        page = self._submit_page(content="<html>Please complete this field. This field is required</html>")
+        page.url = "https://job-boards.greenhouse.io/embed/job_app?for=acme"
+        self.assertEqual(self._run_submit(submit=True, confirm_company="Acme Quantum"), "pending")
+        self.assertEqual(page.submitted, 1)
+        self.assertEqual(self._status(), STATUS_READY_TO_APPLY)
+
+    def test_check_only_sends_nothing_and_approved_answers_are_the_only_way_a_sensitive_question_is_filled(self):
+        from tools.profile_schema import FormAnswer
+        fields = [{"index": 0, "tag": "input", "type": "text", "descriptor": "Will you require visa sponsorship?", "value": "", "role": "combobox"}]
+        fills, left = browser_apply.plan_fills(fields, {}, None, None, [FormAnswer(pattern="visa sponsorship", answer="No", approved=False)])
+        self.assertEqual((fills, len(left)), ([], 1))
+        fills, left = browser_apply.plan_fills(fields, {}, None, None, [FormAnswer(pattern="visa sponsorship", answer="No", approved=True)])
+        self.assertEqual((fills[0]["kind"], fills[0]["value"], left), ("combo", "No", []))
+        page = self._submit_page()
+        self.assertEqual(self._run_submit(check_only=True, submit=False), "pending")
+        self.assertEqual(page.submitted, 0)
+
+    def test_drafts_cover_free_text_questions_only_and_are_inert_until_approved(self):
+        import tempfile as _tf
+        from types import SimpleNamespace as NS
+        from tools import answer_drafts as ad
+        fields = [
+            {"index": 0, "tag": "textarea", "type": "textarea", "descriptor": "Tell us about your experience working in an async and remote environment", "value": "", "required": True},
+            {"index": 1, "tag": "input", "type": "text", "descriptor": "During this application process I agree to use only my own words. I understand that", "value": ""},
+            {"index": 2, "tag": "input", "type": "text", "descriptor": "Will you now or in the future require sponsorship for a visa to work?", "value": ""},
+            {"index": 3, "tag": "input", "type": "text", "descriptor": "Name", "value": ""},
+            {"index": 4, "tag": "input", "type": "text", "descriptor": "Describe your experience with TypeScript in production?", "value": "", "role": "combobox"},
+        ]
+        asked = ad.free_text_questions(fields, [])
+        self.assertEqual([q["index"] for q in asked], [0])
+        with _tf.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            reply = ad.AnswerDraft(answer="At Globant I work in agile teams on enterprise Angular applications.")
+            gateway = NS(evaluate=lambda messages, model, job_id=None: (reply, None))
+            job = {"job_id": 1, "title": "Engineer", "company": "Acme", "description": "Remote first."}
+            draft = ad.draft_answer(gateway, make_profile(), job, asked[0]["question"])
+            ad.write_drafts(folder, [draft])
+            ad.write_drafts(folder, [draft])
+            loaded = ad.load_job_answers(folder)
+            self.assertEqual(len(loaded), 1)
+            self.assertFalse(loaded[0].approved)
+            fills, left = browser_apply.plan_fills(fields[:1], {}, None, None, loaded)
+            self.assertEqual((fills, len(left)), ([], 1))
+            approved = [loaded[0].model_copy(update={"approved": True})]
+            fills, _ = browser_apply.plan_fills(fields[:1], {}, None, None, approved)
+            self.assertEqual((fills[0]["kind"], fills[0]["value"][:10]), ("text", "At Globant"))
+            failing = NS(evaluate=lambda messages, model, job_id=None: (_ for _ in ()).throw(RuntimeError("down")))
+            self.assertEqual(ad.draft_answer(failing, make_profile(), job, "Why do you want this role at all?")["answer"], ad.NEEDS_HUMAN)
+
+    def test_a_failed_model_review_blocks_the_submit_unless_allowed(self):
+        gates = browser_apply.submission_gates
+        broken = {"verdict": "send", "checks": [], "model": {"error": "validation failed"}}
+        self.assertTrue(gates("Acme", "Acme", [], [], broken, True))
+        self.assertEqual(gates("Acme", "Acme", [], [], broken, True, allow_model_fix=True), [])
+
+    def test_country_of_residence_is_recognised_despite_a_long_placeholder(self):
+        key = browser_apply.classify_field("Country of Residence Type here... _systemfield_country", "input", "text")
+        self.assertEqual(key, "country")
 
     def test_record_applied_after_a_manual_submit_starts_the_cooldown_once(self):
         self.assertEqual(browser_apply.record_applied(self.job_id, db_path=self.db), "applied")

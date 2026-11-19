@@ -206,6 +206,15 @@ class CandidateIdentity(BaseModel):
     languages: List[LanguageSkill] = Field(default_factory=list)
 
 
+class FormAnswer(BaseModel):
+    """An answer you wrote for a recurring form question. Only entries you set `approved: true` are ever typed."""
+
+    pattern: str = Field(..., description="Case-insensitive regex matched against the field's label")
+    answer: str
+    approved: bool = False
+    note: Optional[str] = None
+
+
 class MasterProfile(BaseModel):
     """Canonical Master Profile for the candidate."""
     version: str = "2.0.0"
@@ -213,6 +222,7 @@ class MasterProfile(BaseModel):
     identity: CandidateIdentity
     summary: str
     headlines: Dict[str, str] = Field(default_factory=dict, description="CV headline per skill category; 'default' is the fallback")
+    form_answers: List[FormAnswer] = Field(default_factory=list, description="Answers to recurring form questions, used only when approved")
     summary_variants: Dict[str, str] = Field(default_factory=dict, description="Approved summary per skill category; 'default' is `summary`")
     education: List[EducationEntry] = Field(default_factory=list)
     experience: List[WorkExperienceEntry] = Field(default_factory=list)

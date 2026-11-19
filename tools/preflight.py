@@ -188,12 +188,19 @@ def run_preflight(
                                     location=job.get("location") or "", is_remote=job.get("is_remote"), left=left)
     review: Optional[Dict[str, Any]] = None
     if gateway is not None:
-        messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": build_context(job, profile, cv, letter, fills, left)}]
-        try:
-            review = gateway.evaluate(messages, PreflightReview, job_id=job.get("job_id"))[0].model_dump()
-            review = clean_review(review, has_form=bool(fills or left), left=left)
-        except Exception as exc:
-            review = {"error": str(exc)[:200]}
+        review = None
+        for degraded, (f, l) in enumerate(((fills, left), ((), ()))):
+            messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": build_context(job, profile, cv, letter, f, l)}]
+            try:
+                review = gateway.evaluate(messages, PreflightReview, job_id=job.get("job_id"))[0].model_dump()
+                review = clean_review(review, has_form=bool(f or l), left=l)
+                if degraded:
+                    review["degraded"] = "the model could not read the form context, so it reviewed the documents only"
+                break
+            except Exception as exc:
+                review = {"error": str(exc)[:200]}
+            if not (fills or left):
+                break
     verdict = "fix" if problems else "send"
     if review and "error" not in review:
         worse = model_verdict(review)
@@ -207,6 +214,8 @@ def render_preflight(result: Dict[str, Any]) -> str:
         lines.append(f"    check:  {p}")
     model = result.get("model")
     if model and "error" not in model:
+        if model.get("degraded"):
+            lines.append(f"    note:   {model['degraded']}")
         lines.append(f"    model:  fit {model['fit']}. {model['summary']}")
         lines.append(f"    reads like a person: {'yes' if model['reads_like_a_person'] else 'NO'}")
         for key in ("document_issues", "form_issues", "unsupported_claims"):

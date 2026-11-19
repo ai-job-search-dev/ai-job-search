@@ -89,6 +89,18 @@ Start every new session with `pipeline.py status`, and run `--dry-run` before an
 
 **Changing screening rules.** Edit only the `preferences:` block of `profile/master_profile.yaml`; see `config/PREFERENCES.md` for every key. Rules are `veto`, `penalty` or `off`. Then run `pipeline.py run --skip-ingest --refresh-stale`.
 
+## Automated submission
+
+`browser_apply.py --submit --confirm-company "<exact company name>"` clicks Submit for that one application, and only when every gate passes:
+
+- the name typed matches the company exactly;
+- a form was recognised and no required field is empty (consent boxes and questions without an approved answer count as empty);
+- the pre-flight has no failed exact checks (eligibility included), no HOLD, and the model review either passed or was waived with `--allow-model-fix` after the user read it.
+
+Otherwise it falls back to the checkpoint. After clicking it waits for a confirmation page; only then is the job recorded as APPLIED, with a `submitted.png` screenshot. Without a confirmation the job stays READY_TO_APPLY and the user checks the window.
+
+Free-text questions are answered only from approved answers: the profile's `form_answers` (recurring questions, such as country of residence or sponsorship) and the application's own `answers.yaml`. `--draft-answers` asks the model to draft `answers.yaml` from the verified profile, with `approved: false` and a CHECK note naming tools or stock phrases the profile does not support. Never set `approved: true` on the user's behalf. Declarations ("use only my own words", consent, privacy, background checks), demographics, visa and salary are never drafted. CAPTCHAs block submission until the user solves them.
+
 ## Pre-flight review
 
 Before the human checkpoint, `browser_apply.py` runs a pre-flight on that exact application and prints it with the form summary; `tailor` runs the document part when it builds the packet. Exact checks run in code: the letter names the right company and role, no other company, word count, placeholders, resemblance to the letters of other jobs, and form values that are not in the profile. If a model is configured, it also reads a compact context: the role and what the posting asks for, the verified candidate facts, the CV and letter being sent, the form values being typed and the fields left for the human. It judges fit, whether the documents read like a person wrote them for this role, and unsupported claims. The result is advice and never blocks; it is saved as `preflight.json` beside the documents. A small local model pads its answers, so read the verdict as a prompt to look, not as a ruling.

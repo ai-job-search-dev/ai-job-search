@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Human-in-the-loop application assistant (Playwright).
+"""Application assistant (Playwright): pre-fills the form, reviews it, and stops before Submit unless told otherwise.
 
-Opens a READY_TO_APPLY job in a dedicated, headed Chrome profile, pre-fills the plain
-identity fields and uploads the tailored CV, then STOPS. The candidate reviews the form
-and clicks Submit personally; only then does typing `applied` at the prompt record the
-application and start the 30-day company cooldown.
+Opens a READY_TO_APPLY job in a dedicated, headed Chrome profile, pre-fills identity, location and education
+fields (dropdowns included, when exactly one option clearly matches), uploads the tailored CV and cover letter,
+and answers recurring questions only with answers you wrote and approved in the profile (`form_answers`).
+It then prints a pre-flight review and stops at a checkpoint: you review the form and click Submit yourself.
 
-It also fills country, city, school, degree, discipline and graduation date from the profile, including
-dropdowns: it types into the dropdown and clicks an option only when exactly one option clearly matches, and
-leaves the field empty otherwise. The only clicks are on dropdown inputs and their options. It never clicks
-Submit or any button, never presses keys, never solves CAPTCHAs, and never answers visa, authorization,
-sponsorship, relocation, salary, referral, demographic or free-text questions; those stay for the human.
+`--submit --confirm-company "<exact name>"` lets the tool click Submit for that one application, and only when
+every gate passes: the company name you typed matches, nothing required is left empty (consent boxes and
+questions without an approved answer count), the pre-flight has no failed checks and no HOLD, and a form was
+recognised. Otherwise it falls back to the checkpoint. It never solves CAPTCHAs, never answers a question
+without an approved answer, never presses keys, and its only clicks are on dropdown inputs, dropdown options
+and the Submit button. `--check` reports whether auto-submit would be allowed and sends nothing.
 """
 
 from __future__ import annotations
@@ -61,6 +62,7 @@ FIELD_PATTERNS: List[Tuple[str, "re.Pattern[str]"]] = [
     ("location", re.compile(r"\bcity\b|\blocation\b|where.*(?:based|located)|current[\s_-]*location", re.I)),
 ]
 # Fields that depend on a short, plain label; a long question that merely mentions a country or a degree is never one.
+REUSABLE_KEYS = {"country"}  # forms ask for it twice: phone country code and country of residence
 NARROW_KEYS = {"country", "school", "degree", "discipline", "end_month", "end_year"}
 MAX_NARROW_CHARS = 45
 # Questions this tool must never answer, whatever else the label contains.
@@ -117,6 +119,7 @@ COLLECT_FIELDS_JS = """
       descriptor: labelFor(el),
       value: el.value || '',
       role: el.getAttribute('role') || '',
+      required: !!(el.required || el.getAttribute('aria-required') === 'true'),
       options: el.tagName.toLowerCase() === 'select' ? Array.from(el.options).map(o => o.text.trim()) : [],
     });
   });
@@ -302,7 +305,8 @@ def combo_queries(key: str, value: str) -> List[str]:
 
 def short_label(descriptor: str, limit: int = 80) -> str:
     """A form field's own label without the duplicated words, ids and autocomplete hints that labelFor() appends."""
-    words = ID_NOISE.sub(" ", descriptor or "").replace("*", " ").split()
+    text = re.sub(r"\btype here\.*|\bselect\.\.\.|_systemfield_\w+", " ", ID_NOISE.sub(" ", descriptor or ""), flags=re.I)
+    words = text.replace("*", " ").split()
     for size in range(1, len(words) // 2 + 1):
         if [w.casefold() for w in words[:size]] == [w.casefold() for w in words[size:2 * size]]:
             return " ".join(words[:size])[:limit]
@@ -314,8 +318,13 @@ def plan_fills(
     answers: Dict[str, str],
     cv_path: Optional[str],
     cover_letter_path: Optional[str],
+    form_answers: Sequence[Any] = (),
 ) -> Tuple[List[Dict[str, Any]], List[str]]:
-    """Decide what to fill. Returns (fills, labels left for the human)."""
+    """Decide what to fill. Returns (fills, labels left for the human).
+
+    `form_answers` are answers you wrote and approved for recurring questions; they are the only way a visa,
+    authorization or similar question is ever answered by this tool.
+    """
     fills: List[Dict[str, Any]] = []
     left: List[str] = []
     used: set = set()
@@ -324,6 +333,19 @@ def plan_fills(
         if f.get("type") != "file" and not (f.get("descriptor") or "").strip():
             continue  # unlabeled helper inputs that sit behind a styled dropdown
         label = short_label(f.get("descriptor") or "") or f.get("type") or f.get("tag") or "field"
+        approved = next((a for a in form_answers if getattr(a, "approved", False) and re.search(a.pattern, f.get("descriptor") or "", re.I)), None)
+        if approved is not None and f.get("type") not in ("file", "checkbox", "radio") and not f.get("value") and ("answer", approved.pattern) not in used:
+            if f.get("tag") == "select":
+                choice = pick_option(f.get("options") or [], "answer", approved.answer)
+                if choice is not None:
+                    used.add(("answer", approved.pattern))
+                    fills.append({"index": f["index"], "kind": "select", "key": "answer", "label": label, "value": f["options"][choice]})
+                    continue
+            else:
+                used.add(("answer", approved.pattern))
+                kind = "combo" if f.get("role") == "combobox" else "text"
+                fills.append({"index": f["index"], "kind": kind, "key": "answer", "label": label, "value": approved.answer})
+                continue
         key = classify_field(f.get("descriptor", ""), f.get("tag", "input"), f.get("type", "text"))
         if f.get("type") == "file":
             path = files.get(key or "")
@@ -344,7 +366,7 @@ def plan_fills(
             continue
         if f.get("value"):
             continue
-        if key and key in answers and key not in used:
+        if key and key in answers and (key not in used or key in REUSABLE_KEYS):
             used.add(key)
             if f.get("role") == "combobox":
                 fills.append({"index": f["index"], "kind": "combo", "key": key, "label": label, "value": answers[key]})
@@ -429,6 +451,67 @@ def apply_fills(page: Any, fills: List[Dict[str, Any]]) -> int:
         except Exception as exc:
             logger.warning(f"Could not fill {fill['key']}: {exc}")
     return done
+SUBMIT_NAME = re.compile(r"^\s*submit(?:\s+application)?\s*$", re.I)
+CONFIRMED = re.compile(r"thank you for (?:applying|your application|submitting)|application (?:has been )?(?:submitted|received)|we(?:'|\u2019)?ve received your application", re.I)
+REJECTED = re.compile(r"this field is required|please (?:fix|correct|complete)|is required|invalid", re.I)
+
+
+def required_missing(fields: Sequence[Dict[str, Any]], fills: Sequence[Dict[str, Any]]) -> List[str]:
+    """Labels of required fields that nothing filled. Consent checkboxes count: only a person can tick them."""
+    done = {f["index"] for f in fills if f.get("done")}
+    missing: List[str] = []
+    for f in fields:
+        if not f.get("required") or f.get("index") in done or f.get("value") or not (f.get("descriptor") or "").strip():
+            continue
+        label = short_label(f["descriptor"])
+        if label not in missing:
+            missing.append(label)
+    return missing
+
+
+def submission_gates(
+    company: str, confirm_company: str, fields: Sequence[Dict[str, Any]], fills: Sequence[Dict[str, Any]],
+    preflight: Optional[Dict[str, Any]], recognised: bool, allow_model_fix: bool = False,
+) -> List[str]:
+    """Reasons this application may not be submitted by the tool. An empty list means every gate passed."""
+    reasons: List[str] = []
+    if (confirm_company or "").strip().casefold() != company.strip().casefold():
+        reasons.append(f"--confirm-company must be exactly '{company}'")
+    if not recognised:
+        reasons.append("no application form was recognised on the page")
+    missing = required_missing(fields, fills)
+    if missing:
+        reasons.append("required fields nobody filled: " + "; ".join(missing[:6]))
+    if preflight is None:
+        reasons.append("the pre-flight review did not run")
+    else:
+        if preflight.get("checks"):
+            reasons.append("pre-flight checks failed: " + " | ".join(preflight["checks"][:3]))
+        verdict = (preflight.get("model") or {}) if isinstance(preflight.get("model"), dict) else {}
+        if verdict and "error" in verdict and not allow_model_fix:
+            reasons.append("the model review failed to run (use --allow-model-fix to proceed on the exact checks alone)")
+        if preflight.get("verdict") == "hold":
+            reasons.append("the model review says HOLD")
+        elif preflight.get("verdict") == "fix" and not preflight.get("checks") and not allow_model_fix and verdict and "error" not in verdict:
+            reasons.append("the model review asks for fixes (use --allow-model-fix once you read them)")
+    return reasons
+
+
+def _click_submit(page: Any) -> None:
+    page.get_by_role("button", name=SUBMIT_NAME).click()
+
+
+def submission_outcome(page: Any) -> str:
+    """'confirmed' when the page shows an acknowledgement, 'rejected' when it shows validation errors, else 'unknown'."""
+    try:
+        text = page.content()
+    except Exception:
+        return "unknown"
+    if CONFIRMED.search(text) or re.search(r"confirmation|thank", getattr(page, "url", "") or "", re.I):
+        return "confirmed"
+    return "rejected" if REJECTED.search(text) else "unknown"
+
+
 def human_checkpoint(
     summary: str,
     input_fn: Callable[[str], str] = input,
@@ -457,6 +540,43 @@ def _profile_dir() -> Path:
     return Path(override).expanduser() if override else CHROME_PROFILE_DIR
 
 
+def _ensure_cdp_window(cdp_url: str, force: bool = False) -> None:
+    """A Chrome whose windows were all closed refuses CDP sessions; open a blank tab first."""
+    import json
+    import urllib.request
+    base = cdp_url.rstrip("/")
+    try:
+        with urllib.request.urlopen(f"{base}/json/list", timeout=5) as resp:
+            if any(t.get("type") == "page" for t in json.load(resp)) and not force:
+                return
+        urllib.request.urlopen(urllib.request.Request(f"{base}/json/new?about:blank", method="PUT"), timeout=5).read()
+        import time
+        for _ in range(10):
+            time.sleep(0.5)
+            with urllib.request.urlopen(f"{base}/json/list", timeout=5) as resp:
+                if any(t.get("type") == "page" for t in json.load(resp)):
+                    time.sleep(1.0)
+                    return
+    except Exception as exc:
+        logger.warning(f"Could not check the Chrome window at {cdp_url}: {exc}")
+
+
+def _connect_cdp(pw: Any, cdp_url: str) -> Any:
+    """Attach to the dedicated Chrome; a Chrome that just lost its last window needs a moment and a fresh tab."""
+    import time
+    last: Optional[Exception] = None
+    for attempt in range(6):
+        try:
+            return pw.chromium.connect_over_cdp(cdp_url)
+        except Exception as exc:
+            last = exc
+            if "context management" not in str(exc):
+                raise
+            time.sleep(1.5)
+            _ensure_cdp_window(cdp_url, force=attempt % 2 == 1)
+    raise RuntimeError(f"Chrome at {cdp_url} refuses automation sessions. Click its window or open a new tab there, then run again.") from last
+
+
 @contextmanager
 def open_browser_page(url: str, cdp_url: Optional[str] = None) -> Iterator[Any]:
     """Yield a Playwright page in a headed, dedicated Chrome profile (never the daily profile)."""
@@ -464,7 +584,7 @@ def open_browser_page(url: str, cdp_url: Optional[str] = None) -> Iterator[Any]:
 
     with sync_playwright() as pw:
         if cdp_url:
-            browser = pw.chromium.connect_over_cdp(cdp_url)
+            browser = _connect_cdp(pw, cdp_url)
             context = browser.contexts[0] if browser.contexts else browser.new_context()
             page = context.new_page()
             page.goto(url, wait_until="domcontentloaded")
@@ -495,8 +615,18 @@ def run_apply(
     page_factory: Callable[..., Any] = open_browser_page,
     extra_hosts: Tuple[str, ...] = (),
     preflight_fn: Optional[Callable[..., Dict[str, Any]]] = None,
+    submit: bool = False,
+    confirm_company: str = "",
+    allow_model_fix: bool = False,
+    check_only: bool = False,
+    draft_answers: bool = False,
 ) -> str:
-    """Returns 'applied', 'pending' or 'blocked'. Nothing is filled unless the final page is on an approved https host."""
+    """Returns 'applied', 'pending' or 'blocked'. Nothing is filled unless the final page is on an approved https host.
+
+    By default the tool stops before Submit. With `submit=True` it clicks Submit itself, but only when every gate in
+    `submission_gates` passes, including `confirm_company` equal to the company name. `check_only` fills nothing
+    permanently and reports whether auto-submit would be allowed.
+    """
     profile = load_profile(profile_path or DEFAULT_PROFILE_FILE)
     init_db(db_path)
     with get_db(db_path) as conn:
@@ -526,7 +656,9 @@ def run_apply(
                 logger.error(f"Blocked: the page ended up on {getattr(page, 'url', None)!r}, which is not an approved host. Nothing was filled.")
                 return "blocked"
             fields = page.evaluate(COLLECT_FIELDS_JS)
-            fills, left = plan_fills(fields, answers, app["cv_path"], app["cover_letter_path"])
+            from tools.answer_drafts import NEEDS_HUMAN, load_job_answers
+            job_answers = [a for a in load_job_answers(Path(app["cv_path"]).parent) if a.answer.strip() != NEEDS_HUMAN]
+            fills, left = plan_fills(fields, answers, app["cv_path"], app["cover_letter_path"], [*profile.form_answers, *job_answers])
             filled = apply_fills(page, fills)
             left += [f.get("label") or f["key"] for f in fills if not f.get("done")]
             fills = [f for f in fills if f.get("done")]
@@ -541,29 +673,81 @@ def run_apply(
                 summary.append("            Open the real application page yourself; nothing useful was filled.")
             if detect_captcha(page.content()):
                 summary.append("  NOTE:     A CAPTCHA widget is on the page. If it asks, solve it yourself; this tool will not.")
-            summary.append(_preflight_summary(conn, job_id, profile, app, fills, left, answers, preflight_fn))
+            if draft_answers:
+                summary.append(_draft_answers_for_form(conn, job_id, profile, app, fields, fills))
+            result = _run_preflight(conn, job_id, profile, app, fills, left, answers, preflight_fn)
+            summary.append(render_preflight_text(result))
+            recognised = form_recognised(fields)
+            blockers = submission_gates(app["company_name"], confirm_company if submit else "(auto-submit off)", fields, fills, result, recognised, allow_model_fix)
+            if check_only:
+                summary.append("  AUTO-SUBMIT: " + ("allowed once you add --submit --confirm-company" if not [b for b in blockers if not b.startswith("--confirm-company")] else "blocked: " + "; ".join(b for b in blockers if not b.startswith("--confirm-company"))))
+                print("\n".join(summary))
+                return "pending"
+            if submit and not blockers:
+                logger.info(f"All gates passed for job {job_id}; submitting.")
+                _click_submit(page)
+                page.wait_for_timeout(5000)
+                outcome = submission_outcome(page)
+                try:
+                    page.screenshot(path=str(Path(app["cv_path"]).parent / "submitted.png"))
+                except Exception:
+                    pass
+                if outcome == "confirmed":
+                    confirm_application(conn, job_id, notes=f"Filled {filled} field(s); submitted by the tool after explicit confirmation; confirmation page seen")
+                    METRICS.increment("applied_total")
+                    logger.info(f"Submitted and recorded APPLIED for job {job_id}; cooldown started for {app['company_name']}.")
+                    return "applied"
+                logger.warning(f"Submit was clicked but the page shows no confirmation ({outcome}). Check the window; if it went through, run --record-applied.")
+                return "pending"
+            if submit:
+                summary.append("  AUTO-SUBMIT BLOCKED: " + "; ".join(blockers) + ". Review and submit yourself, or fix these and run again.")
             if not human_checkpoint("\n".join(summary), input_fn=input_fn):
                 logger.info("No confirmation received. Job stays READY_TO_APPLY.")
                 return "pending"
-
         confirm_application(conn, job_id, notes=f"Filled {filled} field(s); submitted by candidate")
         METRICS.increment("applied_total")
         logger.info(f"Recorded APPLIED for job {job_id}; cooldown started for {app['company_name']}.")
         return "applied"
 
 
-def _preflight_summary(
+def _run_preflight(
     conn: Any, job_id: int, profile: MasterProfile, app: Any, fills: List[Dict[str, Any]], left: List[str],
     answers: Dict[str, str], preflight_fn: Optional[Callable[..., Dict[str, Any]]],
-) -> str:
-    """Review of this exact application (role, documents, form values) shown at the checkpoint. Never blocks."""
+) -> Optional[Dict[str, Any]]:
+    """Review of this exact application (role, documents, form values). None when it could not run."""
     try:
-        from tools.preflight import render_preflight, review_application
+        from tools.preflight import review_application
         cv = Path(app["cv_path"])
-        result = (preflight_fn or review_application)(conn, job_id, profile, cv, cv.parent, fills=fills, left=left, answers=answers)
-        return render_preflight(result)
+        return (preflight_fn or review_application)(conn, job_id, profile, cv, cv.parent, fills=fills, left=left, answers=answers)
     except Exception as exc:
-        return f"  PRE-FLIGHT: skipped ({exc})"
+        logger.warning(f"Pre-flight skipped: {exc}")
+        return None
+
+
+def _draft_answers_for_form(conn: Any, job_id: int, profile: MasterProfile, app: Any, fields: List[Dict[str, Any]], fills: List[Dict[str, Any]]) -> str:
+    """Write model drafts for the form's free-text questions to answers.yaml. Drafts are never typed until you approve them."""
+    try:
+        from tools.answer_drafts import draft_answer, free_text_questions, write_drafts
+        from tools.llm import LLMGateway, llm_configured
+        from tools.preflight import load_job
+        questions = free_text_questions(fields, [f["index"] for f in fills if f.get("done")])
+        if not questions:
+            return "  DRAFTS:   no free-text questions to draft"
+        if not llm_configured():
+            return f"  DRAFTS:   {len(questions)} free-text question(s) found, but no model is configured to draft them"
+        gateway, job = LLMGateway(conn, use_cache=True), load_job(conn, job_id)
+        drafts = [draft_answer(gateway, profile, job, q["question"]) for q in questions]
+        path = write_drafts(Path(app["cv_path"]).parent, drafts)
+        return f"  DRAFTS:   {len(drafts)} answer draft(s) written to {path}; edit them and set approved: true, then run again"
+    except Exception as exc:
+        return f"  DRAFTS:   skipped ({exc})"
+
+
+def render_preflight_text(result: Optional[Dict[str, Any]]) -> str:
+    if result is None:
+        return "  PRE-FLIGHT: skipped"
+    from tools.preflight import render_preflight
+    return render_preflight(result)
 
 
 def record_applied(job_id: int, db_path: Optional[Path] = None) -> str:
@@ -598,6 +782,11 @@ if __name__ == "__main__":
     parser.add_argument("--job-id", type=int, help="READY_TO_APPLY job to open")
     parser.add_argument("--list", action="store_true", help="List READY_TO_APPLY jobs")
     parser.add_argument("--cdp-url", default=None, help="Attach to a Chrome started by tools/browser_profile.py")
+    parser.add_argument("--check", action="store_true", help="Fill, review and report whether auto-submit would be allowed; send nothing")
+    parser.add_argument("--submit", action="store_true", help="Let the tool click Submit, only when every gate passes (needs --confirm-company)")
+    parser.add_argument("--confirm-company", default="", help="The company's exact name, typed by you, to authorise --submit for this one application")
+    parser.add_argument("--allow-model-fix", action="store_true", help="Allow --submit when only the model review asks for fixes, after you read them")
+    parser.add_argument("--draft-answers", action="store_true", help="Have the model draft answers to free-text questions into answers.yaml for you to approve")
     parser.add_argument("--record-applied", action="store_true", help="After you submitted the form yourself, record it and start the cooldown")
     parser.add_argument("--allow-host", action="append", default=[], help="Extra host (and its subdomains) to trust for this run")
     args = parser.parse_args()
@@ -607,5 +796,9 @@ if __name__ == "__main__":
         sys.exit(0)
     if args.record_applied:
         sys.exit(0 if record_applied(args.job_id) == "applied" else 1)
-    outcome = run_apply(args.job_id, cdp_url=args.cdp_url, extra_hosts=tuple(args.allow_host))
+    if args.submit and not args.confirm_company:
+        sys.exit("--submit needs --confirm-company with the company's exact name")
+    outcome = run_apply(args.job_id, cdp_url=args.cdp_url, extra_hosts=tuple(args.allow_host), submit=args.submit,
+                        confirm_company=args.confirm_company, allow_model_fix=args.allow_model_fix, check_only=args.check,
+                        draft_answers=args.draft_answers)
     sys.exit(0 if outcome in ("applied", "pending") else 1)
