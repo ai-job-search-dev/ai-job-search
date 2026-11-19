@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.1
+framework_version: 1.2.0
 ---
 
 # Candidate Profile
@@ -15,6 +15,7 @@ framework_version: 1.1.1
 - **LinkedIn:** [YOUR_LINKEDIN_URL]
 - **GitHub:** [YOUR_GITHUB_URL]
 - **Status:** [YOUR_EMPLOYMENT_STATUS]
+- **Work authorization:** [YOUR_WORK_AUTHORIZATION] <!-- e.g. "Citizen, no sponsorship needed" or "Requires visa sponsorship now or in the future"; read by the Eligibility Gate in 04-job-evaluation.md -->
 - **Constraints:** [YOUR_COMMUTE_OR_LOCATION_CONSTRAINTS]
 
 ### Languages

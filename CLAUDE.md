@@ -30,6 +30,7 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 - **CV language:** [YOUR_CV_LANGUAGE] <!-- English unless your market expects otherwise; /setup asks -->
 
 - **Status:** [YOUR_EMPLOYMENT_STATUS]
+- **Work authorization:** [YOUR_WORK_AUTHORIZATION] <!-- citizen/permanent resident, or permit type, plus "Will you now or in the future require visa sponsorship?"; /setup asks. See 04-job-evaluation.md's Eligibility Gate. -->
 - **LinkedIn headline:** "[YOUR_LINKEDIN_HEADLINE]"
 
 ### Education

@@ -246,6 +246,7 @@ Documents cover skills, experience, education, references, and behavioral signal
 - What excites the user in their next role
 - Deal-breakers and must-haves
 - Languages you work in professionally, with proficiency levels (only if not already extracted from `cv/` or `linkedin/` above) - this feeds the Language Gate in `04-job-evaluation.md`, so ask directly rather than skipping it
+- Work authorization in the country they are applying in, including whether they need visa sponsorship now or in the future (see Path C Section 1) - this feeds the Eligibility Gate in `04-job-evaluation.md`; CVs rarely state it, so always ask
 - Salary expectations / baseline (optional)
 - Commute or location constraints (if not visible from CV)
 - Job search configuration (use the questions from Path C Section 9 below)
@@ -261,7 +262,7 @@ If the user provides a single CV/resume:
 1. Read the document thoroughly.
 2. Extract all structured information: name, contact, education, experience, skills, languages, publications, awards.
 3. Present a summary of what was extracted.
-4. Ask follow-up questions for gaps (behavioral profile, career goals, deal-breakers, languages and proficiency levels if not already extracted, salary expectations, references).
+4. Ask follow-up questions for gaps (behavioral profile, career goals, deal-breakers, languages and proficiency levels if not already extracted, work authorization and visa sponsorship need (see Path C Section 1), salary expectations, references).
 5. Proceed to Step 3 (file generation).
 
 ---
@@ -276,6 +277,7 @@ Ask about:
 - Location (city, country)
 - Phone, email, LinkedIn, GitHub
 - What languages they work in professionally, and roughly what level in each (native, fluent, conversational, a CEFR letter like B2 - whatever's natural for them to describe, doesn't need to be precise). Worth explaining why: a posting requiring a language they don't list at all gets auto-excluded later by the Language Gate, while one asking for a higher level in a language they do list gets flagged for their own judgment instead of silently passed or rejected - so it's worth being honest here rather than optimistic.
+- Work authorization in the country (or countries) they are applying in: citizen or permanent resident, or holding a permit or visa (which type, and any expiry or start date). Then ask the question application forms ask: "Will you now or in the future require visa sponsorship?" Record the answer as written, for example "Citizen, no sponsorship needed" or "Requires visa sponsorship now or in the future". Worth explaining why: the Eligibility Gate in `04-job-evaluation.md` reads this to drop postings that require citizenship or refuse sponsorship before any scoring or drafting, and to flag postings that are silent on it. If a permit also limits *hours* or *start date*, record those dates too; the gate keeps them as a separate check.
 - Current employment status
 - Family/commute constraints (if any)
 
@@ -365,7 +367,7 @@ Once data collection is complete, generate or finish populating the following fi
 Replace all `[PLACEHOLDER]` tokens with the user's actual information. Keep the structure, workflow, and verification checklist intact.
 
 ### 2. Populate `01-candidate-profile.md` *(Path B and C; skip if Path A populated it)*
-Write the full candidate profile with structured sections: Identity (including Languages, with levels), Education, Professional Experience, Independent Projects, Technical Skills, Publications, Awards, References.
+Write the full candidate profile with structured sections: Identity (including Languages, with levels, and Work authorization), Education, Professional Experience, Independent Projects, Technical Skills, Publications, Awards, References.
 
 ### 3. Populate `02-behavioral-profile.md` *(Path B and C; skip if Path A populated it)*
 Write the behavioral profile based on assessment results or synthesized answers.
