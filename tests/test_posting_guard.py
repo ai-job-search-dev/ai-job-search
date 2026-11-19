@@ -15,6 +15,7 @@ import json
 import shutil
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -151,6 +152,96 @@ class HiddenContent(GuardFixture):
         code, out, err = self.run_main("--html", "--json", stdin_text=html)
         self.assertIn("Faded but visible.", self.text_of(out))
         self.assertEqual(self.findings_of(out)["hidden_blocks"], [])
+
+    def test_css_invisibility_tricks_are_removed_and_reported(self):
+        html = (
+            "<html><body><p>Visible job spec.</p>"
+            "<span style='font-size: 0vw'>secret-tiny-font-0vw</span>"
+            "<span style='font-size: 0vh'>secret-tiny-font-0vh</span>"
+            "<span style='font-size: 1px'>secret-tiny-font-1px</span>"
+            "<span style='font-size: 2px'>secret-tiny-font-2px</span>"
+            "<div style='visibility: collapse'>secret-collapsed</div>"
+            "<div style='transform: scale(0)'>secret-scaled-zero</div>"
+            "<div style='transform: scale(0, 0)'>secret-scaled-zero-pair</div>"
+            "<div style='transform: scaleX(0)'>secret-scaled-x-zero</div>"
+            "<div style='transform: scaleY(0)'>secret-scaled-y-zero</div>"
+            "<div style='transform: scale3d(0, 0, 0)'>secret-scaled-3d-zero</div>"
+            "<div style='transform: rotate(0deg) scale(0)'>secret-prefixed-scale-zero</div>"
+            "<div style='transform: translateX(-50%) scale(0)'>secret-translate-scale-zero</div>"
+            "<div style='clip-path: inset(50%)'>secret-clipped-inset</div>"
+            "<div style='left: -999px'>secret-offscreen-left</div>"
+            "<div style='text-indent: -9999em'>secret-offscreen-indent</div>"
+            "<div style='opacity: 00'>secret-zero-zero-opacity</div>"
+            "</body></html>"
+        )
+        code, out, err = self.run_main("--html", "--json", stdin_text=html)
+        self.assertEqual(code, 0, err)
+        text = self.text_of(out)
+        self.assertIn("Visible job spec.", text)
+        for secret in (
+            "secret-tiny-font-0vw",
+            "secret-tiny-font-0vh",
+            "secret-tiny-font-1px",
+            "secret-tiny-font-2px",
+            "secret-collapsed",
+            "secret-scaled-zero",
+            "secret-scaled-zero-pair",
+            "secret-scaled-x-zero",
+            "secret-scaled-y-zero",
+            "secret-scaled-3d-zero",
+            "secret-prefixed-scale-zero",
+            "secret-translate-scale-zero",
+            "secret-clipped-inset",
+            "secret-offscreen-left",
+            "secret-offscreen-indent",
+            "secret-zero-zero-opacity",
+        ):
+            self.assertNotIn(secret, text)
+        f = self.findings_of(out)
+        self.assertEqual(len(f["hidden_blocks"]), 16)
+
+    def test_legitimate_styles_are_not_hidden(self):
+        html = (
+            "<html><body>"
+            "<p style='font-size: 1em'>Standard em text.</p>"
+            "<p style='font-size: 1rem'>Standard rem text.</p>"
+            "<p style='font-size: 3px'>Boundary 3px text.</p>"
+            "<p style='font-size: 14px'>Standard 14px text.</p>"
+            "<p style='font-size: 100%'>Standard percentage text.</p>"
+            "<p style='margin-left: -15px'>Slight margin adjustment.</p>"
+            "<p style='transform: scale(1)'>Full scale text.</p>"
+            "<p style='transform: scale(0.5)'>Half scale text.</p>"
+            "<p style='transform: rotate(0deg) scale(0.5)'>Prefixed half scale text.</p>"
+            "<p style='clip-path: inset(50% 0 0 0)'>Partial inset text.</p>"
+            "</body></html>"
+        )
+        code, out, err = self.run_main("--html", "--json", stdin_text=html)
+        self.assertEqual(code, 0, err)
+        text = self.text_of(out)
+        for expected in (
+            "Standard em text.",
+            "Standard rem text.",
+            "Boundary 3px text.",
+            "Standard 14px text.",
+            "Standard percentage text.",
+            "Slight margin adjustment.",
+            "Full scale text.",
+            "Half scale text.",
+            "Prefixed half scale text.",
+            "Partial inset text.",
+        ):
+            self.assertIn(expected, text)
+        f = self.findings_of(out)
+        self.assertEqual(f["hidden_blocks"], [])
+
+    def test_transform_whitespace_backtracking_bound(self):
+        html = f"<html><body><p style='transform:{' ' * 40000}'>Visible</p></body></html>"
+        t0 = time.perf_counter()
+        code, out, err = self.run_main("--html", "--json", stdin_text=html)
+        elapsed = time.perf_counter() - t0
+        self.assertEqual(code, 0, err)
+        self.assertIn("Visible", self.text_of(out))
+        self.assertLess(elapsed, 0.5, f"Transform pattern backtracked: took {elapsed:.2f}s")
 
 
 class InvisibleCharacters(GuardFixture):
