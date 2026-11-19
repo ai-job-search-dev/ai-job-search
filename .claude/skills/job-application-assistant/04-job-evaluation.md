@@ -1,5 +1,5 @@
 ---
-framework_version: 1.2.7
+framework_version: 1.3.0
 ---
 
 # Job Evaluation Framework
@@ -63,6 +63,8 @@ How well do the required/preferred skills align with the candidate's capabilitie
 **Strong match areas:** [YOUR_PRIMARY_SKILLS]
 **Moderate match areas:** [YOUR_SECONDARY_SKILLS]
 **Weak match areas:** [SKILLS_YOU_LACK]
+
+**Platform lineage:** before scoring a named vendor platform (e.g. ChatGPT, Gemini, Copilot) as a gap, check the candidate's listed tools for one from that vendor or one that can run on its platform (e.g. Codex -> OpenAI, Antigravity -> Gemini, Claude Code -> Anthropic). A related tool is related evidence, not an automatic match. In `/apply`, if related evidence is present and use is not already confirmed, ask the user once before scoring and carry the answer into Step 5d. In batch scoring (`/rank`), do not ask; mark the platform `unconfirmed (related tool)` and score it as a gap until `/apply` confirms use. Score as a gap only if the candidate does not confirm real use. A confirmed claim covers use of the platform only, never building on its API. Write confirmed lineage back to `01-candidate-profile.md` once instead of re-deriving it per posting.
 
 ### 2. Experience Match (0-100)
 Does work history align with what they're looking for? Match on the function and nature of the work performed, not the literal job title - a "Data Consultant" and a "Data Scientist" role can be functionally identical.
