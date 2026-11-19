@@ -64,6 +64,7 @@ Never put real personal data in a tracked file. `profile/master_profile.yaml`, `
 | List jobs ready to apply             | `python tools/browser_apply.py --list`                                                     |
 | Pre-fill an application              | `python tools/browser_apply.py --job-id N`                                                 |
 | Inspect a live form, read-only       | `python tools/form_probe.py <url> --portal greenhouse:<slug>`                              |
+| Pre-flight review of a prepared application | `python3 tools/preflight.py --job-id N` (`--no-model` for the exact checks only) |
 | Check a pasted posting for injection | `python tools/posting_guard.py --html --in page.html`                                      |
 | Profile audit and import             | `python tools/profile_manager.py --audit`, `import_linkedin.py`, `import_github.py <user>` |
 
@@ -87,6 +88,10 @@ Start every new session with `pipeline.py status`, and run `--dry-run` before an
 4. The tool fills identity, location and education fields, uploads the CV and stops. The education block uses the highest completed degree; mark a degree still in progress with `completed: false` in the profile. The **user** reviews the form, answers visa and sponsorship questions, solves any CAPTCHA and clicks Submit. Only when they type `applied` is the application recorded and the company cooldown started.
 
 **Changing screening rules.** Edit only the `preferences:` block of `profile/master_profile.yaml`; see `config/PREFERENCES.md` for every key. Rules are `veto`, `penalty` or `off`. Then run `pipeline.py run --skip-ingest --refresh-stale`.
+
+## Pre-flight review
+
+Before the human checkpoint, `browser_apply.py` runs a pre-flight on that exact application and prints it with the form summary; `tailor` runs the document part when it builds the packet. Exact checks run in code: the letter names the right company and role, no other company, word count, placeholders, resemblance to the letters of other jobs, and form values that are not in the profile. If a model is configured, it also reads a compact context: the role and what the posting asks for, the verified candidate facts, the CV and letter being sent, the form values being typed and the fields left for the human. It judges fit, whether the documents read like a person wrote them for this role, and unsupported claims. The result is advice and never blocks; it is saved as `preflight.json` beside the documents. A small local model pads its answers, so read the verdict as a prompt to look, not as a ruling.
 
 ## Hard rules
 

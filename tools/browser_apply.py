@@ -300,6 +300,15 @@ def combo_queries(key: str, value: str) -> List[str]:
     return queries
 
 
+def short_label(descriptor: str, limit: int = 80) -> str:
+    """A form field's own label without the duplicated words, ids and autocomplete hints that labelFor() appends."""
+    words = ID_NOISE.sub(" ", descriptor or "").replace("*", " ").split()
+    for size in range(1, len(words) // 2 + 1):
+        if [w.casefold() for w in words[:size]] == [w.casefold() for w in words[size:2 * size]]:
+            return " ".join(words[:size])[:limit]
+    return " ".join(words)[:limit]
+
+
 def plan_fills(
     fields: List[Dict[str, Any]],
     answers: Dict[str, str],
@@ -312,7 +321,9 @@ def plan_fills(
     used: set = set()
     files = {"resume_file": cv_path, "cover_letter_file": cover_letter_path}
     for f in fields:
-        label = (f.get("descriptor") or f.get("type") or f.get("tag") or "field")[:80]
+        if f.get("type") != "file" and not (f.get("descriptor") or "").strip():
+            continue  # unlabeled helper inputs that sit behind a styled dropdown
+        label = short_label(f.get("descriptor") or "") or f.get("type") or f.get("tag") or "field"
         key = classify_field(f.get("descriptor", ""), f.get("tag", "input"), f.get("type", "text"))
         if f.get("type") == "file":
             path = files.get(key or "")
@@ -483,6 +494,7 @@ def run_apply(
     input_fn: Callable[[str], str] = input,
     page_factory: Callable[..., Any] = open_browser_page,
     extra_hosts: Tuple[str, ...] = (),
+    preflight_fn: Optional[Callable[..., Dict[str, Any]]] = None,
 ) -> str:
     """Returns 'applied', 'pending' or 'blocked'. Nothing is filled unless the final page is on an approved https host."""
     profile = load_profile(profile_path or DEFAULT_PROFILE_FILE)
@@ -529,6 +541,7 @@ def run_apply(
                 summary.append("            Open the real application page yourself; nothing useful was filled.")
             if detect_captcha(page.content()):
                 summary.append("  NOTE:     A CAPTCHA widget is on the page. If it asks, solve it yourself; this tool will not.")
+            summary.append(_preflight_summary(conn, job_id, profile, app, fills, left, answers, preflight_fn))
             if not human_checkpoint("\n".join(summary), input_fn=input_fn):
                 logger.info("No confirmation received. Job stays READY_TO_APPLY.")
                 return "pending"
@@ -537,6 +550,20 @@ def run_apply(
         METRICS.increment("applied_total")
         logger.info(f"Recorded APPLIED for job {job_id}; cooldown started for {app['company_name']}.")
         return "applied"
+
+
+def _preflight_summary(
+    conn: Any, job_id: int, profile: MasterProfile, app: Any, fills: List[Dict[str, Any]], left: List[str],
+    answers: Dict[str, str], preflight_fn: Optional[Callable[..., Dict[str, Any]]],
+) -> str:
+    """Review of this exact application (role, documents, form values) shown at the checkpoint. Never blocks."""
+    try:
+        from tools.preflight import render_preflight, review_application
+        cv = Path(app["cv_path"])
+        result = (preflight_fn or review_application)(conn, job_id, profile, cv, cv.parent, fills=fills, left=left, answers=answers)
+        return render_preflight(result)
+    except Exception as exc:
+        return f"  PRE-FLIGHT: skipped ({exc})"
 
 
 def list_ready(db_path: Optional[Path] = None) -> List[Dict[str, Any]]:

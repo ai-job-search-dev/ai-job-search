@@ -9,6 +9,7 @@ model to read the finished letter and report problems; it never rewrites the let
 from __future__ import annotations
 
 import re
+import zlib
 from typing import Any, Dict, List, Optional, Sequence
 
 from pydantic import BaseModel, Field
@@ -102,6 +103,40 @@ def _join(words: Sequence[str]) -> str:
     return words[0] if len(words) == 1 else ", ".join(words[:-1]) + " and " + words[-1]
 
 
+OPENINGS = (
+    "I am applying for the {title} position at {company}.",
+    "I would like to apply for the {title} role at {company}.",
+    "Please consider my application for the {title} position at {company}.",
+)
+BRIDGES = (
+    "The posting mentions {skills}, which I have used in the work above.",
+    "You ask for {skills}; I work with these, as described above.",
+    "{skills} come up in this role, and they are part of the work I described.",
+)
+CLOSINGS = (
+    "I would be glad to talk through any of this. Thank you for your time.",
+    "I would welcome the chance to discuss the role. Thank you for considering my application.",
+    "If useful, I can walk you through any of these projects. Thank you for your time.",
+)
+SENIORITY_ONLY = {"intern", "senior", "junior", "staff", "principal", "lead", "associate", "sr", "jr"}
+
+
+def pick(options: Sequence[str], company: str, title: str, salt: str) -> str:
+    """A stable choice per company, role and slot, so letters differ between jobs but never change on a re-run."""
+    return options[zlib.crc32(f"{company}|{title}|{salt}".encode("utf-8")) % len(options)]
+
+
+def short_title(title: str) -> str:
+    """The role as a person would write it: no team suffix, location or remote note."""
+    text = re.sub(r"\s*\((?:[^)]*\b(?:remote|hybrid|on-?site)\b[^)]*)\)", "", title, flags=re.I)
+    text = text.split(" | ")[0].strip()
+    parts = [p.strip() for p in text.split(", ") if p.strip()]
+    if len(parts) > 1:
+        head = parts[0]
+        text = ", ".join(parts[:2]) if head.casefold() in SENIORITY_ONLY else head
+    return text.strip(" -") or title
+
+
 def compose_letter(
     profile: MasterProfile, company: str, title: str, matched: Sequence[str], remote: bool = True,
 ) -> List[str]:
@@ -112,16 +147,17 @@ def compose_letter(
     shared = list(dict.fromkeys(shared))[:4]
 
     paragraphs = [f"Dear {company} hiring team,"]
-    opening = f"I am applying for the {title} position at {company}."
+    role = short_title(title)
+    opening = pick(OPENINGS, company, title, "open").format(title=role, company=company)
     paragraphs.append(f"{opening} {chosen[0].sentence}" if chosen else opening)
     if len(chosen) > 1:
         paragraphs.append(chosen[1].sentence)
     if len(shared) >= 2:
-        paragraphs.append(f"The posting mentions {_join(shared)}, which I have used in the work above.")
+        paragraphs.append(pick(BRIDGES, company, title, "bridge").format(skills=_join(shared)))
     prefs = profile.preferences
     if not remote and getattr(prefs, "relocation", False):
         paragraphs.append("I am ready to relocate for this role.")
-    paragraphs.append("I would be glad to talk through any of this. Thank you for your time.")
+    paragraphs.append(pick(CLOSINGS, company, title, "close"))
     return paragraphs
 
 

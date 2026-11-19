@@ -24,7 +24,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from tools.cover_letter import compose_letter, review_letter
+from tools.cover_letter import compose_letter
 from tools.db import (
     STATUS_READY_TO_APPLY,
     STATUS_SHORTLISTED,
@@ -390,15 +390,6 @@ def verify_documents(
     return ats_ok, layout_ok, messages
 
 
-def review_letter_with_model(conn: Any, profile: MasterProfile, paragraphs: Sequence[str]) -> Optional[Dict[str, Any]]:
-    """Advisory model review of the finished letter. None when no model is configured."""
-    from tools.llm import LLMGateway, llm_configured
-
-    if not llm_configured():
-        return None
-    return review_letter(profile, paragraphs, LLMGateway(conn, use_cache=True))
-
-
 def tailor_job(
     conn: Any,
     job: Any,
@@ -434,12 +425,14 @@ def tailor_job(
     compile_typst(letter_typ, letter_pdf)
 
     ats_ok, layout_ok, messages = verify_documents(cv_pdf, letter_pdf, profile)
-    review = review_letter_with_model(conn, profile, paragraphs)
-    if review is not None:
-        (folder / "letter_review.json").write_text(json.dumps(review, indent=2), encoding="utf-8")
-        result["letter_review"] = review
-        if not review.get("reads_naturally", True) or review.get("problems") or review.get("claims_not_in_profile"):
-            messages.append("Letter review raised points, read letter_review.json before applying")
+    try:
+        from tools.preflight import review_application
+        review = review_application(conn, job_id, profile, cv_pdf, folder)
+        result["preflight"] = review
+        if review["verdict"] != "send":
+            messages.append(f"Pre-flight says {review['verdict'].upper()}: read {folder / 'preflight.json'} before applying")
+    except Exception as exc:
+        logger.warning(f"Pre-flight review skipped: {exc}", job_id=job_id)
     record_tailored_documents(
         conn, job_id, str(cv_pdf), str(letter_pdf), ats_verified=ats_ok, layout_verified=layout_ok,
         notes="; ".join(messages) or None,

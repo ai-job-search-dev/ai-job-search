@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
 
-from tools import browser_apply, tailor
+from tools import browser_apply, cover_letter, tailor
 from tools.db import (
     STATUS_APPLIED,
     STATUS_IGNORED,
@@ -116,13 +116,29 @@ class TailorContentTests(unittest.TestCase):
         self.assertEqual((ui.title, ui.summary), ("Frontend Engineer", profile.summary))
         self.assertEqual((other.title, other.summary), ("Software Engineer", profile.summary))
 
+    def test_letter_wording_varies_by_job_but_never_between_runs(self):
+        profile = make_profile()
+        cv = tailor.build_cv(profile, ["Python"])
+        once = tailor.build_cover_letter(profile, "Acme", "QSE", cv.matched, [], cv)
+        again = tailor.build_cover_letter(profile, "Acme", "QSE", cv.matched, [], cv)
+        self.assertEqual(once, again)
+        variants = {tuple(tailor.build_cover_letter(profile, f"Co{i}", "Engineer", cv.matched, [], cv)[1:2]) for i in range(12)}
+        self.assertGreater(len(variants), 1)
+
+    def test_short_title_drops_team_suffixes_and_location_notes(self):
+        short = cover_letter.short_title
+        self.assertEqual(short("Fullstack Engineer (TypeScript), AI Engineering: Duo Client SDK"), "Fullstack Engineer (TypeScript)")
+        self.assertEqual(short("Intern, Quantum Algorithms and Compilation"), "Intern, Quantum Algorithms and Compilation")
+        self.assertEqual(short("Senior Full Stack Engineer | Observability | Germany | Remote"), "Senior Full Stack Engineer")
+        self.assertEqual(short("Full Stack Engineer (Remote Ireland)"), "Full Stack Engineer")
+
     def test_cover_letter_does_not_advertise_gaps_or_repeat_the_summary(self):
         profile = make_profile()
         cv = tailor.build_cv(profile, ["Python"])
         text = " ".join(tailor.build_cover_letter(profile, "Acme", "QSE", cv.matched, ["Python", "C++"], cv))
         self.assertNotIn("C++", text)
         self.assertNotIn(profile.summary, text)
-        self.assertIn("I am applying for the QSE position at Acme.", text)
+        self.assertTrue(any(o.format(title="QSE", company="Acme") in text for o in cover_letter.OPENINGS))
 
     def test_cover_letter_uses_approved_lines_and_only_claims_profile_skills(self):
         profile = make_profile()
@@ -133,7 +149,7 @@ class TailorContentTests(unittest.TestCase):
         self.assertIn("I built Quantum Bench in Qiskit", text)
         self.assertIn("I build the REST APIs", text)
         self.assertNotIn("Rust", text)
-        self.assertIn("The posting mentions Qiskit and Python", text)
+        self.assertTrue(any(b.format(skills="Qiskit and Python") in text for b in cover_letter.BRIDGES))
 
     def test_cover_letter_offers_relocation_only_for_on_site_roles_when_enabled(self):
         profile = make_profile()
@@ -312,6 +328,68 @@ class JobspyNanTests(unittest.TestCase):
         self.assertFalse(bool(_clean(nan)))
 
 
+class PreflightTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.profile = make_profile()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def letter(self, company="Acme", extra=""):
+        return (f"Dear {company} hiring team, I am applying for the QSE position at {company}. " + "I build quantum software with Python and Qiskit every day. " * 12 + extra + " Sincerely, Ada Example")
+
+    def test_exact_checks_catch_wrong_company_placeholders_length_and_recycled_letters(self):
+        from tools import preflight
+        folder = self.root / "acme"
+        folder.mkdir()
+        other = self.root / "beta"
+        other.mkdir()
+        with mock.patch.object(preflight, "sibling_letters", return_value={"beta": self.letter("Betacorp")}):
+            problems = preflight.deterministic_checks("Acme", "QSE", self.letter("Betacorp") + " [COMPANY]", "cv", folder, self.profile, ["Betacorp", "Gammacorp"])
+        text = " | ".join(problems)
+        self.assertIn("never names the company", text)
+        self.assertIn("mentions another company: Betacorp", text)
+        self.assertIn("placeholder", text)
+        self.assertIn("same as the one for beta", text)
+        short = preflight.deterministic_checks("Acme", "QSE", "Dear Acme, Ada Example", "cv", folder, self.profile)
+        self.assertTrue(any("words" in p for p in short))
+        with mock.patch.object(preflight, "sibling_letters", return_value={}):
+            self.assertEqual(preflight.deterministic_checks("Acme", "QSE", self.letter(), "cv", folder, self.profile, ["Betacorp"]), [])
+
+    def test_form_values_must_come_from_the_profile(self):
+        from tools import preflight
+        fills = [{"key": "country", "kind": "combo", "value": "Argentina"}, {"key": "email", "kind": "text", "value": "wrong@example.com"},
+                 {"key": "resume_file", "kind": "file", "value": "/tmp/cv.pdf"}]
+        with mock.patch.object(preflight, "sibling_letters", return_value={}):
+            problems = preflight.deterministic_checks("Acme", "QSE", self.letter(), "cv", self.root, self.profile, fills=fills,
+                                                      answers={"country": "Argentina", "email": "ada@example.com"})
+        self.assertEqual(len(problems), 1)
+        self.assertIn("email", problems[0])
+
+    def test_context_has_only_this_application_and_the_model_verdict_can_only_tighten(self):
+        from types import SimpleNamespace
+        from tools import preflight
+        job = {"job_id": 1, "company": "Acme", "title": "Quantum Software Engineer", "location": "Remote", "is_remote": True,
+               "description": "We build quantum compilers in Python. " * 5, "matched_skills": ["Python", "Qiskit"]}
+        fills = [{"key": "country", "label": "Country", "kind": "combo", "value": "Argentina"}, {"key": "resume_file", "label": "Attach", "kind": "file", "value": "/x/cv.pdf"}]
+        context = preflight.build_context(job, self.profile, "CV TEXT", self.letter(), fills, ["Gender"])
+        for expected in ("Company: Acme", "Python, Qiskit", "CV TEXT", "Country: Argentina", "<file cv.pdf>", "LEFT FOR THE CANDIDATE: Gender", "will not relocate", "salary floor"):
+            self.assertIn(expected, context)
+        review = preflight.PreflightReview(fit="weak", summary="The role stresses storage internals the candidate has not worked on.", reads_like_a_person=False)
+        gateway = SimpleNamespace(evaluate=lambda messages, model, job_id=None: (review, None))
+        with mock.patch.object(preflight, "sibling_letters", return_value={}):
+            result = preflight.run_preflight(job, self.profile, "cv", self.letter(), gateway, folder=self.root)
+        self.assertEqual(result["verdict"], "hold")
+        noisy = preflight.clean_review({"document_issues": ["location", "The letter never names the product the role builds."], "form_issues": ["salary_floor"], "unsupported_claims": []}, has_form=False)
+        self.assertEqual((noisy["document_issues"], noisy["form_issues"]), (["The letter never names the product the role builds."], []))
+        with mock.patch.object(preflight, "sibling_letters", return_value={}):
+            clean = preflight.run_preflight(job, self.profile, "cv", self.letter(), None, folder=self.root)
+        self.assertEqual(clean["verdict"], "send")
+        self.assertIn("skipped", preflight.render_preflight(clean))
+
+
 class FieldClassificationTests(unittest.TestCase):
     def test_identity_fields(self):
         c = browser_apply.classify_field
@@ -385,6 +463,16 @@ class FieldClassificationTests(unittest.TestCase):
         for index in (4, 5, 6):
             self.assertNotIn(index, filled)
         self.assertEqual(len(left), 4)  # the three sensitive questions and the second Country field, already answered
+
+    def test_labels_lose_duplicated_words_and_ids_and_helper_inputs_are_skipped(self):
+        short = browser_apply.short_label
+        self.assertEqual(short("First Name* First Name first_name given-name"), "First Name")
+        self.assertEqual(short("Country* Country* country off"), "Country")
+        self.assertEqual(short("Will you now or in the future require sponsorship?"), "Will you now or in the future require sponsorship?")
+        fields = [{"index": 0, "tag": "input", "type": "text", "descriptor": "", "value": ""},
+                  {"index": 1, "tag": "input", "type": "text", "descriptor": "Gender Gender gender off", "value": "", "role": "combobox"}]
+        fills, left = browser_apply.plan_fills(fields, {}, None, None)
+        self.assertEqual(left, ["Gender"])
 
     def test_native_select_picks_the_matching_option_only(self):
         fields = [{"index": 0, "tag": "select", "type": "select-one", "descriptor": "Country", "value": "", "options": ["Italy", "Argentina"]}]
