@@ -39,12 +39,14 @@ class PreflightReview(BaseModel):
     unsupported_claims: List[str] = Field(default_factory=list, description="Statements the candidate facts do not support")
 
 
-def clean_review(review: Dict[str, Any], has_form: bool) -> Dict[str, Any]:
+def clean_review(review: Dict[str, Any], has_form: bool, left: Sequence[str] = ()) -> Dict[str, Any]:
     """Drop what a small model pads its answer with: one-word items, and form issues when there is no form yet."""
     for key in ("document_issues", "form_issues", "unsupported_claims"):
         review[key] = [item for item in review.get(key, []) if len(item.split()) >= 4]
     if not has_form:
         review["form_issues"] = []
+    prefixes = [l.casefold()[:25] for l in left if l]
+    review["form_issues"] = [i for i in review.get("form_issues", []) if not any(i.casefold().startswith(p) or p in i.casefold() for p in prefixes)]
     return review
 
 
@@ -99,8 +101,18 @@ def sibling_letters(folder: Path) -> Dict[str, str]:
 def deterministic_checks(
     company: str, title: str, letter: str, cv: str, folder: Path, profile: MasterProfile,
     other_companies: Sequence[str] = (), fills: Sequence[Dict[str, Any]] = (), answers: Optional[Dict[str, str]] = None,
+    location: str = "", is_remote: Optional[bool] = None, left: Sequence[str] = (),
 ) -> List[str]:
+    from tools.preferences import onsite_abroad_effect
     problems: List[str] = []
+    veto, penalty = onsite_abroad_effect(profile.preferences, location, is_remote)
+    if veto or penalty:
+        home = profile.preferences.work_authorization.current_country or "your country"
+        problems.append(f"ELIGIBILITY: the role is tied to '{location}'; you live in {home} and will not relocate, so you are probably not eligible.")
+    for label in left:
+        if re.search(r"open to candidates in|do you (?:currently )?live in|current country of residence|must (?:reside|be located)", label, re.I):
+            problems.append(f"The form asks where you live ({label[:70]}); answer it knowing the role may be restricted to one region.")
+            break
     lowered = letter.casefold()
     if company.casefold() not in lowered:
         problems.append(f"The letter never names the company ({company}).")
@@ -172,13 +184,14 @@ def run_preflight(
     other_companies: Sequence[str] = (), answers: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """Exact checks plus the model's review. The model part is None when no model is configured or the call fails."""
-    problems = deterministic_checks(job["company"], job["title"], letter, cv, folder or Path("."), profile, other_companies, fills, answers)
+    problems = deterministic_checks(job["company"], job["title"], letter, cv, folder or Path("."), profile, other_companies, fills, answers,
+                                    location=job.get("location") or "", is_remote=job.get("is_remote"), left=left)
     review: Optional[Dict[str, Any]] = None
     if gateway is not None:
         messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": build_context(job, profile, cv, letter, fills, left)}]
         try:
             review = gateway.evaluate(messages, PreflightReview, job_id=job.get("job_id"))[0].model_dump()
-            review = clean_review(review, has_form=bool(fills or left))
+            review = clean_review(review, has_form=bool(fills or left), left=left)
         except Exception as exc:
             review = {"error": str(exc)[:200]}
     verdict = "fix" if problems else "send"

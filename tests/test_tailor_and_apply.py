@@ -358,6 +358,25 @@ class PreflightTests(unittest.TestCase):
         with mock.patch.object(preflight, "sibling_letters", return_value={}):
             self.assertEqual(preflight.deterministic_checks("Acme", "QSE", self.letter(), "cv", folder, self.profile, ["Betacorp"]), [])
 
+    def test_region_locked_roles_are_flagged_as_probably_ineligible(self):
+        from tools import preflight
+        self.profile.preferences.work_authorization.current_country = "AR"
+        self.profile.preferences.relocation = False
+        with mock.patch.object(preflight, "sibling_letters", return_value={}):
+            locked = preflight.deterministic_checks("Acme", "QSE", self.letter(), "cv", self.root, self.profile, location="Remote, Canada", is_remote=True,
+                                                    left=["This role is open to candidates in the US or Canada. Do you currently live in this region?"])
+            open_role = preflight.deterministic_checks("Acme", "QSE", self.letter(), "cv", self.root, self.profile, location="Remote, Global", is_remote=True)
+        self.assertTrue(any(p.startswith("ELIGIBILITY") for p in locked))
+        self.assertTrue(any("asks where you live" in p for p in locked))
+        self.assertEqual(open_role, [])
+
+    def test_model_form_issues_that_only_repeat_the_fields_left_for_the_human_are_dropped(self):
+        from tools import preflight
+        review = {"document_issues": [], "unsupported_claims": [], "form_issues": [
+            "Will you now or in the future require sponsorship for a visa", "The phone number lacks a country code for the form"]}
+        out = preflight.clean_review(review, has_form=True, left=["Will you now or in the future require sponsorship for a visa to remain"])
+        self.assertEqual(out["form_issues"], ["The phone number lacks a country code for the form"])
+
     def test_form_values_must_come_from_the_profile(self):
         from tools import preflight
         fills = [{"key": "country", "kind": "combo", "value": "Argentina"}, {"key": "email", "kind": "text", "value": "wrong@example.com"},
@@ -617,6 +636,13 @@ class RunApplyTests(unittest.TestCase):
         out = browser_apply.run_apply(other, db_path=self.db, profile_path=self.profile_path,
                                       input_fn=lambda _: "applied", page_factory=self.factory)
         self.assertEqual(out, "blocked")
+
+    def test_record_applied_after_a_manual_submit_starts_the_cooldown_once(self):
+        self.assertEqual(browser_apply.record_applied(self.job_id, db_path=self.db), "applied")
+        self.assertEqual(self._status(), STATUS_APPLIED)
+        with get_db(self.db) as conn:
+            self.assertTrue(check_company_cooldown(conn, "Acme Quantum")[0])
+        self.assertEqual(browser_apply.record_applied(self.job_id, db_path=self.db), "blocked")
 
     def test_blocked_for_non_http_url(self):
         with get_db(self.db) as conn:

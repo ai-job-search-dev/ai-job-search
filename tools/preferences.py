@@ -77,7 +77,7 @@ RULE_TEXT = {
     "citizenship_clearance": ("postings that require US citizenship or a security clearance", r"citizen|clearance|itar|export"),
     "unpaid": ("unpaid or volunteer positions", r"unpaid|volunteer|no compensation|without pay"),
     "work_authorization": ("postings restricted to regions where the candidate cannot work without a visa", r"visa|authori[sz]|sponsor|reside"),
-    "onsite_abroad": ("on-site or hybrid postings outside the candidate's country, when they will not relocate", r"on-?site|in-?office|hybrid|relocat"),
+    "onsite_abroad": ("on-site, hybrid or country-locked remote postings outside the candidate's country, when they will not relocate", r"on-?site|in-?office|hybrid|relocat|country|reside"),
 }
 
 
@@ -178,17 +178,27 @@ def load_candidate_context(path: Optional[Path] = None) -> str:
     return "\n".join(lines)
 
 
+GLOBAL_MARKER = re.compile(r"worldwide|anywhere|global|latam|latin america|americas|any country|emea and latam", re.IGNORECASE)
+
+
 def onsite_abroad_effect(prefs: CareerPreferences, location: str, is_remote: Optional[bool]) -> Tuple[bool, float]:
-    """(veto, penalty) for an on-site posting abroad when the candidate will not relocate."""
+    """(veto, penalty) when a posting needs presence in a country the candidate does not live in and will not move to.
+
+    Covers on-site and hybrid postings abroad, and remote postings locked to named countries (such as
+    'Remote, Canada'), which in practice require living there. Global or Latin American remote roles are untouched.
+    """
     setting = prefs.rules.onsite_abroad
     home = (prefs.work_authorization.current_country or "").upper()
     place = (location or "").strip()
-    if prefs.relocation or setting.mode == "off" or is_remote is not False or not home or not place:
+    if prefs.relocation or setting.mode == "off" or is_remote is None or not home or not place:
         return False, 0.0
-    if re.search(r"remote|anywhere|worldwide|work from home", place, re.IGNORECASE):
+    named = regions_in(place)
+    if home in named:
         return False, 0.0
-    rx = COUNTRY_REGEX.get(home)
-    if rx is not None and rx.search(place):
+    if is_remote:
+        if GLOBAL_MARKER.search(place) or not named:
+            return False, 0.0
+    elif re.search(r"remote|anywhere|worldwide|work from home", place, re.IGNORECASE) and not named:
         return False, 0.0
     return (True, 0.0) if setting.mode == "veto" else (False, setting.penalty)
 
@@ -210,8 +220,9 @@ def describe_preferences(prefs: CareerPreferences) -> str:
     )
     if not prefs.relocation:
         lines.append(
-            f"The candidate will NOT relocate. On-site or hybrid postings outside {wa.current_country or 'their country'} "
-            "should score much lower; fully remote postings are fine."
+            f"The candidate will NOT relocate. On-site or hybrid postings outside {wa.current_country or 'their country'}, and remote "
+            "postings limited to named countries (for example 'Remote, Canada' or 'Germany (Remote)'), should score much lower; "
+            "remote postings open worldwide or to Latin America are fine."
         )
     lines.append(f"Seniority: penalise senior titles by {prefs.seniority.senior_penalty} and staff/principal by {prefs.seniority.staff_penalty} points.")
     lines.append(f"Shortlist threshold: overall_score >= {prefs.shortlist_threshold}.")

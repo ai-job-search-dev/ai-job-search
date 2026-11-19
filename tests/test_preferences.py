@@ -319,9 +319,16 @@ class OnsiteAbroadTests(unittest.TestCase):
         veto, penalty = prefmod.onsite_abroad_effect(self.prefs(), "Delft, NL", False)
         self.assertEqual((veto, penalty), (False, 3.0))
 
+    def test_remote_roles_locked_to_a_country_are_penalised_but_global_ones_are_not(self):
+        p = self.prefs()
+        for location in ("Remote, Canada", "Germany (Remote)", "Remote - Poland; Remote - Spain", "Remote, EU"):
+            self.assertEqual(prefmod.onsite_abroad_effect(p, location, True), (False, 3.0), location)
+        for location in ("Remote, Global", "Remote", "Remote LATAM", "Remote, Argentina", "Worldwide"):
+            self.assertEqual(prefmod.onsite_abroad_effect(p, location, True), (False, 0.0), location)
+
     def test_remote_home_country_unknown_and_relocation_cases_are_untouched(self):
         p = self.prefs()
-        for location, remote in (("Remote, EU", False), ("Buenos Aires, Argentina", False), ("Delft, NL", True), ("", False), ("Delft, NL", None)):
+        for location, remote in (("Buenos Aires, Argentina", False), ("", False), ("Delft, NL", None)):
             self.assertEqual(prefmod.onsite_abroad_effect(p, location, remote), (False, 0.0), (location, remote))
         self.assertEqual(prefmod.onsite_abroad_effect(self.prefs(relocation=True), "Delft, NL", False), (False, 0.0))
 

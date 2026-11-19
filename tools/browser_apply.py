@@ -566,6 +566,20 @@ def _preflight_summary(
         return f"  PRE-FLIGHT: skipped ({exc})"
 
 
+def record_applied(job_id: int, db_path: Optional[Path] = None) -> str:
+    """Record an application you submitted yourself after a pre-fill left the window open. Returns 'applied' or 'blocked'."""
+    init_db(db_path)
+    with get_db(db_path) as conn:
+        try:
+            confirm_application(conn, job_id, notes="Submitted by candidate; recorded afterwards")
+        except ValueError as exc:
+            logger.error(str(exc))
+            return "blocked"
+    METRICS.increment("applied_total")
+    logger.info(f"Recorded APPLIED for job {job_id}; 30-day company cooldown started.")
+    return "applied"
+
+
 def list_ready(db_path: Optional[Path] = None) -> List[Dict[str, Any]]:
     init_db(db_path)
     with get_db(db_path) as conn:
@@ -584,11 +598,14 @@ if __name__ == "__main__":
     parser.add_argument("--job-id", type=int, help="READY_TO_APPLY job to open")
     parser.add_argument("--list", action="store_true", help="List READY_TO_APPLY jobs")
     parser.add_argument("--cdp-url", default=None, help="Attach to a Chrome started by tools/browser_profile.py")
+    parser.add_argument("--record-applied", action="store_true", help="After you submitted the form yourself, record it and start the cooldown")
     parser.add_argument("--allow-host", action="append", default=[], help="Extra host (and its subdomains) to trust for this run")
     args = parser.parse_args()
     if args.list or args.job_id is None:
         for r in list_ready():
             print(f"[{r['id']}] {r['company']} - {r['title']}\n     {r['url']}")
         sys.exit(0)
+    if args.record_applied:
+        sys.exit(0 if record_applied(args.job_id) == "applied" else 1)
     outcome = run_apply(args.job_id, cdp_url=args.cdp_url, extra_hosts=tuple(args.allow_host))
     sys.exit(0 if outcome in ("applied", "pending") else 1)
