@@ -30,6 +30,7 @@ import html
 import json
 import re
 import sys
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
@@ -77,7 +78,13 @@ def load_all(state_path: Path) -> list[dict]:
 
 
 def norm(text) -> str:
-    return " ".join(re.sub(r"[\W_]+", " ", str(text or "").casefold()).split())  # Unicode-aware: keeps non-Latin letters
+    """Match/search key: NFKC, lowercase, every run of non-letter/mark/number characters to one space.
+
+    Keeps letters, combining marks and digits of any script. The in-page search (JS) applies
+    the same steps to the typed query, so queries match these keys.
+    """
+    text = unicodedata.normalize("NFKC", str(text or "")).lower()
+    return " ".join("".join(c if unicodedata.category(c)[0] in "LMN" else " " for c in text).split())
 
 
 def load_tracker(path: Path) -> list[dict]:
@@ -533,7 +540,7 @@ JS = """
         pager=sec.querySelector('.pager'),shown=sec.querySelector('.shown'),page=1;
     function rows(){return Array.prototype.slice.call(tb.rows).filter(function(r){return !r.classList.contains('empty');});}
     function render(){
-      var t=q.value.toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').trim(),sv=st?st.value:'',all=rows();
+      var t=q.value.normalize('NFKC').toLowerCase().replace(/[^\\p{L}\\p{M}\\p{N}]+/gu,' ').trim(),sv=st?st.value:'',all=rows();
       var match=all.filter(function(r){
         return (t===''||(r.getAttribute('data-q')||'').indexOf(t)>-1)&&(sv===''||r.getAttribute('data-status')===sv);
       });

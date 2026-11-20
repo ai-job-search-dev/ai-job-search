@@ -193,7 +193,22 @@ class MakeRankReport(unittest.TestCase):
         _, page = self.run_tool(seen, tracker_rows=tracker)
         self.assertIn("Applied &middot; applied", section(page, "shortlist"))
         self.assertIn('data-q="インフラ エンジニア リーダー 株式会社サンプル"', page)
-        self.assertIn(r"/[^\p{L}\p{N}]+/gu", page, "the in-page search must normalise the same way")
+        self.assertIn(r"q.value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu", page,
+                      "the in-page search must normalise the same way as the Python keys")
+
+    def test_combining_marks_keep_different_names_apart(self):
+        """Stripping combining marks would turn कला and कल into the same key and
+        mark a different company's job as applied."""
+        seen = {"kala": ranked(title="Platform Engineer Lead", company="कला Labs")}
+        tracker = [{"company": "कल Labs", "role": "Platform Engineer Lead", "status": "applied"}]
+        _, page = self.run_tool(seen, tracker_rows=tracker)
+        self.assertNotIn("Applied &middot;", section(page, "shortlist"))
+
+    def test_keys_lowercase_like_the_in_page_search(self):
+        """casefold() would turn ß into ss while JS toLowerCase() keeps ß, so a
+        query typed with the original spelling would stop matching."""
+        _, page = self.run_tool({"de": ranked(title="Leiter IT", company="Großhandel GmbH")})
+        self.assertIn('data-q="leiter it großhandel gmbh"', page)
 
     def test_all_scraped_lists_newest_first_then_highest_score(self):
         seen = {
