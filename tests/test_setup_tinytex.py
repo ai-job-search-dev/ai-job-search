@@ -4,8 +4,9 @@ The snippet is pasted into the user's interactive shell, which is zsh on
 macOS. zsh aborts a command whose glob matches nothing, so a lookup that
 globs both install locations came back empty there, and the snippet then
 persisted `export PATH=":$PATH"` - the current directory first on PATH in
-every future shell. The installer download is stripped; everything after it
-runs as written.
+every future shell. bash's failglob aborts on an unmatched glob the same
+way, so that variant keeps the regression guarded on runners without zsh.
+The installer download is stripped; everything after it runs as written.
 """
 import os
 import re
@@ -64,8 +65,6 @@ class TestTinyTeXPathSnippet(unittest.TestCase):
     def test_bash_writes_nothing_when_tinytex_is_missing(self):
         self.assert_writes_nothing_without_install(shutil.which("bash") or self.skipTest("bash not installed"))
 
-    # bash's failglob aborts on an unmatched glob like zsh's default NOMATCH,
-    # so the zsh regression stays guarded on CI runners without zsh.
     def test_failglob_bash_persists_the_tinytex_bin_dir(self):
         self.assert_persists_bin_dir(shutil.which("bash") or self.skipTest("bash not installed"), "-O", "failglob")
 
