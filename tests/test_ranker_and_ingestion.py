@@ -28,7 +28,6 @@ from tools.db import (
 from tools.logger import FunnelMetrics, StructuredLogger
 from tools.ranker_schema import QuantumJobEvaluation
 from tools.ranker import heuristic_quantum_eval
-from tools.ingest_ats import strip_html
 
 
 class TestSprintModules(unittest.TestCase):
@@ -64,12 +63,6 @@ class TestSprintModules(unittest.TestCase):
             prompts_data = yaml.safe_load(f)
             self.assertIn("ranker", prompts_data)
             self.assertIn("tailor", prompts_data)
-
-    def test_strip_html(self):
-        """Test HTML stripping utility for ATS ingestion."""
-        html = "<div><h3>Quantum <b>Compiler</b> Engineer</h3><p>Python & Qiskit</p></div>"
-        cleaned = strip_html(html)
-        self.assertEqual(cleaned, "Quantum Compiler Engineer Python & Qiskit")
 
     def test_funnel_metrics_tracking(self):
         """Test thread-safe funnel telemetry counter."""

@@ -215,6 +215,35 @@ class FormAnswer(BaseModel):
     note: Optional[str] = None
 
 
+class BankEntry(BaseModel):
+    """A piece of your own story, written once and reused across application forms."""
+
+    id: str
+    topics: List[str] = Field(default_factory=list, description="What questions it answers, e.g. remote_async, challenge")
+    text: str = Field(..., description="First person, English, factual")
+    source: str = Field("user", description="user, linkedin_hr (rewritten from your LinkedIn) or profile")
+    approved: bool = False
+    note: Optional[str] = None
+
+
+class Stance(BaseModel):
+    """A fixed answer to a recurring question. The first stance whose pattern and regions match is used."""
+
+    id: str
+    pattern: str = Field(..., description="Case-insensitive regex matched against the question")
+    answer: str = Field(..., description="English answer; Yes/No are matched to the form's own options in any language")
+    regions: List[str] = Field(default_factory=list, description="Only when the job is tied to one of these regions (ISO codes, EU, EEA); empty means always")
+    translations: Dict[str, str] = Field(default_factory=dict, description="Answer per language code, e.g. {'es': '20 días'}")
+    approved: bool = True
+
+
+class AnswerBank(BaseModel):
+    workplace_tools: List[str] = Field(default_factory=list, description="Tools you can mention without further proof")
+    entries: List[BankEntry] = Field(default_factory=list)
+    stances: List[Stance] = Field(default_factory=list)
+    consents: List[str] = Field(default_factory=list, description="Regexes of checkbox labels you agree to tick, e.g. privacy notices")
+
+
 class MasterProfile(BaseModel):
     """Canonical Master Profile for the candidate."""
     version: str = "2.0.0"
@@ -222,7 +251,7 @@ class MasterProfile(BaseModel):
     identity: CandidateIdentity
     summary: str
     headlines: Dict[str, str] = Field(default_factory=dict, description="CV headline per skill category; 'default' is the fallback")
-    form_answers: List[FormAnswer] = Field(default_factory=list, description="Answers to recurring form questions, used only when approved")
+    answer_bank: AnswerBank = Field(default_factory=AnswerBank)
     summary_variants: Dict[str, str] = Field(default_factory=dict, description="Approved summary per skill category; 'default' is `summary`")
     education: List[EducationEntry] = Field(default_factory=list)
     experience: List[WorkExperienceEntry] = Field(default_factory=list)

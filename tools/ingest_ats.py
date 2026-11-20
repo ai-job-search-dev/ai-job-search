@@ -22,11 +22,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-CONFIG_PATH = (
-    ROOT_DIR / "config" / "companies.yaml"
-    if (ROOT_DIR / "config" / "companies.yaml").exists()
-    else ROOT_DIR / "config" / "target_companies.yaml"
-)
+CONFIG_PATH = ROOT_DIR / "config" / "companies.yaml"
 
 from tools.db import backup_db, check_company_cooldown, flagged_verdict, get_db, init_db, upsert_job
 from tools.net import SourceError, get_with_retry
@@ -40,17 +36,6 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
     "Accept": "application/json",
 }
-
-_HTML_TAGS = re.compile(r"<[^>]+>")
-
-
-def strip_html(markup: str) -> str:
-    """Simple clean text extractor from HTML."""
-    if not markup:
-        return ""
-    text = _HTML_TAGS.sub(" ", markup)
-    return re.sub(r"\s+", " ", text).strip()
-
 
 def fetch_greenhouse_jobs(slug: str) -> List[Dict[str, Any]]:
     """Fetch jobs from public Greenhouse board API."""

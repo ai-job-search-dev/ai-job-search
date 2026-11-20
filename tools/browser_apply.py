@@ -3,7 +3,7 @@
 
 Opens a READY_TO_APPLY job in a dedicated, headed Chrome profile, pre-fills identity, location and education
 fields (dropdowns included, when exactly one option clearly matches), uploads the tailored CV and cover letter,
-and answers recurring questions only with answers you wrote and approved in the profile (`form_answers`).
+and answers the remaining questions from the answer bank (tools/answer_bank.py) or an approved answers.yaml.
 It then prints a pre-flight review and stops at a checkpoint: you review the form and click Submit yourself.
 
 `--submit --confirm-company "<exact name>"` lets the tool click Submit for that one application, and only when
@@ -53,7 +53,8 @@ FIELD_PATTERNS: List[Tuple[str, "re.Pattern[str]"]] = [
     ("first_name", re.compile(r"first[\s_-]*name|given[\s_-]*name|\bfname\b", re.I)),
     ("last_name", re.compile(r"last[\s_-]*name|family[\s_-]*name|surname|\blname\b", re.I)),
     ("full_name", re.compile(r"full[\s_-]*name|^\s*name\b|\byour[\s_-]*name", re.I)),
-    ("country", re.compile(r"\bcountry\b", re.I)),
+    ("citizenship", re.compile(r"passport|citizenship|nationality|nacionalidad|ciudadan[ií]a|pasaporte", re.I)),
+    ("country", re.compile(r"\bcountry\b|\bpa[ií]s\b", re.I)),
     ("school", re.compile(r"\bschool\b|\buniversity\b|\binstitution\b", re.I)),
     ("degree", re.compile(r"\bdegree\b", re.I)),
     ("discipline", re.compile(r"\bdiscipline\b|field[\s_-]*of[\s_-]*study|\bmajor\b", re.I)),
@@ -63,7 +64,7 @@ FIELD_PATTERNS: List[Tuple[str, "re.Pattern[str]"]] = [
 ]
 # Fields that depend on a short, plain label; a long question that merely mentions a country or a degree is never one.
 REUSABLE_KEYS = {"country"}  # forms ask for it twice: phone country code and country of residence
-NARROW_KEYS = {"country", "school", "degree", "discipline", "end_month", "end_year"}
+NARROW_KEYS = {"citizenship", "country", "school", "degree", "discipline", "end_month", "end_year"}
 MAX_NARROW_CHARS = 45
 # Questions this tool must never answer, whatever else the label contains.
 SENSITIVE = re.compile(
@@ -120,6 +121,9 @@ COLLECT_FIELDS_JS = """
       value: el.value || '',
       role: el.getAttribute('role') || '',
       required: !!(el.required || el.getAttribute('aria-required') === 'true'),
+      name: el.name || '',
+      group: (() => { const g = el.closest('fieldset, [role=radiogroup], [role=group]'); const t = g && g.querySelector('legend, [class*=label], label');
+                      return t ? t.innerText.replace(/\\s+/g, ' ').trim() : ''; })(),
       options: el.tagName.toLowerCase() === 'select' ? Array.from(el.options).map(o => o.text.trim()) : [],
     });
   });
@@ -156,6 +160,7 @@ def split_name(full_name: str) -> Tuple[str, str]:
     return parts[0], " ".join(parts[1:])
 
 
+COUNTRY_BY_CODE = {"IT": "Italy", "AR": "Argentina", "ES": "Spain", "US": "United States", "DE": "Germany", "FR": "France", "PT": "Portugal", "BR": "Brazil"}
 MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 DEGREE_LEVELS = (
     ("doctor", 4, r"ph\.?d|doctor"),
@@ -222,6 +227,9 @@ def build_answers(profile: MasterProfile) -> Dict[str, str]:
         "city": ident.location.split(",")[0].strip(),
         "country": ident.location.split(",")[-1].strip() if "," in ident.location else "",
     }
+    citizenships = profile.preferences.work_authorization.citizenships
+    if citizenships:
+        answers["citizenship"] = COUNTRY_BY_CODE.get(citizenships[0].upper(), citizenships[0])
     answers.update(pick_education(profile))
     return {k: v for k, v in answers.items() if v}
 
@@ -253,8 +261,18 @@ def classify_field(descriptor: str, tag: str = "input", input_type: str = "text"
 OPTION_SELECTOR = '[role="option"]'
 
 
+YES_OPTIONS = ["Yes", "Sí", "Si", "Sim", "Oui", "Ja", "Sì"]
+NO_OPTIONS = ["No", "Não", "Nao", "Non", "Nein"]
+
+
 def option_candidates(key: str, value: str) -> List[str]:
-    return DEGREE_SYNONYMS.get(value, [value]) if key == "degree" else [value]
+    if key == "degree":
+        return DEGREE_SYNONYMS.get(value, [value])
+    if value in YES_OPTIONS:
+        return YES_OPTIONS
+    if value in NO_OPTIONS:
+        return NO_OPTIONS
+    return [value]
 
 
 def _token_hit(token: str, option_tokens: List[str]) -> bool:
@@ -318,12 +336,12 @@ def plan_fills(
     answers: Dict[str, str],
     cv_path: Optional[str],
     cover_letter_path: Optional[str],
-    form_answers: Sequence[Any] = (),
+    approved_answers: Sequence[Any] = (),
 ) -> Tuple[List[Dict[str, Any]], List[str]]:
     """Decide what to fill. Returns (fills, labels left for the human).
 
-    `form_answers` are answers you wrote and approved for recurring questions; they are the only way a visa,
-    authorization or similar question is ever answered by this tool.
+    `approved_answers` (answer bank or answers.yaml) are the only way a visa, authorization or other question
+    beyond the profile keys is ever answered by this tool.
     """
     fills: List[Dict[str, Any]] = []
     left: List[str] = []
@@ -333,7 +351,7 @@ def plan_fills(
         if f.get("type") != "file" and not (f.get("descriptor") or "").strip():
             continue  # unlabeled helper inputs that sit behind a styled dropdown
         label = short_label(f.get("descriptor") or "") or f.get("type") or f.get("tag") or "field"
-        approved = next((a for a in form_answers if getattr(a, "approved", False) and re.search(a.pattern, f.get("descriptor") or "", re.I)), None)
+        approved = next((a for a in approved_answers if getattr(a, "approved", False) and re.search(a.pattern, f.get("descriptor") or "", re.I)), None)
         if approved is not None and f.get("type") not in ("file", "checkbox", "radio") and not f.get("value") and ("answer", approved.pattern) not in used:
             if f.get("tag") == "select":
                 choice = pick_option(f.get("options") or [], "answer", approved.answer)
@@ -388,6 +406,10 @@ def form_recognised(fields: List[Dict[str, Any]]) -> bool:
     return bool(keys & {"email", "first_name", "full_name", "resume_file"})
 
 
+def _tick(page: Any, selector: str) -> None:
+    page.check(selector)
+
+
 def _open_combo(page: Any, selector: str) -> None:
     page.click(selector)
 
@@ -440,6 +462,8 @@ def apply_fills(page: Any, fills: List[Dict[str, Any]]) -> int:
                 page.set_input_files(selector, fill["value"])
             elif fill["kind"] == "select":
                 page.select_option(selector, label=fill["value"])
+            elif fill["kind"] == "tick":
+                _tick(page, selector)
             elif fill["kind"] == "combo":
                 if not fill_combo(page, selector, fill["key"], fill["value"]):
                     logger.info(f"No clear option for {fill['key']}={fill['value']!r}; left for you.")
@@ -459,9 +483,12 @@ REJECTED = re.compile(r"this field is required|please (?:fix|correct|complete)|i
 def required_missing(fields: Sequence[Dict[str, Any]], fills: Sequence[Dict[str, Any]]) -> List[str]:
     """Labels of required fields that nothing filled. Consent checkboxes count: only a person can tick them."""
     done = {f["index"] for f in fills if f.get("done")}
+    answered_groups = {f.get("name") for f in fields if f.get("index") in done and f.get("type") == "radio" and f.get("name")}
     missing: List[str] = []
     for f in fields:
         if not f.get("required") or f.get("index") in done or f.get("value") or not (f.get("descriptor") or "").strip():
+            continue
+        if f.get("type") == "radio" and f.get("name") in answered_groups:
             continue
         label = short_label(f["descriptor"])
         if label not in missing:
@@ -619,7 +646,6 @@ def run_apply(
     confirm_company: str = "",
     allow_model_fix: bool = False,
     check_only: bool = False,
-    draft_answers: bool = False,
 ) -> str:
     """Returns 'applied', 'pending' or 'blocked'. Nothing is filled unless the final page is on an approved https host.
 
@@ -656,14 +682,27 @@ def run_apply(
                 logger.error(f"Blocked: the page ended up on {getattr(page, 'url', None)!r}, which is not an approved host. Nothing was filled.")
                 return "blocked"
             fields = page.evaluate(COLLECT_FIELDS_JS)
-            from tools.answer_drafts import NEEDS_HUMAN, load_job_answers
-            job_answers = [a for a in load_job_answers(Path(app["cv_path"]).parent) if a.answer.strip() != NEEDS_HUMAN]
-            fills, left = plan_fills(fields, answers, app["cv_path"], app["cover_letter_path"], [*profile.form_answers, *job_answers])
+            for _ in range(15):  # single-page ATS forms (Ashby, Lever) render after load
+                if form_recognised(fields):
+                    break
+                page.wait_for_timeout(1000)
+                fields = page.evaluate(COLLECT_FIELDS_JS)
+            from tools.answer_bank import load_job_answers
+            job_answers = load_job_answers(Path(app["cv_path"]).parent)
+            base_fills, _ = plan_fills(fields, answers, app["cv_path"], app["cover_letter_path"], job_answers)
+            bank = _bank_answers(conn, job_id, profile, fields, [f["index"] for f in base_fills])
+            fills, left = plan_fills(fields, answers, app["cv_path"], app["cover_letter_path"], [*job_answers, *bank["answers"]])
+            for index in bank["ticks"]:
+                fills.append({"index": index, "kind": "tick", "key": "tick", "label": short_label(next((f.get("descriptor") or "") for f in fields if f["index"] == index)), "value": "checked"})
+            left = [l for l in left if not any(short_label(next((f.get("descriptor") or "") for f in fields if f["index"] == i)) == l for i in bank["ticks"])]
             filled = apply_fills(page, fills)
             left += [f.get("label") or f["key"] for f in fills if not f.get("done")]
             fills = [f for f in fills if f.get("done")]
+            _save_form_values(Path(app["cv_path"]).parent, fills, left)
             summary = [
                 f"  Job:      {app['company_name']} - {app['title']}",
+                f"  Form:     language {bank['language']}" + ("; asks for your own words" if bank["own_words"] else ""),
+                *[f"  Bank:     {line}" for line in bank["report"]],
                 f"  Filled:   {filled} field(s) ({', '.join(f['key'] for f in fills) or 'none'})",
                 f"  For you:  {len(left)} field(s) left untouched"
                 + (f": {'; '.join(left[:8])}" if left else ""),
@@ -673,8 +712,6 @@ def run_apply(
                 summary.append("            Open the real application page yourself; nothing useful was filled.")
             if detect_captcha(page.content()):
                 summary.append("  NOTE:     A CAPTCHA widget is on the page. If it asks, solve it yourself; this tool will not.")
-            if draft_answers:
-                summary.append(_draft_answers_for_form(conn, job_id, profile, app, fields, fills))
             result = _run_preflight(conn, job_id, profile, app, fills, left, answers, preflight_fn)
             summary.append(render_preflight_text(result))
             recognised = form_recognised(fields)
@@ -724,23 +761,28 @@ def _run_preflight(
         return None
 
 
-def _draft_answers_for_form(conn: Any, job_id: int, profile: MasterProfile, app: Any, fields: List[Dict[str, Any]], fills: List[Dict[str, Any]]) -> str:
-    """Write model drafts for the form's free-text questions to answers.yaml. Drafts are never typed until you approve them."""
+def _save_form_values(folder: Path, fills: List[Dict[str, Any]], left: List[str]) -> None:
+    """What was typed, uploaded or ticked, and what was left, beside the documents: the record of what you sent."""
+    import json
+    record = {"filled": [{"field": f.get("label") or f["key"], "kind": f["kind"], "value": Path(f["value"]).name if f["kind"] == "file" else f["value"]} for f in fills],
+              "left_for_you": left}
     try:
-        from tools.answer_drafts import draft_answer, free_text_questions, write_drafts
+        (folder / "form_values.json").write_text(json.dumps(record, indent=2, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _bank_answers(conn: Any, job_id: int, profile: MasterProfile, fields: List[Dict[str, Any]], skip: List[int]) -> Dict[str, Any]:
+    """Answers from the answer bank for what the profile keys do not cover. Never raises."""
+    try:
+        from tools.answer_bank import answer_form
         from tools.llm import LLMGateway, llm_configured
         from tools.preflight import load_job
-        questions = free_text_questions(fields, [f["index"] for f in fills if f.get("done")])
-        if not questions:
-            return "  DRAFTS:   no free-text questions to draft"
-        if not llm_configured():
-            return f"  DRAFTS:   {len(questions)} free-text question(s) found, but no model is configured to draft them"
-        gateway, job = LLMGateway(conn, use_cache=True), load_job(conn, job_id)
-        drafts = [draft_answer(gateway, profile, job, q["question"]) for q in questions]
-        path = write_drafts(Path(app["cv_path"]).parent, drafts)
-        return f"  DRAFTS:   {len(drafts)} answer draft(s) written to {path}; edit them and set approved: true, then run again"
+        gateway = LLMGateway(conn, use_cache=True) if llm_configured() else None
+        return answer_form(conn, profile, load_job(conn, job_id), fields, gateway, skip_indexes=skip)
     except Exception as exc:
-        return f"  DRAFTS:   skipped ({exc})"
+        logger.warning(f"Answer bank skipped: {exc}")
+        return {"answers": [], "ticks": [], "report": [f"skipped ({exc})"], "language": "en", "own_words": False}
 
 
 def render_preflight_text(result: Optional[Dict[str, Any]]) -> str:
@@ -786,7 +828,7 @@ if __name__ == "__main__":
     parser.add_argument("--submit", action="store_true", help="Let the tool click Submit, only when every gate passes (needs --confirm-company)")
     parser.add_argument("--confirm-company", default="", help="The company's exact name, typed by you, to authorise --submit for this one application")
     parser.add_argument("--allow-model-fix", action="store_true", help="Allow --submit when only the model review asks for fixes, after you read them")
-    parser.add_argument("--draft-answers", action="store_true", help="Have the model draft answers to free-text questions into answers.yaml for you to approve")
+    parser.add_argument("--auto", action="store_true", help="Submit without asking when every gate passes; the model review is advisory, HOLD still blocks")
     parser.add_argument("--record-applied", action="store_true", help="After you submitted the form yourself, record it and start the cooldown")
     parser.add_argument("--allow-host", action="append", default=[], help="Extra host (and its subdomains) to trust for this run")
     args = parser.parse_args()
@@ -796,9 +838,14 @@ if __name__ == "__main__":
         sys.exit(0)
     if args.record_applied:
         sys.exit(0 if record_applied(args.job_id) == "applied" else 1)
+    if args.auto:
+        from tools.db import get_db as _get_db
+        with _get_db() as _conn:
+            _row = _conn.execute("SELECT c.name FROM jobs j JOIN companies c ON c.id = j.company_id WHERE j.id = ?", (args.job_id,)).fetchone()
+        args.submit, args.allow_model_fix = True, True
+        args.confirm_company = args.confirm_company or (_row[0] if _row else "")
     if args.submit and not args.confirm_company:
         sys.exit("--submit needs --confirm-company with the company's exact name")
     outcome = run_apply(args.job_id, cdp_url=args.cdp_url, extra_hosts=tuple(args.allow_host), submit=args.submit,
-                        confirm_company=args.confirm_company, allow_model_fix=args.allow_model_fix, check_only=args.check,
-                        draft_answers=args.draft_answers)
+                        confirm_company=args.confirm_company, allow_model_fix=args.allow_model_fix, check_only=args.check)
     sys.exit(0 if outcome in ("applied", "pending") else 1)

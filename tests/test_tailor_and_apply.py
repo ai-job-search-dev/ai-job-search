@@ -455,10 +455,13 @@ class FieldClassificationTests(unittest.TestCase):
         import inspect
         source = Path(browser_apply.__file__).read_text(encoding="utf-8")
         code = "\n".join(l for l in source.splitlines() if not l.lstrip().startswith(("#", '"""')))
-        for forbidden in (".press(", ".dispatch_event(", ".check(", "requestSubmit", ".submit(", ".tap(", "keyboard."):
+        for forbidden in (".press(", ".dispatch_event(", "requestSubmit", ".submit(", ".tap(", "keyboard."):
             self.assertNotIn(forbidden, code)
-        clickers = {name for name, fn in inspect.getmembers(browser_apply, inspect.isfunction) if ".click(" in inspect.getsource(fn)}
+        functions = inspect.getmembers(browser_apply, inspect.isfunction)
+        clickers = {name for name, fn in functions if ".click(" in inspect.getsource(fn)}
         self.assertEqual(clickers, {"_open_combo", "_click_option", "_click_submit"})
+        tickers = {name for name, fn in functions if ".check(" in inspect.getsource(fn)}
+        self.assertEqual(tickers, {"_tick"})
         self.assertIn("role=\"option\"", inspect.getsource(browser_apply._click_option) + browser_apply.OPTION_SELECTOR)
 
     def test_education_and_country_fields_are_filled_but_sensitive_questions_never(self):
@@ -707,43 +710,35 @@ class RunApplyTests(unittest.TestCase):
         self.assertEqual(self._run_submit(check_only=True, submit=False), "pending")
         self.assertEqual(page.submitted, 0)
 
-    def test_drafts_cover_free_text_questions_only_and_are_inert_until_approved(self):
+    def test_per_application_answers_are_typed_only_when_approved(self):
         import tempfile as _tf
-        from types import SimpleNamespace as NS
-        from tools import answer_drafts as ad
-        fields = [
-            {"index": 0, "tag": "textarea", "type": "textarea", "descriptor": "Tell us about your experience working in an async and remote environment", "value": "", "required": True},
-            {"index": 1, "tag": "input", "type": "text", "descriptor": "During this application process I agree to use only my own words. I understand that", "value": ""},
-            {"index": 2, "tag": "input", "type": "text", "descriptor": "Will you now or in the future require sponsorship for a visa to work?", "value": ""},
-            {"index": 3, "tag": "input", "type": "text", "descriptor": "Name", "value": ""},
-            {"index": 4, "tag": "input", "type": "text", "descriptor": "Describe your experience with TypeScript in production?", "value": "", "role": "combobox"},
-        ]
-        asked = ad.free_text_questions(fields, [])
-        self.assertEqual([q["index"] for q in asked], [0])
+        from tools.answer_bank import load_job_answers
+        fields = [{"index": 0, "tag": "textarea", "type": "textarea", "descriptor": "Tell us about your remote work experience", "value": ""}]
         with _tf.TemporaryDirectory() as tmp:
             folder = Path(tmp)
-            reply = ad.AnswerDraft(answer="At Globant I work in agile teams on enterprise Angular applications.")
-            gateway = NS(evaluate=lambda messages, model, job_id=None: (reply, None))
-            job = {"job_id": 1, "title": "Engineer", "company": "Acme", "description": "Remote first."}
-            draft = ad.draft_answer(gateway, make_profile(), job, asked[0]["question"])
-            ad.write_drafts(folder, [draft])
-            ad.write_drafts(folder, [draft])
-            loaded = ad.load_job_answers(folder)
-            self.assertEqual(len(loaded), 1)
-            self.assertFalse(loaded[0].approved)
-            fills, left = browser_apply.plan_fills(fields[:1], {}, None, None, loaded)
-            self.assertEqual((fills, len(left)), ([], 1))
-            approved = [loaded[0].model_copy(update={"approved": True})]
-            fills, _ = browser_apply.plan_fills(fields[:1], {}, None, None, approved)
-            self.assertEqual((fills[0]["kind"], fills[0]["value"][:10]), ("text", "At Globant"))
-            failing = NS(evaluate=lambda messages, model, job_id=None: (_ for _ in ()).throw(RuntimeError("down")))
-            self.assertEqual(ad.draft_answer(failing, make_profile(), job, "Why do you want this role at all?")["answer"], ad.NEEDS_HUMAN)
+            (folder / "answers.yaml").write_text(
+                "answers:\n"
+                "- {pattern: remote work, answer: Draft not yet approved, approved: false}\n"
+                "- {pattern: remote work, answer: My own approved text, approved: true}\n"
+                "- {broken: entry}\n", encoding="utf-8")
+            loaded = load_job_answers(folder)
+            self.assertEqual(len(loaded), 2)
+            fills, left = browser_apply.plan_fills(fields, {}, None, None, loaded)
+            self.assertEqual((fills[0]["value"], left), ("My own approved text", []))
+            self.assertEqual(load_job_answers(folder / "missing"), [])
 
     def test_a_failed_model_review_blocks_the_submit_unless_allowed(self):
         gates = browser_apply.submission_gates
         broken = {"verdict": "send", "checks": [], "model": {"error": "validation failed"}}
         self.assertTrue(gates("Acme", "Acme", [], [], broken, True))
         self.assertEqual(gates("Acme", "Acme", [], [], broken, True, allow_model_fix=True), [])
+
+    def test_passport_and_citizenship_fields_use_the_citizenship_not_the_residence(self):
+        self.assertEqual(browser_apply.classify_field("Passport Country Type here...", "input", "text"), "citizenship")
+        self.assertEqual(browser_apply.classify_field("Nacionalidad", "input", "text"), "citizenship")
+        profile = make_profile()
+        profile.preferences.work_authorization.citizenships = ["IT"]
+        self.assertEqual(browser_apply.build_answers(profile)["citizenship"], "Italy")
 
     def test_country_of_residence_is_recognised_despite_a_long_placeholder(self):
         key = browser_apply.classify_field("Country of Residence Type here... _systemfield_country", "input", "text")
