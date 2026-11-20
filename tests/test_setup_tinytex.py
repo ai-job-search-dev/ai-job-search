@@ -1,0 +1,74 @@
+"""Run SETUP.md's TinyTeX PATH snippet under bash and zsh against a fake HOME.
+
+The snippet is pasted into the user's interactive shell, which is zsh on
+macOS. zsh aborts a command whose glob matches nothing, so a lookup that
+globs both install locations came back empty there, and the snippet then
+persisted `export PATH=":$PATH"` - the current directory first on PATH in
+every future shell. The installer download is stripped; everything after it
+runs as written.
+"""
+import os
+import re
+import shutil
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+SETUP = REPO / "SETUP.md"
+INSTALL_LINES = re.compile(r"^\s*(curl |sh .*install-bin-unix\.sh)")
+
+
+def tinytex_snippet():
+    text = SETUP.read_text(encoding="utf-8")
+    section = text.split("#### Minimal TeX install", 1)[1]
+    block = re.search(r"```bash\n(.*?)```", section, re.DOTALL).group(1)
+    return "\n".join(line for line in block.splitlines() if not INSTALL_LINES.match(line))
+
+
+class TestTinyTeXPathSnippet(unittest.TestCase):
+    def run_snippet(self, shell, layout):
+        home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, home)
+        bin_dir = None
+        if layout:
+            bin_dir = home / layout
+            bin_dir.mkdir(parents=True)
+            stub = bin_dir / "lualatex"
+            stub.write_text("#!/bin/sh\necho stub lualatex\n")
+            stub.chmod(0o755)
+        env = {"HOME": str(home), "SHELL": shell, "PATH": os.environ["PATH"]}
+        result = subprocess.run(
+            [shell, "-c", tinytex_snippet()], env=env, cwd=home, capture_output=True, text=True
+        )
+        rc_text = "".join(p.read_text() for p in home.glob(".*") if p.is_file())
+        return bin_dir, result, rc_text
+
+    def assert_persists_bin_dir(self, shell):
+        for layout in ("Library/TinyTeX/bin/universal-darwin", ".TinyTeX/bin/x86_64-linux"):
+            with self.subTest(shell=shell, layout=layout):
+                bin_dir, result, rc_text = self.run_snippet(shell, layout)
+                self.assertIn(f'export PATH="{bin_dir}:$PATH"', rc_text, result.stderr)
+                self.assertIn("stub lualatex", result.stdout, result.stderr)
+
+    def assert_writes_nothing_without_install(self, shell):
+        _, result, rc_text = self.run_snippet(shell, None)
+        self.assertNotIn("PATH", rc_text, "a failed install must not persist an empty PATH entry")
+        self.assertIn("not found", result.stderr)
+
+    def test_bash_persists_the_tinytex_bin_dir(self):
+        self.assert_persists_bin_dir(shutil.which("bash") or self.skipTest("bash not installed"))
+
+    def test_bash_writes_nothing_when_tinytex_is_missing(self):
+        self.assert_writes_nothing_without_install(shutil.which("bash") or self.skipTest("bash not installed"))
+
+    def test_zsh_persists_the_tinytex_bin_dir(self):
+        self.assert_persists_bin_dir(shutil.which("zsh") or self.skipTest("zsh not installed"))
+
+    def test_zsh_writes_nothing_when_tinytex_is_missing(self):
+        self.assert_writes_nothing_without_install(shutil.which("zsh") or self.skipTest("zsh not installed"))
+
+
+if __name__ == "__main__":
+    unittest.main()

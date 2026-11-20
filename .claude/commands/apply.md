@@ -251,7 +251,7 @@ cd ../cover_letters && xelatex -interaction=nonstopmode cover_<company>_<role>.t
 - **Stock cover letter** uses **xelatex** — cover.cls requires fontspec.
 - **Custom template active:** run its declared `<CV_COMPILE>`/`<COVER_COMPILE>` command instead, substituting the actual filename for `<file>`. Never fall back to lualatex/xelatex when a custom template's compile command is a different toolchain (e.g. `typst compile`) — that command is what the manifest actually verified in `/add-template` Step 4.
 
-If either compile fails, fix the error and re-compile until clean. A `File '<name>.sty' not found` (or `.cls`) error means the TeX install lacks a package, not that the source is wrong: on TeX Live/TinyTeX run `tlmgr search --global --file /<name>.sty` to find the package that ships it, `tlmgr install <package>`, and re-compile; on MiKTeX run `mpm --install=<package>`. Do not rewrite the source to avoid the package.
+If either compile fails, fix the error and re-compile until clean. A missing `.sty`/`.cls` error: follow **Missing LaTeX packages** in `05-cv-templates.md`.
 
 ### 5b. Inspect layout
 

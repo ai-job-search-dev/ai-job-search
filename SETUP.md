@@ -56,27 +56,26 @@ The CV compiles with `lualatex` (pdflatex often fails on modern MiKTeX installs 
 
 Full TeX distributions work out of the box, but minimal distributions need a few extra packages before the stock templates compile.
 
-On macOS and Linux, a user-level TinyTeX install avoids a system-wide installer and does not require `sudo`. It installs to `~/Library/TinyTeX` on macOS and `~/.TinyTeX` on Linux, with the binaries in a platform folder under `bin/` (`universal-darwin`, `x86_64-linux`, `aarch64-linux`, ...):
+On macOS and Linux, a user-level TinyTeX install avoids a system-wide installer and does not require `sudo`. It installs to `~/Library/TinyTeX` on macOS and `~/.TinyTeX` on Linux, with the binaries in a platform folder under `bin/` (`universal-darwin`, `x86_64-linux`, `aarch64-linux`, ...). This block installs it, puts it on `PATH` for the current window, and appends the same line to your shell's startup file (`~/.zshrc`, `~/.bash_profile` on macOS bash, `~/.bashrc` on Linux bash) so new windows find `lualatex` and `xelatex` too:
 
 ```bash
 curl -fsSL https://yihui.org/tinytex/install-bin-unix.sh -o /tmp/tinytex-install-bin-unix.sh
 sh /tmp/tinytex-install-bin-unix.sh "" --no-path
-TINYTEX_BIN="$(ls -d "$HOME"/Library/TinyTeX/bin/* "$HOME"/.TinyTeX/bin/* 2>/dev/null | head -n 1)"
-export PATH="$TINYTEX_BIN:$PATH"
-```
-
-The `export` above only lasts for the current terminal window. Persist it, or every new window reports `command not found: lualatex` (or `xelatex`) even though TinyTeX installed fine:
-
-```bash
+TINYTEX_BIN="$(sh -c 'ls -d "$HOME"/Library/TinyTeX/bin/* "$HOME"/.TinyTeX/bin/* 2>/dev/null | head -n 1')"
 case "$SHELL" in
   */zsh) RC="$HOME/.zshrc" ;;
-  *) RC="$HOME/.bashrc" ;;
+  *) if [ "$(uname)" = Darwin ]; then RC="$HOME/.bash_profile"; else RC="$HOME/.bashrc"; fi ;;
 esac
-echo "export PATH=\"$TINYTEX_BIN:\$PATH\"" >> "$RC"
-lualatex --version   # should print a version, not "command not found"
+if [ -d "$TINYTEX_BIN" ]; then
+  export PATH="$TINYTEX_BIN:$PATH"
+  echo "export PATH=\"$TINYTEX_BIN:\$PATH\"" >> "$RC"
+  lualatex --version
+else
+  echo "TinyTeX bin folder not found: check the installer output above" >&2
+fi
 ```
 
-(Bash on macOS reads `~/.bash_profile` instead of `~/.bashrc`: append the line there. On a headless Linux server without a desktop, `xelatex` also needs fontconfig: `sudo apt install fontconfig` or your distribution's equivalent.)
+On a headless Linux server without a desktop, `xelatex` also needs fontconfig: `sudo apt install fontconfig` or your distribution's equivalent.
 
 Then install the template dependencies:
 
@@ -124,7 +123,7 @@ initexmf --set-config-value=[MPM]AutoInstall=1
 
 (Run the first line from an elevated/Admin PowerShell if you installed MiKTeX for all users; the second line covers a per-user install. Only one will apply depending on how you installed it — running both is harmless.)
 
-If you'd rather not rely on on-the-fly installs at all (for example, for a fully offline compile later), pre-install the same package set the macOS TinyTeX section above lists, using MiKTeX's package manager:
+If you'd rather not rely on on-the-fly installs at all (for example, for a fully offline compile later), pre-install the same package set the TinyTeX section above lists, using MiKTeX's package manager:
 
 ```powershell
 mpm --admin --install=moderncv --install=fontawesome5 --install=fontawesome6 --install=academicons --install=import --install=luatexbase --install=pgf --install=titlesec --install=textpos --install=xltxtra --install=xunicode --install=cite --install=realscripts --install=needspace --install=setspace
