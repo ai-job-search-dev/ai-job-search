@@ -48,7 +48,7 @@ Install a LaTeX distribution to compile the generated `.tex` files to PDF:
 
 - **Windows:** [MiKTeX](https://miktex.org/download)
 - **macOS:** [MacTeX](https://tug.org/mactex/)
-- **Linux:** `sudo apt install texlive-full` or `sudo dnf install texlive-scheme-full`
+- **Linux:** `sudo apt install texlive-full` or `sudo dnf install texlive-scheme-full`, or the user-level TinyTeX install below
 
 The CV compiles with `lualatex` (pdflatex often fails on modern MiKTeX installs with `fontawesome5` font-expansion errors). The cover letter compiles with `xelatex` because `cover.cls` requires `fontspec` for its custom Lato/Raleway fonts.
 
@@ -56,30 +56,34 @@ The CV compiles with `lualatex` (pdflatex often fails on modern MiKTeX installs 
 
 Full TeX distributions work out of the box, but minimal distributions need a few extra packages before the stock templates compile.
 
-On macOS, a user-level TinyTeX install avoids a system-wide installer and does not require `sudo`:
+On macOS and Linux, a user-level TinyTeX install avoids a system-wide installer and does not require `sudo`. It installs to `~/Library/TinyTeX` on macOS and `~/.TinyTeX` on Linux, with the binaries in a platform folder under `bin/` (`universal-darwin`, `x86_64-linux`, `aarch64-linux`, ...):
 
 ```bash
 curl -fsSL https://yihui.org/tinytex/install-bin-unix.sh -o /tmp/tinytex-install-bin-unix.sh
-sh /tmp/tinytex-install-bin-unix.sh /tmp --no-path
-export PATH="$HOME/Library/TinyTeX/bin/universal-darwin:$PATH"
+sh /tmp/tinytex-install-bin-unix.sh "" --no-path
+TINYTEX_BIN="$(ls -d "$HOME"/Library/TinyTeX/bin/* "$HOME"/.TinyTeX/bin/* 2>/dev/null | head -n 1)"
+export PATH="$TINYTEX_BIN:$PATH"
 ```
 
-The `export` above only lasts for the current terminal window. Persist it, or every new window reports `zsh: command not found: lualatex` (or `xelatex`) even though TinyTeX installed fine:
+The `export` above only lasts for the current terminal window. Persist it, or every new window reports `command not found: lualatex` (or `xelatex`) even though TinyTeX installed fine:
 
 ```bash
-echo 'export PATH="$HOME/Library/TinyTeX/bin/universal-darwin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
+case "$SHELL" in
+  */zsh) RC="$HOME/.zshrc" ;;
+  *) RC="$HOME/.bashrc" ;;
+esac
+echo "export PATH=\"$TINYTEX_BIN:\$PATH\"" >> "$RC"
 lualatex --version   # should print a version, not "command not found"
 ```
 
-(Bash users: append to `~/.bash_profile` instead.)
+(Bash on macOS reads `~/.bash_profile` instead of `~/.bashrc`: append the line there. On a headless Linux server without a desktop, `xelatex` also needs fontconfig: `sudo apt install fontconfig` or your distribution's equivalent.)
 
 Then install the template dependencies:
 
 ```bash
 tlmgr install \
   moderncv fontawesome5 fontawesome6 academicons import luatexbase pgf \
-  titlesec textpos xltxtra xunicode cite realscripts needspace
+  titlesec textpos xltxtra xunicode cite realscripts needspace setspace
 ```
 
 For BasicTeX/MacTeX, make sure the TeX binary directory is on `PATH` first (for example via `/Library/TeX/texbin`), then run the same `tlmgr install ...` command.
@@ -123,7 +127,7 @@ initexmf --set-config-value=[MPM]AutoInstall=1
 If you'd rather not rely on on-the-fly installs at all (for example, for a fully offline compile later), pre-install the same package set the macOS TinyTeX section above lists, using MiKTeX's package manager:
 
 ```powershell
-mpm --admin --install=moderncv --install=fontawesome5 --install=fontawesome6 --install=academicons --install=import --install=luatexbase --install=pgf --install=titlesec --install=textpos --install=xltxtra --install=xunicode --install=cite --install=realscripts --install=needspace
+mpm --admin --install=moderncv --install=fontawesome5 --install=fontawesome6 --install=academicons --install=import --install=luatexbase --install=pgf --install=titlesec --install=textpos --install=xltxtra --install=xunicode --install=cite --install=realscripts --install=needspace --install=setspace
 ```
 
 Drop `--admin` if MiKTeX is installed for the current user only. If a package name doesn't resolve, `mpm --find=<name>` searches the repository for the correct name.
