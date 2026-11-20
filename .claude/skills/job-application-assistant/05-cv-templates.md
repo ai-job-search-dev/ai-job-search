@@ -1,5 +1,5 @@
 ---
-framework_version: 1.4.8
+framework_version: 1.4.9
 ---
 
 # CV Templates and Tailoring Guide
@@ -40,6 +40,10 @@ Expected output: `Output written on main_<company>_<role>.pdf (2 pages, ...)`. A
 \colorlet{lastnamecolor}{color1}
 \colorlet{namecolor}{color1}
 \renewcommand*{\sectionstyle}[1]{{\sectionfont\color{color1}#1}}
+% Banking's awesome icon set renews \labelitemi as a FontAwesome circle whose
+% ToUnicode maps to U+1F7E4, so each bullet extracts as an emoji in the PDF
+% text layer that ATS parsers read. Use moderncv.cls's own text bullet instead.
+\renewcommand*{\labelitemi}{\strut\textcolor{color1}{\large\rmfamily\textbullet}}
 
 \usepackage[utf8]{inputenc}
 % pdflatex fallback only (the documented engine is lualatex, which skips this
