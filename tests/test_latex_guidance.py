@@ -179,7 +179,9 @@ class TestPdflatexFontEncodingGuard(unittest.TestCase):
 class TestMissingPackageGuidance(unittest.TestCase):
     """A minimal TeX install only behaves like a full one if every compile
     loop installs a missing package instead of editing the source around it.
-    The rule lives once in 05-cv-templates.md; every compile loop points to it."""
+    The rule lives once in 05-cv-templates.md; every agent compile loop (05, 06,
+    /apply, /add-template) points to it. SETUP.md's smoke tests are run by people
+    and list every package up front, so they carry no pointer."""
 
     HEADING = "Missing LaTeX packages"
 

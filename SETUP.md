@@ -65,6 +65,7 @@ case "$SHELL" in
   */zsh) RC="$HOME/.zshrc" ;;
   *) if [ "$(uname)" != Darwin ]; then RC="$HOME/.bashrc"
      elif [ -f "$HOME/.bash_profile" ]; then RC="$HOME/.bash_profile"
+     elif [ -f "$HOME/.bash_login" ]; then RC="$HOME/.bash_login"
      else RC="$HOME/.profile"; fi ;;
 esac
 if [ -d "$TINYTEX_BIN" ]; then
@@ -73,6 +74,7 @@ if [ -d "$TINYTEX_BIN" ]; then
   lualatex --version
 else
   echo "TinyTeX bin folder not found: check the installer output above" >&2
+  false
 fi
 ```
 
