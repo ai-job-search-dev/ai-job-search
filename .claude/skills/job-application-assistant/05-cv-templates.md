@@ -24,10 +24,10 @@ Expected output: `Output written on main_<company>_<role>.pdf (2 pages, ...)`. A
 
 ### Missing LaTeX packages
 
-A compile that stops on ``! LaTeX Error: File `<file>' not found`` (a `.sty` or `.cls`) usually means the TeX install lacks a package, which is normal on minimal installs such as TinyTeX. Install it rather than rewriting the source to avoid it: `tlmgr search --global --file /<file>` (the exact file name from the error) names the package that ships it, then `tlmgr install <package>` and re-compile. MiKTeX with `[MPM]AutoInstall=1` (see SETUP.md) installs it during the compile; otherwise `mpm --install=<package>`. Exceptions:
+A compile that stops on ``! LaTeX Error: File `<file>' not found`` (a `.sty` or `.cls`) usually means the TeX install lacks a package, which is normal on minimal installs such as TinyTeX. Install it rather than rewriting the source to avoid it: `tlmgr search --global --file /<file>` (the exact file name from the error) names the package that ships it, then `tlmgr install <package>` and re-compile. MiKTeX has no `tlmgr`: with `[MPM]AutoInstall=1` (see SETUP.md) it installs the package during the compile; otherwise `mpm --install=<package>`. Exceptions:
 
-- **The search finds nothing:** the name is misspelled, or the file is local (a class or style that belongs next to the source, such as `cover.cls`). Fix the source or the working directory.
-- **`tlmgr` is missing or disabled (distribution-packaged TeX Live), or the install needs root (BasicTeX/MacTeX, system-wide TeX Live):** never run `sudo`. Tell the user the exact install command, or the distribution package that ships the file, and wait.
+- **The search succeeds but finds nothing:** the name is misspelled, or the file is local (a class or style that belongs next to the source, such as `cover.cls`). Fix the source or the working directory.
+- **The install cannot run:** `tlmgr` is disabled (distribution-packaged TeX Live), cannot reach its repository, or needs root (BasicTeX/MacTeX, system-wide TeX Live), or `mpm` needs admin rights. Never run `sudo`. Tell the user the exact install command, or the distribution package that ships the file, and wait.
 
 ## Document Structure
 

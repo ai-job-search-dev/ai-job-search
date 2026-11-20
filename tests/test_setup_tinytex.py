@@ -27,8 +27,9 @@ def tinytex_snippet():
     return "\n".join(line for line in block.splitlines() if not INSTALL_LINES.match(line))
 
 
+@unittest.skipIf(os.name == "nt", "the snippet targets macOS and Linux; Windows uses MiKTeX")
 class TestTinyTeXPathSnippet(unittest.TestCase):
-    def run_snippet(self, shell, layout):
+    def run_snippet(self, shell, layout, *shell_opts):
         home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, home)
         bin_dir = None
@@ -40,20 +41,20 @@ class TestTinyTeXPathSnippet(unittest.TestCase):
             stub.chmod(0o755)
         env = {"HOME": str(home), "SHELL": shell, "PATH": os.environ["PATH"]}
         result = subprocess.run(
-            [shell, "-c", tinytex_snippet()], env=env, cwd=home, capture_output=True, text=True
+            [shell, *shell_opts, "-c", tinytex_snippet()], env=env, cwd=home, capture_output=True, text=True
         )
         rc_text = "".join(p.read_text() for p in home.glob(".*") if p.is_file())
         return bin_dir, result, rc_text
 
-    def assert_persists_bin_dir(self, shell):
+    def assert_persists_bin_dir(self, shell, *shell_opts):
         for layout in ("Library/TinyTeX/bin/universal-darwin", ".TinyTeX/bin/x86_64-linux"):
-            with self.subTest(shell=shell, layout=layout):
-                bin_dir, result, rc_text = self.run_snippet(shell, layout)
+            with self.subTest(shell=shell, opts=shell_opts, layout=layout):
+                bin_dir, result, rc_text = self.run_snippet(shell, layout, *shell_opts)
                 self.assertIn(f'export PATH="{bin_dir}:$PATH"', rc_text, result.stderr)
                 self.assertIn("stub lualatex", result.stdout, result.stderr)
 
-    def assert_writes_nothing_without_install(self, shell):
-        _, result, rc_text = self.run_snippet(shell, None)
+    def assert_writes_nothing_without_install(self, shell, *shell_opts):
+        _, result, rc_text = self.run_snippet(shell, None, *shell_opts)
         self.assertNotIn("PATH", rc_text, "a failed install must not persist an empty PATH entry")
         self.assertIn("not found", result.stderr)
 
@@ -62,6 +63,11 @@ class TestTinyTeXPathSnippet(unittest.TestCase):
 
     def test_bash_writes_nothing_when_tinytex_is_missing(self):
         self.assert_writes_nothing_without_install(shutil.which("bash") or self.skipTest("bash not installed"))
+
+    # bash's failglob aborts on an unmatched glob like zsh's default NOMATCH,
+    # so the zsh regression stays guarded on CI runners without zsh.
+    def test_failglob_bash_persists_the_tinytex_bin_dir(self):
+        self.assert_persists_bin_dir(shutil.which("bash") or self.skipTest("bash not installed"), "-O", "failglob")
 
     def test_zsh_persists_the_tinytex_bin_dir(self):
         self.assert_persists_bin_dir(shutil.which("zsh") or self.skipTest("zsh not installed"))

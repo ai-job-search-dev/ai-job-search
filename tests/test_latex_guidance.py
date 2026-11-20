@@ -187,7 +187,7 @@ class TestMissingPackageGuidance(unittest.TestCase):
         body = section(CV_TEMPLATES.read_text(encoding="utf-8"), self.HEADING)
         self.assertIsNotNone(body, f"05-cv-templates.md needs a '{self.HEADING}' section")
         self.assertIn("tlmgr search --global --file", body)
-        self.assertIn("sudo", body, "the rule must say what to do when an install needs root")
+        self.assertIn("never run `sudo`", body.lower(), "the rule must say what to do when an install needs root")
 
     def test_every_compile_loop_points_to_the_rule(self):
         add_template = REPO / ".claude" / "commands" / "add-template.md"

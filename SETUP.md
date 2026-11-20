@@ -56,7 +56,7 @@ The CV compiles with `lualatex` (pdflatex often fails on modern MiKTeX installs 
 
 Full TeX distributions work out of the box, but minimal distributions need a few extra packages before the stock templates compile.
 
-On macOS and Linux, a user-level TinyTeX install avoids a system-wide installer and does not require `sudo`. It installs to `~/Library/TinyTeX` on macOS and `~/.TinyTeX` on Linux, with the binaries in a platform folder under `bin/` (`universal-darwin`, `x86_64-linux`, `aarch64-linux`, ...). This block installs it, puts it on `PATH` for the current window, and appends the same line to your shell's startup file (`~/.zshrc`, `~/.bash_profile` on macOS bash, `~/.bashrc` on Linux bash) so new windows find `lualatex` and `xelatex` too:
+On macOS and Linux, a user-level TinyTeX install avoids a system-wide installer and does not require `sudo`. It installs to `~/Library/TinyTeX` on macOS and `~/.TinyTeX` on Linux, with the binaries in a platform folder under `bin/` (`universal-darwin`, `x86_64-linux`, `aarch64-linux`, ...). This block installs it, puts it on `PATH` for the current window, and appends the same line to your shell's startup file (`~/.zshrc`; for bash, `~/.bashrc` on Linux and your existing login profile on macOS) so new windows find `lualatex` and `xelatex` too:
 
 ```bash
 curl -fsSL https://yihui.org/tinytex/install-bin-unix.sh -o /tmp/tinytex-install-bin-unix.sh
@@ -64,7 +64,9 @@ sh /tmp/tinytex-install-bin-unix.sh "" --no-path
 TINYTEX_BIN="$(sh -c 'ls -d "$HOME"/Library/TinyTeX/bin/* "$HOME"/.TinyTeX/bin/* 2>/dev/null | head -n 1')"
 case "$SHELL" in
   */zsh) RC="$HOME/.zshrc" ;;
-  *) if [ "$(uname)" = Darwin ]; then RC="$HOME/.bash_profile"; else RC="$HOME/.bashrc"; fi ;;
+  *) if [ "$(uname)" != Darwin ]; then RC="$HOME/.bashrc"
+     elif [ -f "$HOME/.bash_profile" ]; then RC="$HOME/.bash_profile"
+     else RC="$HOME/.profile"; fi ;;
 esac
 if [ -d "$TINYTEX_BIN" ]; then
   export PATH="$TINYTEX_BIN:$PATH"
