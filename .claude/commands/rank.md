@@ -202,6 +202,9 @@ Rules for the presentation:
 - Say explicitly that these are **triage scores from the posting text only**, and that `/apply` will re-evaluate with company research before anything is drafted.
 - Then ask: "Want to apply to any of these? Give me the number(s) and I'll start with the full `/apply` workflow."
 - If the user picks one, run the `/apply` workflow on that job's URL, passing the triage verdict as prior context but **re-running the full Step 1 evaluation** - triage never substitutes for it.
+- **HTML report (last step, every run):** after presenting, refresh the browsable page with
+  `python3 tools/make_rank_report.py --run-results "<the temporary results file passed to rank_state.py apply>"`
+  and give the user the `report` path from its JSON output. On the sweep-only "Nothing new to rank" path, run it without `--run-results`. It rewrites one self-contained page, `reports/job-ranking.html` (gitignored, works offline): the shortlist and below-threshold tables with search and sortable columns, the jobs scored this run marked "New", an "Applied" badge on jobs already in `job_search_tracker.csv`, and a table of every scraped entry whatever its status. It reads `job_scraper/seen_jobs.json` and the tracker only and writes nothing else. All posting-derived text is HTML-escaped and only http(s) links are rendered, since it is untrusted data.
 
 ---
 
