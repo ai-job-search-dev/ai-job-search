@@ -184,13 +184,49 @@ class MakeRankReport(unittest.TestCase):
         self.assertIn("run /scrape and /rank first", proc.stderr)
 
 
+    def test_non_latin_company_and_title_still_match_the_tracker(self):
+        """The normaliser behind tracker matching and search must keep Unicode
+        letters: an ASCII-only one reduces these names to nothing."""
+        seen = {"jp": ranked(title="インフラ エンジニア リーダー", company="株式会社サンプル")}
+        tracker = [{"date": "2026-09-03", "company": "株式会社サンプル", "role": "インフラ エンジニア リーダー",
+                    "status": "applied", "fit_rating": "70"}]
+        _, page = self.run_tool(seen, tracker_rows=tracker)
+        self.assertIn("Applied &middot; applied", section(page, "shortlist"))
+        self.assertIn('data-q="インフラ エンジニア リーダー 株式会社サンプル"', page)
+        self.assertIn(r"/[^\p{L}\p{N}]+/gu", page, "the in-page search must normalise the same way")
+
+    def test_all_scraped_lists_newest_first_then_highest_score(self):
+        seen = {
+            "low": ranked(title="Low Same Day", first_seen="2026-09-05", rank_score=40),
+            "high": ranked(title="High Same Day", company="Beta", first_seen="2026-09-05", rank_score=90),
+            "older": ranked(title="Older Day", company="Gamma", first_seen="2026-09-01", rank_score=99),
+        }
+        _, page = self.run_tool(seen)
+        table = section(page, "all-scraped")
+        order = [table.index(t) for t in ("High Same Day", "Low Same Day", "Older Day")]
+        self.assertEqual(order, sorted(order))
+
+    def test_summary_counts_drafted_rows_case_insensitively(self):
+        tracker = [{"company": "Acme", "role": "Platform Engineer", "status": " Drafted "},
+                   {"company": "Beta", "role": "Data Engineer", "status": "applied"}]
+        _, page = self.run_tool({"a": ranked()}, tracker_rows=tracker)
+        self.assertIn("1 applications sent", page)
+
+
 class RankCommandRunsTheReport(unittest.TestCase):
-    def test_step5_runs_the_report_on_both_paths(self):
-        text = (REPO / ".claude" / "commands" / "rank.md").read_text(encoding="utf-8")
-        step5 = text[text.index("## Step 5: Present the Shortlist"):]
+    def setUp(self):
+        self.text = (REPO / ".claude" / "commands" / "rank.md").read_text(encoding="utf-8")
+
+    def test_step5_runs_the_report_with_this_runs_results(self):
+        step5 = self.text[self.text.index("## Step 5: Present the Shortlist"):]
         self.assertIn("tools/make_rank_report.py --run-results", step5)
-        self.assertIn("Nothing new to rank", step5)
         self.assertIn("reports/job-ranking.html", step5)
+
+    def test_sweep_only_path_runs_the_report_without_run_results_before_stopping(self):
+        line = next(l for l in self.text.splitlines() if 'say "Nothing new to rank"' in l)
+        tail = line[line.index("Then "):]
+        self.assertIn("HTML report step without `--run-results`", tail)
+        self.assertLess(tail.index("HTML report"), tail.index("stop"), "the report must run before the path stops")
 
 
 if __name__ == "__main__":

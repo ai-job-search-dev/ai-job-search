@@ -77,7 +77,7 @@ def load_all(state_path: Path) -> list[dict]:
 
 
 def norm(text) -> str:
-    return " ".join(re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).split())
+    return " ".join(re.sub(r"[\W_]+", " ", str(text or "").casefold()).split())  # Unicode-aware: keeps non-Latin letters
 
 
 def load_tracker(path: Path) -> list[dict]:
@@ -262,7 +262,7 @@ def applications_table(tracker: list[dict], entries: list[dict]) -> str:
 
 def scraped_table(all_entries: list[dict], tracker: list[dict]) -> str:
     """Every job in seen_jobs.json, so scraped, skipped, ranked and applied jobs can be cross-referenced."""
-    rows = sorted(all_entries, key=lambda e: (str(e.get("first_seen") or ""), -score_of(e)), reverse=True)
+    rows = sorted(all_entries, key=lambda e: (str(e.get("first_seen") or ""), score_of(e)), reverse=True)  # newest first, then highest score
     statuses = sorted({str(e.get("status") or "-") for e in rows})
     out = []
     for e in rows:
@@ -533,7 +533,7 @@ JS = """
         pager=sec.querySelector('.pager'),shown=sec.querySelector('.shown'),page=1;
     function rows(){return Array.prototype.slice.call(tb.rows).filter(function(r){return !r.classList.contains('empty');});}
     function render(){
-      var t=q.value.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(),sv=st?st.value:'',all=rows();
+      var t=q.value.toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').trim(),sv=st?st.value:'',all=rows();
       var match=all.filter(function(r){
         return (t===''||(r.getAttribute('data-q')||'').indexOf(t)>-1)&&(sv===''||r.getAttribute('data-status')===sv);
       });
@@ -583,7 +583,7 @@ def render(entries: list[dict], run_label: str, new_basis: str, generated: datet
         e["_applied"] = (hit.get("status") or "tracked") if hit else ""
     short, below = classify(entries)
     n_new = sum(1 for e in entries if e["_new"])
-    n_app = sum(1 for r in tracker if (r.get("status") or "") != "drafted")
+    n_app = sum(1 for r in tracker if (r.get("status") or "").strip().lower() != "drafted")
     summary = (f"{len(entries)} ranked jobs, {n_new} new this run, {len(short)} shortlisted, {len(below)} below threshold"
                + (f", {n_app} applications sent" if tracker else ""))
     return (
