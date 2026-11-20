@@ -1,0 +1,11 @@
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+graphify-out/
+backups/
+reports/
+node_modules/
+*.db
+*.db-shm
+*.db-wal
