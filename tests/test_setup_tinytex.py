@@ -23,7 +23,7 @@ INSTALL_LINES = re.compile(r"^\s*(curl |sh .*install-bin-unix\.sh)")
 
 def tinytex_snippet():
     text = SETUP.read_text(encoding="utf-8")
-    section = text.split("#### Minimal TeX install", 1)[1]
+    section = text.split("#### macOS and Linux: TinyTeX", 1)[1]
     block = re.search(r"```bash\n(.*?)```", section, re.DOTALL).group(1)
     return "\n".join(line for line in block.splitlines() if not INSTALL_LINES.match(line))
 

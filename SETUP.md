@@ -44,19 +44,18 @@ If you prefer a package manager, `winget install Oven-sh.Bun` also works on Wind
 
 ### LaTeX (for compiling CVs and cover letters)
 
-Install a LaTeX distribution to compile the generated `.tex` files to PDF:
+The generated `.tex` files compile with a minimal LaTeX distribution plus about a dozen packages the templates use: about 220 MB, where a full TeX Live or MacTeX is several GB.
 
-- **Windows:** [MiKTeX](https://miktex.org/download)
-- **macOS:** [MacTeX](https://tug.org/mactex/)
-- **Linux:** `sudo apt install texlive-full` or `sudo dnf install texlive-scheme-full`, or the user-level TinyTeX install below
+- **macOS and Linux:** [TinyTeX](#macos-and-linux-tinytex), below
+- **Windows:** [Basic MiKTeX](#windows-basic-miktex), below
+
+A full TeX Live, MacTeX or MiKTeX you already have works as is; skip to the smoke tests. When a compile hits a package the minimal install lacks (for example one a custom template adds), Claude installs it with `tlmgr` or `mpm` and re-compiles.
 
 The CV compiles with `lualatex` (pdflatex often fails on modern MiKTeX installs with `fontawesome5` font-expansion errors). The cover letter compiles with `xelatex` because `cover.cls` requires `fontspec` for its custom Lato/Raleway fonts.
 
-#### Minimal TeX install: TinyTeX/BasicTeX
+#### macOS and Linux: TinyTeX
 
-Full TeX distributions work out of the box, but minimal distributions need a few extra packages before the stock templates compile.
-
-On macOS and Linux, a user-level TinyTeX install avoids a system-wide installer and does not require `sudo`. It installs to `~/Library/TinyTeX` on macOS and `~/.TinyTeX` on Linux, with the binaries in a platform folder under `bin/` (`universal-darwin`, `x86_64-linux`, `aarch64-linux`, ...). This block installs it, puts it on `PATH` for the current window, and appends the same line to your shell's startup file (`~/.zshrc`; for bash, `~/.bashrc` on Linux and your existing login profile on macOS) so new windows find `lualatex` and `xelatex` too:
+A user-level TinyTeX install avoids a system-wide installer and does not require `sudo`. It installs to `~/Library/TinyTeX` on macOS and `~/.TinyTeX` on Linux, with the binaries in a platform folder under `bin/` (`universal-darwin`, `x86_64-linux`, `aarch64-linux`, ...). This block installs it, puts it on `PATH` for the current window, and appends the same line to your shell's startup file (`~/.zshrc`; for bash, `~/.bashrc` on Linux and your existing login profile on macOS) so new windows find `lualatex` and `xelatex` too:
 
 ```bash
 curl -fsSL https://yihui.org/tinytex/install-bin-unix.sh -o /tmp/tinytex-install-bin-unix.sh
@@ -114,7 +113,7 @@ EOF
 
 #### Windows: Basic MiKTeX
 
-The full MiKTeX installer bundles every CTAN package and works out of the box, but the smaller [Basic MiKTeX](https://miktex.org/download) installer (`basic-miktex-*.exe`) only ships a minimal package set and needs a couple of one-time settings before the stock templates compile.
+Use the [Basic MiKTeX](https://miktex.org/download) installer (`basic-miktex-*.exe`). It ships a minimal package set and needs a couple of one-time settings before the stock templates compile.
 
 By default, MiKTeX installs missing packages on demand but pops up a GUI prompt for each one — which blocks non-interactive terminals (including Claude Code's Bash tool). Turn that into a silent auto-install instead:
 

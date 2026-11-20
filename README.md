@@ -83,14 +83,14 @@ The framework encodes career guidance best practices, including structured evalu
 | **[Claude Code](https://claude.com/claude-code)** | The CLI. No free tier: a Claude Pro/Max/Team subscription or Anthropic API credits (pay-per-token, usually cheaper for occasional use). |
 | **Python 3.10+** | For the tools in `tools/`. |
 | **[Bun](https://bun.sh)** | Runs the job portal CLI tools you copy in from community-portals. |
-| **LaTeX** | A distribution with `lualatex` and `xelatex`: [TeX Live](https://tug.org/texlive/), [MacTeX](https://tug.org/mactex/), [TinyTeX](https://yihui.org/tinytex/), or [MiKTeX](https://miktex.org/). |
+| **LaTeX** | A minimal install with `lualatex` and `xelatex`: [TinyTeX](https://yihui.org/tinytex/) on macOS/Linux or [Basic MiKTeX](https://miktex.org/) on Windows, plus the packages in [SETUP.md](SETUP.md#latex-for-compiling-cvs-and-cover-letters). A full TeX Live, MacTeX or MiKTeX also works. |
 | **pypdf** *(optional)* | `pip install pypdf` for `/apply`'s ATS parseability check. |
 
 <details>
 <summary>Fine print: other agents, LaTeX engines, PDF text extraction</summary>
 
 - **Using a different agent tool** (Codex, Antigravity, Gemini CLI)? Start at [`AGENTS.md`](AGENTS.md) - portal search skills you copy into `.agents/skills/` work there out of the box, and [community forks](https://github.com/ai-job-search-dev/ai-job-search/discussions/78) adapt the full workflow.
-- **LaTeX engines.** The CV compiles with `lualatex` (pdflatex often fails on modern MiKTeX installs with `fontawesome5` font-expansion errors); the cover letter compiles with `xelatex` because `cover.cls` requires `fontspec`. If using a minimal TeX install such as TinyTeX or BasicTeX, install the extra packages listed in [SETUP.md](SETUP.md#minimal-tex-install-tinytexbasictex).
+- **LaTeX engines.** The CV compiles with `lualatex` (pdflatex often fails on modern MiKTeX installs with `fontawesome5` font-expansion errors); the cover letter compiles with `xelatex` because `cover.cls` requires `fontspec`. The minimal TinyTeX/Basic MiKTeX install and its package list are in [SETUP.md](SETUP.md#latex-for-compiling-cvs-and-cover-letters).
 - **PDF text extraction.** `pypdf` is BSD-licensed and needs no Poppler. Poppler `pdftotext` remains a fallback (macOS: `brew install poppler`, Debian/Ubuntu: `apt install poppler-utils`, Windows: `choco install poppler`). If both are missing, the check degrades to a visual keyword review.
 
 </details>
