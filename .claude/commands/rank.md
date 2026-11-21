@@ -42,7 +42,7 @@ If it reports no candidates, there is nothing to score, but already-ranked jobs 
 python3 tools/rank_state.py sweep --write
 ```
 
-Skip profile loading and Steps 2-4 on this path: no jobs need fetching or scoring. Present a sweep-only Step 5 summary: say "Nothing new to rank", report `swept` and `newly_expired`, list `closing_soon` with deadlines and posting URLs, and report any `unparseable_deadlines` with their portals. Apply rule 6's same reporting and defensive-date rules. Then suggest `/scrape` for fresh postings and stop. An empty candidate batch, including one caused by a focus filter or tracker exclusion, never skips this sweep.
+Skip profile loading and Steps 2-4 on this path: no jobs need fetching or scoring. Present a sweep-only Step 5 summary: say "Nothing new to rank", report `swept` and `newly_expired`, list `closing_soon` with deadlines and posting URLs, and report any `unparseable_deadlines` with their portals. Apply rule 6's same reporting and defensive-date rules. Then run Step 5's HTML report step without `--run-results`, suggest `/scrape` for fresh postings, and stop. An empty candidate batch, including one caused by a focus filter or tracker exclusion, never skips this sweep.
 
 Then read the scoring framework and profile **once**:
 - `.claude/skills/job-application-assistant/04-job-evaluation.md`
@@ -202,6 +202,9 @@ Rules for the presentation:
 - Say explicitly that these are **triage scores from the posting text only**, and that `/apply` will re-evaluate with company research before anything is drafted.
 - Then ask: "Want to apply to any of these? Give me the number(s) and I'll start with the full `/apply` workflow."
 - If the user picks one, run the `/apply` workflow on that job's URL, passing the triage verdict as prior context but **re-running the full Step 1 evaluation** - triage never substitutes for it.
+- **HTML report (last step, every run):** after presenting, refresh the browsable page with
+  `python3 tools/make_rank_report.py --run-results "<the temporary results file passed to rank_state.py apply>"`
+  and give the user the `report` path from its JSON output. On the sweep-only "Nothing new to rank" path, run it without `--run-results`. It rewrites one self-contained page, `reports/job-ranking.html` (gitignored, works offline): the shortlist and below-threshold tables with search and sortable columns, the jobs scored this run marked "New", an "Applied" badge on jobs already in `job_search_tracker.csv`, and a table of every scraped entry whatever its status. It reads `job_scraper/seen_jobs.json`, the tracker and (when given) the `--run-results` file, and writes nothing else. All posting-derived text is HTML-escaped and only http(s) links are rendered, since it is untrusted data.
 
 ---
 
