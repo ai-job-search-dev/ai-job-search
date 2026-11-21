@@ -222,6 +222,7 @@ def _inside_repo(path: Path) -> bool:
         if parent == probe:
             return False
         probe = parent
+    probe = probe.resolve()
     for ancestor in (probe, *probe.parents):
         try:
             if os.path.samefile(ancestor, ROOT):
