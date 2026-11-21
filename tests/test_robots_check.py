@@ -251,6 +251,41 @@ class TestSoftTwoHundred(unittest.TestCase):
     def test_sitemap_only_file_counts(self):
         self.assertTrue(is_robots_body("Sitemap: https://x.example/sitemap.xml\n"))
 
+    # Rails' default public/robots.txt, served verbatim by job-boards.greenhouse.io
+    # and job-boards.eu.greenhouse.io (checked 2026-11-21). Every line is a
+    # comment, so it has no rules: allow-all under RFC 9309, the same as an
+    # empty file. It used to read as "not a robots.txt" and fetch_page refused.
+    RAILS_DEFAULT = (
+        "# See http://www.robotstxt.org/robotstxt.html for documentation on how to use the robots.txt file\n"
+        "#\n"
+        "# To ban all spiders from the entire site uncomment the next two lines:\n"
+        "# User-agent: *\n"
+        "# Disallow: /\n"
+    )
+
+    def test_a_comment_only_robots_is_allow_all(self):
+        self.assertTrue(is_robots_body(self.RAILS_DEFAULT))
+        self.assertTrue(is_robots_body("﻿" + self.RAILS_DEFAULT))
+        self.assertTrue(allowed(self.RAILS_DEFAULT, "Claude-User", "/gitlab/jobs/8704363002"))
+
+    def test_gate_allows_a_comment_only_robots(self):
+        import robots_check
+
+        original = robots_check._fetch
+        robots_check._fetch = lambda url, ua: (self.RAILS_DEFAULT, 200)
+        try:
+            rc, msg = robots_check.gate("https://job-boards.greenhouse.io/gitlab/jobs/8704363002")
+        finally:
+            robots_check._fetch = original
+        self.assertEqual(rc, 0, msg)
+        self.assertIn("ALLOWED", msg)
+
+    def test_a_comment_line_does_not_make_an_error_page_a_robots_file(self):
+        """Only a body that is ALL comments counts; one leading comment line in
+        front of an HTML page is still a soft 200."""
+        self.assertFalse(is_robots_body("# cached\n<html><body>404 Not Found</body></html>\n"))
+        self.assertFalse(is_robots_body("#!/bin/sh\necho not a robots file\n"))
+
 
 class TestPercentEncodedRules(unittest.TestCase):
     """Rule patterns are percent-decoded to match the decoded request path.

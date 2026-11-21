@@ -63,11 +63,15 @@ def is_robots_body(text):
     A misconfigured host can answer /robots.txt with 200 and an HTML error page.
     That body parses to zero rules, and zero rules read as "allowed" - so a
     soft-200 granted permission that was never given. An empty or whitespace-only
-    body IS a valid allow-all under RFC 9309 and stays allowed; a non-empty body
-    with no recognised directive is treated as unreadable.
+    body IS a valid allow-all under RFC 9309 and stays allowed, and so does a body
+    of nothing but comments (Rails' default robots.txt, served by
+    job-boards.greenhouse.io): comments carry no rules, so it is the same file.
+    Any other non-empty body with no recognised directive is treated as unreadable.
     """
     text = text.removeprefix('\ufeff')          # byte-order mark, see _groups
     if not text.strip():
+        return True
+    if all(not raw.strip() or raw.lstrip().startswith('#') for raw in text.splitlines()):
         return True
     for raw in text.splitlines():
         line = raw.split('#', 1)[0].strip().lower()
