@@ -14,7 +14,7 @@ sys.path.insert(0, str(REPO_ROOT / "tools"))
 import security_guards  # noqa: E402  (imported for its allowlist constants)
 
 
-def run_guards(root: Path, repository=None) -> subprocess.CompletedProcess:
+def run_guards(root: Path, repository=None, **extra_env) -> subprocess.CompletedProcess:
     """Run the guard script in ``root``.
 
     ``repository`` pins GITHUB_REPOSITORY for the subprocess so results do not
@@ -25,6 +25,7 @@ def run_guards(root: Path, repository=None) -> subprocess.CompletedProcess:
         env.pop("GITHUB_REPOSITORY", None)
     else:
         env["GITHUB_REPOSITORY"] = repository
+    env.update(extra_env)
     return subprocess.run(
         [sys.executable, str(root / "tools" / "security_guards.py")],
         capture_output=True,
@@ -839,6 +840,146 @@ class SubdirectoryGitignoreTests(GuardRepoFixture):
             sub = self.root.joinpath(*parts)
             sub.mkdir(parents=True, exist_ok=True)
             (sub / ".gitignore").write_text("!anything\n", encoding="utf-8")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+class GitignoreReadLikeGitTests(GuardRepoFixture):
+    """The guard must read a .gitignore line for line as `git check-ignore` does:
+    a rule git ignores must count as present, a rule git does not apply must not."""
+
+    def setUp(self):
+        super().setUp()
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True, capture_output=True)
+
+    def _git_ignores(self, path):
+        return subprocess.run(
+            ["git", "-C", str(self.root), "check-ignore", "-q", "--no-index", path],
+            capture_output=True,
+        ).returncode == 0
+
+    def _root_gitignore_with(self, replacement):
+        rules = [r for r in security_guards.REQUIRED_IGNORE_RULES if r != "salary_data.json"]
+        self.gitignore.write_bytes(("\n".join(rules) + "\n" + replacement + "\n").encode("utf-8"))
+
+    def test_trailing_tab_or_nbsp_is_part_of_the_pattern(self):
+        for line in ("salary_data.json\t", "salary_data.json ", "salary_data.json \t"):
+            with self.subTest(line=line):
+                self._root_gitignore_with(line)
+                self.assertFalse(self._git_ignores("salary_data.json"))
+                result = run_guards(self.root)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("required personal-data rule missing: 'salary_data.json'", result.stdout)
+
+    def test_only_newline_separates_lines(self):
+        for sep in ("\x0b", "\x0c", "\r", "\x1c", "\x1d", "\x1e", "\x85", " ", " "):
+            with self.subTest(sep=repr(sep)):
+                self._root_gitignore_with("x" + sep + "salary_data.json")
+                self.assertFalse(self._git_ignores("salary_data.json"))
+                result = run_guards(self.root)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+
+    def test_only_one_trailing_carriage_return_is_dropped(self):
+        self._root_gitignore_with("salary_data.json\r\r")
+        self.assertFalse(self._git_ignores("salary_data.json"))
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("required personal-data rule missing: 'salary_data.json'", result.stdout)
+
+    def test_symlinked_root_gitignore_fails(self):
+        target = self.root / "gitignore-rules.txt"
+        self.gitignore.rename(target)
+        try:
+            os.symlink(target.name, self.gitignore)
+        except OSError:
+            self.skipTest("symlinks are unavailable on this platform")
+        if self._git_ignores("salary_data.json"):
+            self.skipTest("git on this host reads a symlinked .gitignore")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(".gitignore is a symlink", result.stdout)
+
+    def test_crlf_line_endings_pass(self):
+        text = "\r\n".join(security_guards.REQUIRED_IGNORE_RULES[1:] + ["salary_data.json \r\n"])
+        self.gitignore.write_bytes(text.encode("utf-8"))
+        self.assertTrue(self._git_ignores("salary_data.json"))
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_utf8_bom_on_root_gitignore_is_skipped(self):
+        rules = ["salary_data.json"] + [
+            r for r in security_guards.REQUIRED_IGNORE_RULES if r != "salary_data.json"
+        ]
+        self.gitignore.write_bytes(b"\xef\xbb\xbf" + ("\n".join(rules) + "\n").encode("utf-8"))
+        self.assertTrue(self._git_ignores("salary_data.json"))
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_utf8_bom_does_not_hide_a_subdirectory_negation(self):
+        sub = self.root / "documents" / "cv"
+        sub.mkdir(parents=True)
+        self.assertTrue(self._git_ignores("documents/cv/personal_cv.pdf"))
+        (sub / ".gitignore").write_bytes(b"\xef\xbb\xbf!personal_cv.pdf\n")
+        self.assertFalse(self._git_ignores("documents/cv/personal_cv.pdf"))
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("documents/cv/.gitignore", result.stdout.replace("\\", "/"))
+
+
+class TrackedLocalSettingsTests(GuardRepoFixture):
+    def _git(self, *args, **kwargs):
+        return subprocess.run(
+            ["git", *args], cwd=self.root, capture_output=True, encoding="utf-8",
+            check=False, **kwargs
+        )
+
+    def _stage_exact(self, name, mode="100644"):
+        """Index `name` byte for byte, whatever spellings the filesystem folds together."""
+        sha = self._git("hash-object", "-w", "--stdin", input="{}").stdout.strip()
+        self._git("update-index", "--add", "--cacheinfo", f"{mode},{sha},{name}")
+        entries = self._git("ls-files", "-s", "-z").stdout.split("\x00")
+        self.assertIn(f"{mode} {sha} 0\t{name}", entries)
+
+    def setUp(self):
+        super().setUp()
+        self._git("init", "-q")
+        self.local = self.root / ".claude" / "settings.local.json"
+        self.local.write_text(json.dumps({"env": {"PYTHONPATH": "/tmp/x"}}), encoding="utf-8")
+
+    def test_force_added_settings_local_fails(self):
+        self._git("add", "-f", ".claude/settings.local.json")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(".claude/settings.local.json", result.stdout)
+
+    def test_force_added_settings_local_in_other_case_fails(self):
+        self._stage_exact(".Claude/Settings.local.json")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("tracked '.Claude/Settings.local.json'", result.stdout)
+
+    def test_force_added_settings_local_with_a_case_folded_letter_fails(self):
+        self._stage_exact(".claude/\u017fettings.local.json")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("tracked '.claude/\\u017fettings.local.json'", result.stdout)
+
+    def test_case_folded_settings_local_message_survives_a_cp1252_stdout(self):
+        self._stage_exact(".claude/\u017fettings.local.json")
+        result = run_guards(self.root, PYTHONIOENCODING="cp1252", PYTHONUTF8="0")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertIn("tracked '.claude/\\u017fettings.local.json'", result.stdout)
+
+    def test_claude_tracked_as_symlink_file_or_submodule_fails(self):
+        for mode in ("100644", "120000", "160000"):
+            with self.subTest(mode=mode):
+                self._stage_exact(".claude", mode)
+                result = run_guards(self.root)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("tracked '.claude' is a symlink, file or submodule", result.stdout)
+
+    def test_untracked_settings_local_passes(self):
         result = run_guards(self.root)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
