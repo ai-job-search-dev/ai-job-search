@@ -521,10 +521,6 @@ class TestNonAsciiCurlOutput(unittest.TestCase):
 
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestSchemeHardening(unittest.TestCase):
     """GHSA-h8vc-753p-wpmh: only http(s) reaches curl, on the first hop and on
     every redirect.
@@ -998,3 +994,7 @@ class TestSizeLimits(unittest.TestCase):
         one, two = self._fastest_gate(url, 0, "User-agent: *\n" + rules, both + rules)
         self.assertLess(two, 3.0, f"two agents {two:.2f}s")
         self.assertLessEqual(two, 1.5 * one, f"two agents {two:.2f}s, one agent {one:.2f}s")
+
+
+if __name__ == "__main__":
+    unittest.main()

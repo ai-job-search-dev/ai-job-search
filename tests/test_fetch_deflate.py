@@ -2,7 +2,6 @@
 import http.server
 import contextlib
 import io
-import ipaddress
 from pathlib import Path
 import sys
 from unittest.mock import patch
@@ -54,7 +53,7 @@ class DeflateBackend(unittest.TestCase):
                         # goes through its real curl transport and parser.
                         # The server listens on loopback, which the real gate refuses.
                         with patch.object(fetch_page.shutil, "which", return_value=None), \
-                             patch.object(ipaddress.IPv4Address, "is_global", True), \
+                             patch("robots_check._is_public", return_value=True), \
                              contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                             code = fetch_page.main([
                                 f"http://127.0.0.1:{server.server_port}{path}",
