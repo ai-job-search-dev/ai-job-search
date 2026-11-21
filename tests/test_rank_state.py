@@ -455,6 +455,34 @@ class Apply(RankStateCase):
         self.assertEqual(self.read_state()["a"]["status"], "expired")
         self.assertEqual([r["key"] for r in out["expired"]], ["a"])
 
+    def test_non_iso_fresh_deadline_is_an_error_and_never_stored(self):
+        # The scorer returned "ASAP" (or an ISO timestamp, or a number) for a
+        # job whose stored deadline has already passed. parse_iso reads the
+        # junk as "no deadline", so the stored past date was masked and the
+        # job ranked instead of expiring; then the junk was persisted, so the
+        # real closing date was gone and the sweep reported the entry as
+        # unparseable on every later run. Step 2's contract is YYYY-MM-DD or
+        # null; anything else is a contract error that leaves the entry alone.
+        for junk in ("ASAP", "2026-09-15T00:00:00Z", 20260915, "15/09/2026"):
+            with self.subTest(deadline=junk):
+                self.write_state({"a": entry(deadline="2026-09-01"), "b": entry()})
+                before = self.read_state()["a"]
+                out = self.run_tool(
+                    "apply", "--results",
+                    self.results([self._scored(deadline=junk), self._scored(key="b")]),
+                    expect=1,
+                )
+                self.assertEqual([e["key"] for e in out["errors"]], ["a"])
+                self.assertIn("is not YYYY-MM-DD or null", out["errors"][0]["error"])
+                self.assertEqual([r["key"] for r in out["ranked"]], ["b"], "the valid result still applies")
+                self.assertEqual(out["expired"], [])
+                self.assertEqual(self.read_state()["a"], before, "a rejected result leaves the entry untouched")
+
+    def test_iso_fresh_deadline_still_replaces_the_stored_one(self):
+        self.write_state({"a": entry(deadline="2026-09-20")})
+        self.run_tool("apply", "--results", self.results([self._scored(deadline="2026-09-25")]))
+        self.assertEqual(self.read_state()["a"]["deadline"], "2026-09-25")
+
     def test_null_deadline_does_not_erase_a_stored_one(self):
         """Absence is not a correction: a fetch that degraded to a listing page
         returns no deadline, and blanking the stored date would also put the
