@@ -843,6 +843,107 @@ class SubdirectoryGitignoreTests(GuardRepoFixture):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
+class GitignoreReadLikeGitTests(GuardRepoFixture):
+    """The guard must read a .gitignore line for line as `git check-ignore` does:
+    a rule git ignores must count as present, a rule git does not apply must not."""
+
+    def setUp(self):
+        super().setUp()
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True, capture_output=True)
+
+    def _git_ignores(self, path):
+        return subprocess.run(
+            ["git", "-C", str(self.root), "check-ignore", "-q", "--no-index", path],
+            capture_output=True,
+        ).returncode == 0
+
+    def _root_gitignore_with(self, replacement):
+        rules = [r for r in security_guards.REQUIRED_IGNORE_RULES if r != "salary_data.json"]
+        self.gitignore.write_bytes(("\n".join(rules) + "\n" + replacement + "\n").encode("utf-8"))
+
+    def test_trailing_tab_or_nbsp_is_part_of_the_pattern(self):
+        for line in ("salary_data.json\t", "salary_data.json ", "salary_data.json \t"):
+            with self.subTest(line=line):
+                self._root_gitignore_with(line)
+                self.assertFalse(self._git_ignores("salary_data.json"))
+                result = run_guards(self.root)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("required personal-data rule missing: 'salary_data.json'", result.stdout)
+
+    def test_escaped_backslash_before_trailing_space_still_trims(self):
+        self._root_gitignore_with("salary_data.json\\\\ ")
+        self.assertTrue(self._git_ignores("salary_data.json\\"))
+        self.assertFalse(self._git_ignores("salary_data.json"))
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+
+    def test_only_newline_separates_lines(self):
+        for sep in ("\x0b", "\x0c", "\r", "\x1c", "\x1d", "\x1e", "\x85", " ", " "):
+            with self.subTest(sep=repr(sep)):
+                self._root_gitignore_with("x" + sep + "salary_data.json")
+                self.assertFalse(self._git_ignores("salary_data.json"))
+                result = run_guards(self.root)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+
+    def test_crlf_line_endings_pass(self):
+        text = "\r\n".join(security_guards.REQUIRED_IGNORE_RULES[1:] + ["salary_data.json \r\n"])
+        self.gitignore.write_bytes(text.encode("utf-8"))
+        self.assertTrue(self._git_ignores("salary_data.json"))
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_utf8_bom_on_root_gitignore_is_skipped(self):
+        rules = ["salary_data.json"] + [
+            r for r in security_guards.REQUIRED_IGNORE_RULES if r != "salary_data.json"
+        ]
+        self.gitignore.write_bytes(b"\xef\xbb\xbf" + ("\n".join(rules) + "\n").encode("utf-8"))
+        self.assertTrue(self._git_ignores("salary_data.json"))
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_utf8_bom_does_not_hide_a_subdirectory_negation(self):
+        sub = self.root / "documents" / "cv"
+        sub.mkdir(parents=True)
+        self.assertTrue(self._git_ignores("documents/cv/personal_cv.pdf"))
+        (sub / ".gitignore").write_bytes(b"\xef\xbb\xbf!personal_cv.pdf\n")
+        self.assertFalse(self._git_ignores("documents/cv/personal_cv.pdf"))
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("documents/cv/.gitignore", result.stdout.replace("\\", "/"))
+
+
+class TrackedLocalSettingsTests(GuardRepoFixture):
+    def _git(self, *args):
+        return subprocess.run(
+            ["git", *args], cwd=self.root, capture_output=True, text=True, check=False
+        )
+
+    def setUp(self):
+        super().setUp()
+        self._git("init", "-q")
+        self.local = self.root / ".claude" / "settings.local.json"
+        self.local.write_text(json.dumps({"env": {"PYTHONPATH": "/tmp/x"}}), encoding="utf-8")
+
+    def test_force_added_settings_local_fails(self):
+        self._git("add", "-f", ".claude/settings.local.json")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(".claude/settings.local.json", result.stdout)
+
+    def test_force_added_settings_local_in_other_case_fails(self):
+        upper = self.root / ".Claude" / "Settings.local.json"
+        upper.parent.mkdir(exist_ok=True)
+        if not upper.exists():
+            upper.write_text("{}", encoding="utf-8")
+        self._git("add", "-f", upper.relative_to(self.root).as_posix())
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+
+    def test_untracked_settings_local_passes(self):
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
 class SettingsKeyAllowlistTests(GuardRepoFixture):
     """GHSA-cqcv-crx7-x7q7: the guard checked allow, ask, deny and hooks and
     nothing else, so a settings.json could add keys that run commands or turn
