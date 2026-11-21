@@ -41,9 +41,9 @@ TOPICS: List[Tuple[str, str]] = [
     ("learning", r"learn(?:ed|t)? (?:a )?new|learn quickly|picked up|aprend"),
     ("conflict", r"conflict|disagree|disagreement|difficult (?:colleague|coworker|stakeholder)|conflicto|desacuerdo"),
     ("teamwork_mentoring", r"mentor|teach|team ?work|collaborat|lead(?:ership)?|equipo|ense[ñn]"),
-    ("motivation", r"why (?:do you want|are you interested|us|this|join)|what (?:attracts|excites|interests)|motivat|interest(?:ed)? in|por qu[eé]|te interesa|motiva"),
+    ("motivation", r"^\s*why [\w .&'-]{2,40}\?|caught your attention|made you (?:want to )?apply|excited (?:to apply|about this)|why (?:you'?re|you are) (?:applying|excited)|why (?:do you want|are you interested|us|this|join)|what (?:attracts|excites|interests)|motivat|interest(?:ed)? in|por qu[eé]|te interesa|motiva"),
     ("strengths", r"strength|sets you apart|why (?:should we )?hire|what makes you|fortaleza|diferencia"),
-    ("about_me", r"about yourself|introduce yourself|anything else|additional information|cover letter|sobre (?:vos|ti|usted)|pres[eé]ntate|informaci[oó]n adicional"),
+    ("about_me", r"^\s*tell us more\b|tell us about you\b|about yourself|introduce yourself|anything else|additional information|cover letter|sobre (?:vos|ti|usted)|pres[eé]ntate|informaci[oó]n adicional"),
     ("tech_experience", r"experience (?:with|in|using|working)|describe your experience|years of experience|experiencia (?:con|en)"),
 ]
 GENERIC_TOPICS = {"tech_experience", "about_me"}  # they match almost any question; a specific topic leads when present
@@ -65,7 +65,7 @@ STOCK = re.compile(r"\b(?:passionate|eager|thrilled|excited to|would love to|cur
 
 CLAIMS = re.compile(
     r"\bremote(?:ly)?\b|work(?:ing)? from home|time ?zones?|\bhybrid\b|on-?site|\bled\b|\bmanag(?:ed|er)\b|\bhired\b|\bpromot\w+|"
-    r"\bremot[oa]s?\b|desde casa|husos? horarios?",
+    r"\bremot[oa]s?\b|desde casa|husos? horarios?|contribut\w* to|\bmaintain(?:er|ed)\b|core (?:contributor|maintainer)",
     re.I,
 )
 
@@ -217,6 +217,10 @@ def answer_form(
     lang = form_language(labels)
     own_words = any(OWN_WORDS.search(l) for l in labels)
     regions = job_regions(job.get("location") or "", job.get("description") or "")
+    from tools.preferences import regions_in
+    for label in labels:
+        if re.search(r"authori[sz]ed to work|right to work|sponsor|work visa|eligible to work", label, re.I):
+            regions |= regions_in(label)
     allowed = vocabulary(profile, " ".join([job.get("description") or "", job.get("company") or "", job.get("title") or ""]))
     candidate_only = vocabulary(profile)
     answers: List[FormAnswer] = []
@@ -266,7 +270,7 @@ def answer_form(
             answers.append(FormAnswer(pattern=pattern, answer=localized(stance, lang), approved=True, note=f"stance:{stance.id}"))
             report.append(f"{stance.id}: {label[:50]} -> {localized(stance, lang)}")
             continue
-        if not free_text_field(field) or len(label) < 20:
+        if not free_text_field(field) or (len(label) < 20 and not topics_of(label)):
             continue
         topics = topics_of(label)
         entries = entries_for(profile, topics) if topics else []

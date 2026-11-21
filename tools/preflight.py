@@ -31,9 +31,9 @@ PLACEHOLDER = re.compile(r"\[[A-Z_ ]{3,}\]|\{\{|TODO|lorem ipsum|\bXXX\b", re.I)
 
 
 class PreflightReview(BaseModel):
-    fit: Literal["strong", "fair", "weak"] = Field(..., description="How well the candidate fits this role")
-    summary: str = Field(..., min_length=20, description="One or two sentences on the fit")
-    reads_like_a_person: bool = Field(..., description="True if the letter and CV read as written by a person for this role, not a template")
+    fit: Literal["strong", "fair", "weak"] = Field("fair", description="How well the candidate fits this role")
+    summary: str = Field("", description="One or two sentences on the fit")
+    reads_like_a_person: bool = Field(True, description="True if the letter and CV read as written by a person for this role, not a template")
     document_issues: List[str] = Field(default_factory=list, description="Specific problems in the CV or letter for this role")
     form_issues: List[str] = Field(default_factory=list, description="Specific form values that look wrong for this role")
     unsupported_claims: List[str] = Field(default_factory=list, description="Statements the candidate facts do not support")
@@ -95,7 +95,9 @@ def cv_text(path: Path) -> str:
 
 
 def sibling_letters(folder: Path) -> Dict[str, str]:
-    return {p.parent.name: letter_text(p.parent) for p in folder.parent.glob("*/cover_letter.pdf") if p.parent != folder}
+    """Letters already written for other roles at the same company (folders are named <company>_<job id>_<title>)."""
+    prefix = folder.name.split("_", 1)[0] + "_"
+    return {p.parent.name: letter_text(p.parent) for p in folder.parent.glob(f"{prefix}*/cover_letter.pdf") if p.parent != folder}
 
 
 def deterministic_checks(
@@ -109,14 +111,11 @@ def deterministic_checks(
     if veto or penalty:
         home = profile.preferences.work_authorization.current_country or "your country"
         problems.append(f"ELIGIBILITY: the role is tied to '{location}'; you live in {home} and will not relocate, so you are probably not eligible.")
-    for label in left:
-        if re.search(r"open to candidates in|do you (?:currently )?live in|current country of residence|must (?:reside|be located)", label, re.I):
-            problems.append(f"The form asks where you live ({label[:70]}); answer it knowing the role may be restricted to one region.")
-            break
     lowered = letter.casefold()
     if company.casefold() not in lowered:
         problems.append(f"The letter never names the company ({company}).")
     own = {e.company.casefold() for e in profile.experience} | {e.institution.casefold() for e in profile.education}
+    own |= {w.casefold() for tool in profile.answer_bank.workplace_tools for w in [tool, *tool.split()]}
     for other in other_companies:
         name = other.casefold()
         if len(other) > 4 and name != company.casefold() and name not in own and name not in title.casefold().replace(" ", "") \

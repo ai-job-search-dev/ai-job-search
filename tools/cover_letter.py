@@ -82,14 +82,24 @@ def _score(item: Evidence, matched: Sequence[str], title: str = "") -> int:
     return domain + sum(2 for s in item.skills if s.casefold() in wanted) + sum(1 for w in wanted if w in text)
 
 
-def choose_evidence(profile: MasterProfile, matched: Sequence[str], title: str = "") -> List[Evidence]:
-    """The best-matching entry, then the best match of the other kind (role or project), then the next best."""
+def choose_evidence(profile: MasterProfile, matched: Sequence[str], title: str = "", posting: str = "") -> List[Evidence]:
+    """The best-matching entry and the current job; when the best entry is the current job, the best of the other kind.
+
+    The current role is always one of the two: a letter that skips the job you hold now reads as hiding it.
+    """
     items = collect_evidence(profile)
-    ranked = sorted(items, key=lambda i: (-_score(i, matched, title), items.index(i)))
+    text = posting.casefold()
+    def score(i: Evidence) -> int:
+        return _score(i, matched, title) + sum(1 for s in i.skills if len(s) > 2 and s.casefold() in text)
+    ranked = sorted(items, key=lambda i: (-score(i), items.index(i)))
     if not ranked:
         return []
+    current = {e.company for e in profile.experience if e.is_current}
     chosen = [ranked[0]]
-    others = [i for i in ranked[1:] if i.kind != ranked[0].kind and _score(i, matched, title) > 0]
+    now = next((i for i in ranked if i.kind == "role" and i.label in current), None)
+    if now is not None and now is not ranked[0]:
+        return [ranked[0], now]
+    others = [i for i in ranked[1:] if i.kind != ranked[0].kind and score(i) > 0]
     rest = [i for i in ranked[1:] if i not in others]
     for item in others + rest:
         if len(chosen) == MAX_EVIDENCE:
@@ -144,9 +154,9 @@ def fit_paragraph(profile: MasterProfile, title: str, posting: str) -> Optional[
     """The first two sentences of the approved bank entry that matches what the role is about, title first, then posting."""
     from tools.answer_bank import TOPICS
     patterns = dict(TOPICS)
-    for text in (title, posting[:1500]):
+    for text, needed in ((title, 1), (posting[:3000], 3)):  # the posting must stress a topic, not mention it once
         for topic in LETTER_TOPICS:
-            if re.search(patterns[topic], text, re.I):
+            if len(re.findall(patterns[topic], text, re.I)) >= needed:
                 entry = next((e for e in profile.answer_bank.entries if e.approved and e.topics and e.topics[0] == topic), None)
                 if entry:
                     sentences = re.split(r"(?<=[.!?])\s+", entry.text.strip())
@@ -157,7 +167,7 @@ def fit_paragraph(profile: MasterProfile, title: str, posting: str) -> Optional[
 def compose_letter(
     profile: MasterProfile, company: str, title: str, matched: Sequence[str], remote: bool = True, posting: str = "",
 ) -> List[str]:
-    chosen = choose_evidence(profile, matched, title)
+    chosen = choose_evidence(profile, matched, title, posting)
     verified = {s.name.casefold(): s.name for s in profile.skills}
     in_evidence = [verified[s.casefold()] for item in chosen for s in item.skills if s.casefold() in verified]
     shared = [verified[m.casefold()] for m in matched if m.casefold() in verified and verified[m.casefold()] in in_evidence]
@@ -166,10 +176,15 @@ def compose_letter(
     paragraphs = [f"Dear {company} hiring team,"]
     role = short_title(title)
     opening = pick(OPENINGS, company, title, "open").format(title=role, company=company)
-    paragraphs.append(f"{opening} {chosen[0].sentence}" if chosen else opening)
+    lead = re.sub(r"^I also ", "I ", chosen[0].sentence) if chosen else ""
+    paragraphs.append(f"{opening} {lead}" if chosen else opening)
     if len(chosen) > 1:
         paragraphs.append(chosen[1].sentence)
     fit = fit_paragraph(profile, title, posting)
+    for item in chosen:  # "At Globant, ..." already opened the letter; do not introduce the same employer twice
+        if fit and fit.startswith(f"At {item.label} "):
+            fit = fit[len(f"At {item.label} "):]
+            fit = fit[0].upper() + fit[1:]
     if fit and fit not in paragraphs:
         paragraphs.append(fit)
     if len(shared) >= 2:

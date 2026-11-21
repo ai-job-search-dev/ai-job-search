@@ -155,3 +155,28 @@ companies:
     domain: "affirm.com"
     focus: "frontend_typescript"
     notes: "Fintech; remote roles in Spain, TypeScript frontend and mobile."
+  - name: "Anyone AI"
+    ats_provider: "ashby"
+    slug: "anyone-ai"
+    domain: "anyoneai.com"
+    focus: "frontend_typescript"
+    notes: "LATAM remote engineering roles, including Argentina; Python and platform work."
+
+  # ---------------------------------------------------------------------------
+  # Remote web-engineering employers found by probing public boards for remote roles
+  # (worldwide, Americas, or a single country, which the profile accepts for remote work).
+  # ---------------------------------------------------------------------------
+  - {name: "Mozilla", ats_provider: "greenhouse", slug: "mozilla", domain: "mozilla.org", focus: "frontend_typescript", notes: "Remote roles in many countries; web platform and Firefox."}
+  - {name: "Railway", ats_provider: "ashby", slug: "railway", domain: "railway.com", focus: "frontend_typescript", notes: "Global remote; TypeScript product engineering."}
+  - {name: "Resend", ats_provider: "ashby", slug: "resend", domain: "resend.com", focus: "frontend_typescript", notes: "Americas remote; TypeScript developer tools."}
+  - {name: "Linear", ats_provider: "ashby", slug: "linear", domain: "linear.app", focus: "frontend_typescript", notes: "Remote in Europe and North America; TypeScript."}
+  - {name: "Netlify", ats_provider: "greenhouse", slug: "netlify", domain: "netlify.com", focus: "frontend_typescript", notes: "Remote; web platform."}
+  - {name: "Wikimedia Foundation", ats_provider: "greenhouse", slug: "wikimedia", domain: "wikimediafoundation.org", focus: "frontend_typescript", notes: "Remote worldwide, some contract roles."}
+  - {name: "Temporal", ats_provider: "ashby", slug: "temporal", domain: "temporal.io", focus: "frontend_typescript", notes: "Remote; TypeScript SDKs and cloud."}
+  - {name: "Cohere", ats_provider: "ashby", slug: "cohere", domain: "cohere.com", focus: "frontend_typescript", notes: "Remote in Canada, US and UK; full-stack on AI products."}
+  - {name: "LiveKit", ats_provider: "ashby", slug: "livekit", domain: "livekit.io", focus: "frontend_typescript", notes: "Remote North America; real-time and agents SDKs."}
+  - {name: "Vanta", ats_provider: "ashby", slug: "vanta", domain: "vanta.com", focus: "frontend_typescript", notes: "Remote US and Ireland; TypeScript full-stack."}
+  - {name: "Sanity", ats_provider: "ashby", slug: "sanity", domain: "sanity.io", focus: "frontend_typescript", notes: "Remote US and Europe; TypeScript content platform."}
+  - {name: "n8n", ats_provider: "ashby", slug: "n8n", domain: "n8n.io", focus: "frontend_typescript", notes: "Remote Europe; TypeScript, Node.js and Vue."}
+  - {name: "Twilio", ats_provider: "greenhouse", slug: "twilio", domain: "twilio.com", focus: "frontend_typescript", notes: "Remote in several countries."}
+  - {name: "LangChain", ats_provider: "ashby", slug: "langchain", domain: "langchain.com", focus: "frontend_typescript", notes: "Remote US; TypeScript frontend for AI observability."}

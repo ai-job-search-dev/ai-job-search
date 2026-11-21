@@ -43,6 +43,7 @@ from tools.preferences import (
     is_unpaid,
     load_candidate_context,
     load_preferences,
+    below_salary_floor,
     onsite_abroad_effect,
     reason_matches,
 )
@@ -136,7 +137,12 @@ def deterministic_screen(
             penalty += kind_penalty
             notes.append(f"employment type {sorted(employment)}")
 
-    auth = assess_work_authorization(prefs, location, description)
+    low_pay = below_salary_floor(prefs, description)
+    if low_pay:
+        veto = veto or f"VETO: Salary below floor ({low_pay})."
+    # A remote role tied to one country is not an authorization problem when the candidate accepts such roles.
+    auth_location = "" if prefs.accept_country_locked_remote and re.search(r"remote", location or "", re.I) else location
+    auth = assess_work_authorization(prefs, auth_location, description)
     if auth.penalty > 0:
         mode = prefs.rules.work_authorization.mode
         if mode == "veto":

@@ -60,11 +60,16 @@ FIELD_PATTERNS: List[Tuple[str, "re.Pattern[str]"]] = [
     ("discipline", re.compile(r"\bdiscipline\b|field[\s_-]*of[\s_-]*study|\bmajor\b", re.I)),
     ("end_month", re.compile(r"(?:end|graduation)[\s_-]*(?:date)?[\s_-]*month", re.I)),
     ("end_year", re.compile(r"(?:end|graduation)[\s_-]*(?:date)?[\s_-]*year", re.I)),
+    ("current_company", re.compile(r"(?:current|most recent)[\s/a-z-]*company|current employer|^\s*company(?: name)?\b|empresa actual", re.I)),
+    ("current_title", re.compile(r"(?:current|most recent)[\s/a-z-]*(?:job )?title|^\s*(?:job )?title\b|cargo actual|puesto actual", re.I)),
+    ("start_month", re.compile(r"start[\s_-]*(?:date)?[\s_-]*month", re.I)),
+    ("start_year", re.compile(r"start[\s_-]*(?:date)?[\s_-]*year", re.I)),
     ("location", re.compile(r"\bcity\b|\blocation\b|where.*(?:based|located)|current[\s_-]*location", re.I)),
 ]
+WHERE_BASED = re.compile(r"^\s*where (?:are you|do you (?:currently )?live|are you currently)\s*(?:based|located|living)?\b(?!.*\b(?:hear|find|see|learn)\b)|^\s*d[oó]nde (?:viv|est[aá]s)", re.I)
 # Fields that depend on a short, plain label; a long question that merely mentions a country or a degree is never one.
 REUSABLE_KEYS = {"country"}  # forms ask for it twice: phone country code and country of residence
-NARROW_KEYS = {"citizenship", "country", "school", "degree", "discipline", "end_month", "end_year"}
+NARROW_KEYS = {"start_month", "start_year", "citizenship", "country", "school", "degree", "discipline", "end_month", "end_year"}
 MAX_NARROW_CHARS = 45
 # Questions this tool must never answer, whatever else the label contains.
 SENSITIVE = re.compile(
@@ -106,17 +111,21 @@ COLLECT_FIELDS_JS = """
     const by = el.getAttribute('aria-labelledby');
     if (by) by.split(/\\s+/).forEach(id => { const n = document.getElementById(id); if (n) parts.push(n.innerText); });
     if (!parts.length) {
-      const q = el.closest('li.application-question, .application-question');
-      const t = q && q.querySelector('.application-label, .text');
+      const q = el.closest('li.application-question, .application-question, [class*=fieldEntry]');
+      const t = q && q.querySelector('.application-label, .text, label');
       if (t && t.innerText.trim()) parts.push(t.innerText.split('\\n')[0]);
     }
     ['aria-label', 'placeholder', 'name', 'id', 'autocomplete'].forEach(a => { const v = el.getAttribute(a); if (v) parts.push(v); });
     return parts.join(' ').replace(/\\s+/g, ' ').trim();
   };
-  document.querySelectorAll('input, textarea, select').forEach((el, i) => {
+  const tagged = Array.from(document.querySelectorAll('[data-aja-idx]')).map(e => Number(e.getAttribute('data-aja-idx')));
+  let next = tagged.length ? Math.max(...tagged) + 1 : 0;
+  document.querySelectorAll('input, textarea, select').forEach((el, n) => {
     const style = window.getComputedStyle(el);
     const isFile = el.type === 'file';
     if (!isFile && (el.offsetParent === null || style.visibility === 'hidden')) return;
+    const kept = el.getAttribute('data-aja-idx');
+    const i = kept !== null ? Number(kept) : (tagged.length ? next++ : n);
     el.setAttribute('data-aja-idx', String(i));
     out.push({
       index: i,
@@ -125,7 +134,8 @@ COLLECT_FIELDS_JS = """
       descriptor: labelFor(el),
       value: el.value || '',
       role: el.getAttribute('role') || (el.parentElement && el.parentElement.querySelector('.dropdown-results') ? 'combobox' : ''),
-      required: !!(el.required || el.getAttribute('aria-required') === 'true'),
+      required: !!(el.required || el.getAttribute('aria-required') === 'true' ||
+                   (el.closest('[class*=fieldEntry]') && el.closest('[class*=fieldEntry]').querySelector('label[class*=required], [class*=required]'))),
       name: el.name || '',
       group: (() => { const g = el.closest('fieldset, [role=radiogroup], [role=group]'); const t = g && g.querySelector('legend, [class*=label], label');
                       return t ? t.innerText.replace(/\\s+/g, ' ').trim() : ''; })(),
@@ -145,7 +155,8 @@ COLLECT_FIELDS_JS = """
     const question = (box.innerText || '').replace(/\\s+/g, ' ').replace(/(?:\\s(?:yes|no|s[ií]|sim|n[aã]o))+$/i, '').trim();
     choices.forEach(x => x.setAttribute('data-aja-choice', String(k)));
     out.push({index: k, tag: 'button', type: 'choice', descriptor: question, value: '', role: 'buttons',
-              required: /\\*/.test(question), name: '', group: question, options: choices.map(x => x.innerText.trim())});
+              required: /\\*/.test(question) || !!box.querySelector('[class*=required]') || !!(box.parentElement && box.parentElement.querySelector('label[class*=required]')),
+              name: '', group: question, options: choices.map(x => x.innerText.trim())});
   });
   return out;
 }
@@ -252,6 +263,14 @@ def build_answers(profile: MasterProfile) -> Dict[str, str]:
     citizenships = profile.preferences.work_authorization.citizenships
     if citizenships:
         answers["citizenship"] = COUNTRY_BY_CODE.get(citizenships[0].upper(), citizenships[0])
+    current = next((e for e in profile.experience if e.is_current), None)
+    if current is not None:
+        answers["current_company"], answers["current_title"] = current.company, current.role
+        started = re.match(r"(\d{4})(?:-(\d{2}))?", current.start_date or "")
+        if started:
+            answers["start_year"] = started.group(1)
+            if started.group(2):
+                answers["start_month"] = MONTHS[int(started.group(2)) - 1]
     answers.update(pick_education(profile))
     return {k: v for k, v in answers.items() if v}
 
@@ -261,6 +280,8 @@ def classify_field(descriptor: str, tag: str = "input", input_type: str = "text"
     if input_type in SKIP_INPUT_TYPES or tag == "textarea":
         return None
     descriptor = re.sub(r"\s+", " ", ID_NOISE.sub(" ", descriptor)).strip()
+    if WHERE_BASED.search(descriptor) and input_type != "file" and len(descriptor) <= MAX_LABEL_CHARS:
+        return "location"
     if "?" in descriptor or len(descriptor) > MAX_LABEL_CHARS or SENSITIVE.search(descriptor):
         return None
     if input_type == "file":
@@ -299,6 +320,8 @@ def option_candidates(key: str, value: str) -> List[str]:
         return [value, *DEMONYMS.get(value, [])]
     if value.casefold().startswith("decline"):
         return DECLINE_OPTIONS
+    if "careers page" in value.casefold():
+        return [value, "Company careers page", "Careers page", "Company website", "Company Website", "Website", "Job posting"]
     if value in YES_OPTIONS:
         return YES_OPTIONS
     if value in NO_OPTIONS:
@@ -321,12 +344,17 @@ def pick_option(options: Sequence[str], key: str, value: str) -> Optional[int]:
         endings = {country, *COUNTRY_CODES.get(country, ())}
         hits = [i for i, opt in enumerate(folded) if opt.split(" ")[: len(city.split())] == city.split()
                 and any(opt.endswith(" " + e) or opt == e for e in endings)]
+        if not hits:  # some forms ask for the country only
+            hits = [i for i, opt in enumerate(folded) if opt == country]
         return hits[0] if hits else None
     wanted = [_fold(c) for c in option_candidates(key, value) if c]
     for cand in wanted:
         for i, opt in enumerate(folded):
             if opt == cand:
                 return i
+    if value in YES_OPTIONS[:7] or value in NO_OPTIONS:
+        hits = [i for i, opt in enumerate(folded) for cand in wanted if opt.split(" ")[:1] == [cand]]
+        return hits[0] if hits else None
     for cand in wanted:
         hits = [i for i, opt in enumerate(folded) if opt and (opt.startswith(cand) or cand in opt)]
         if hits:
@@ -387,7 +415,9 @@ def pick_range(options: Sequence[str], value: str) -> Optional[int]:
 
 
 def combo_queries(key: str, value: str) -> List[str]:
-    queries = [value.split(",")[0].strip()] if key == "location" else [value]
+    queries = [value.split(",")[0].strip(), value.split(",")[-1].strip()] if key == "location" else [value]
+    if key == "answer":
+        queries += [c for c in option_candidates(key, value)[1:4] if len(c) <= 30]
     if key in ("school", "discipline"):
         queries += re.findall(r"\(([^)]{2,12})\)", value)
         plain = re.sub(r"\([^)]*\)", " ", value)
@@ -506,6 +536,8 @@ def _option_selector(page: Any, selector: str) -> str:
     try:
         if page.evaluate("(s) => !!document.querySelector(s).parentElement.querySelector('.dropdown-results')", selector):
             return f"{selector} ~ .dropdown-container .dropdown-results > *"
+        if page.evaluate("(s) => !!document.querySelector(s).closest('[class*=fieldEntry]')", selector):
+            return 'div[class*="_result_"]:not([class*="resultContainer"]):not([class*="noResults"])'
     except Exception:
         pass
     return f".select__menu {OPTION_SELECTOR}"
@@ -641,7 +673,8 @@ def verify_commits(page: Any, fills: List[Dict[str, Any]]) -> List[str]:
             lost.append(fill.get("label") or fill["key"])
     return lost
 SUBMIT_NAME = re.compile(r"^\s*submit(?:\s+application)?\s*$", re.I)
-CONFIRMED = re.compile(r"thank you for (?:applying|your application|submitting)|application (?:has been )?(?:submitted|received)|we(?:'|\u2019)?ve received your application", re.I)
+CONFIRMED = re.compile(r"thank you for (?:applying|your application|submitting)|application (?:has been |was )?(?:successfully )?(?:submitted|received)|"
+                       r"application success|successfully submitted|we(?:'|\u2019)?ve received your application", re.I)
 REJECTED = re.compile(r"this field is required|please (?:fix|correct|complete)|is required|invalid", re.I)
 
 
@@ -696,7 +729,9 @@ def _click_submit(page: Any) -> None:
 def submission_outcome(page: Any) -> str:
     """'confirmed' when the page shows an acknowledgement, 'rejected' when it shows validation errors, else 'unknown'."""
     try:
-        text = page.content()
+        text = page.evaluate("() => document.body.innerText")  # visible text: the HTML also holds hidden error templates
+        if not isinstance(text, str):
+            text = page.content()
     except Exception:
         return "unknown"
     if CONFIRMED.search(text) or re.search(r"confirmation|thank", getattr(page, "url", "") or "", re.I):
@@ -797,6 +832,7 @@ def open_browser_page(url: str, cdp_url: Optional[str] = None) -> Iterator[Any]:
             context = browser.contexts[0] if browser.contexts else browser.new_context()
             _close_previous_attempts(context, url)
             page = context.new_page()
+            page.bring_to_front()
             page.goto(url, wait_until="domcontentloaded")
             try:
                 yield page
@@ -879,6 +915,7 @@ def run_apply(
                 fills.append({"index": index, "kind": "tick", "key": "tick", "label": short_label(next((f.get("descriptor") or "") for f in fields if f["index"] == index)), "value": "checked"})
             left = [l for l in left if not any(short_label(next((f.get("descriptor") or "") for f in fields if f["index"] == i)) == l for i in bank["ticks"])]
             filled = apply_fills(page, fills)
+            filled += _fill_follow_ups(conn, job_id, profile, page, fields, fills, answers, app)
             lost = verify_commits(page, fills)
             stuck = [f.get("label") or f["key"] for f in fills if (f.get("error") or "").startswith("stuck")]
             filled -= len(lost)
@@ -912,11 +949,16 @@ def run_apply(
                 summary.append("  AUTO-SUBMIT: " + ("allowed once you add --submit --confirm-company" if not [b for b in blockers if not b.startswith("--confirm-company")] else "blocked: " + "; ".join(b for b in blockers if not b.startswith("--confirm-company"))))
                 print("\n".join(summary))
                 return "pending"
+            try:
+                (Path(app["cv_path"]).parent / "apply_summary.txt").write_text("\n".join(summary), encoding="utf-8")
+            except OSError:
+                pass
             if submit and not blockers:
+                print("\n".join(summary))
                 logger.info(f"All gates passed for job {job_id}; submitting.")
                 _click_submit(page)
                 outcome = "unknown"
-                for _ in range(20):
+                for _ in range(40):  # Ashby verifies its invisible CAPTCHA before showing the result; this can take 30 s or more
                     page.wait_for_timeout(1500)
                     outcome = submission_outcome(page)
                     if outcome != "unknown":
@@ -930,7 +972,7 @@ def run_apply(
                     METRICS.increment("applied_total")
                     logger.info(f"Submitted and recorded APPLIED for job {job_id}; cooldown started for {app['company_name']}.")
                     return "applied"
-                what = "validation errors" if outcome == "rejected" else "no confirmation after 30 s (stuck or still sending)"
+                what = "validation errors" if outcome == "rejected" else "no confirmation after 60 s (stuck or still sending)"
                 logger.warning(f"Submit was clicked but the page shows {what}. Check the window; if it went through, run --record-applied.")
                 return "pending"
             if submit:
@@ -956,6 +998,35 @@ def _run_preflight(
     except Exception as exc:
         logger.warning(f"Pre-flight skipped: {exc}")
         return None
+
+
+def _fill_follow_ups(conn: Any, job_id: int, profile: MasterProfile, page: Any, fields: List[Dict[str, Any]],
+                     fills: List[Dict[str, Any]], answers: Dict[str, str], app: Any) -> int:
+    """Fields revealed by earlier answers. Each is read together with the question above it, then answered the same way."""
+    try:
+        page.wait_for_timeout(800)
+        now = page.evaluate(COLLECT_FIELDS_JS)
+    except Exception:
+        return 0
+    known = {f["index"] for f in fields}
+    by_index = {f["index"]: f for f in fields}
+    new = []
+    for f in now:
+        if f["index"] in known or not (f.get("descriptor") or "").strip():
+            continue
+        before = max((i for i in known if i < f["index"]), default=None)
+        context = by_index[before]["descriptor"] if before is not None else ""
+        new.append({**f, "descriptor": f"{context} {f['descriptor']}".strip()})
+    if not new:
+        return 0
+    bank = _bank_answers(conn, job_id, profile, new, [])
+    extra, _ = plan_fills(new, answers, app["cv_path"], app["cover_letter_path"], bank["answers"])
+    for index in bank["ticks"]:
+        extra.append({"index": index, "kind": "tick", "key": "tick", "label": "follow-up", "value": "checked"})
+    done = apply_fills(page, extra)
+    fields.extend(new)
+    fills.extend(extra)
+    return done
 
 
 def _save_form_values(folder: Path, fills: List[Dict[str, Any]], left: List[str]) -> None:

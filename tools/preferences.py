@@ -50,7 +50,7 @@ COUNTRY_NAMES: Dict[str, str] = {
 US_STATE = re.compile(r",\s*(?:AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b")
 CA_PROVINCE = re.compile(r",\s*(?:ON|QC|BC|AB|MB|SK|NS|NB|NL|PE)\b|ontario|qu[eé]bec|british columbia|alberta", re.IGNORECASE)
 COUNTRY_REGEX = {c: re.compile(r"(?<![A-Za-z])(?:" + p + r")(?![A-Za-z])", re.IGNORECASE) for c, p in COUNTRY_NAMES.items()}
-ABBREVIATIONS = {"US": re.compile(r"\b(?:US|USA|U\.S\.A?\.?)\b"), "UK": re.compile(r"\b(?:UK|U\.K\.)\b")}
+ABBREVIATIONS = {"US": re.compile(r"\b(?:US|USA|U\.S\.A?\.?)(?!\w)"), "UK": re.compile(r"\b(?:UK|U\.K\.)(?!\w)")}
 EU_PHRASE = re.compile(r"\bEU\b|\bE\.U\.|european union|\bEEA\b|european economic area|\bEurope\b|\bEMEA\b", re.IGNORECASE)
 
 RESTRICTION_TRIGGER = re.compile(
@@ -110,6 +110,8 @@ def regions_in(text: str) -> Set[str]:
     """Country codes mentioned in `text`; 'Europe' or 'EU' expand to the EU group."""
     found = {code for code, rx in COUNTRY_REGEX.items() if rx.search(text)}
     found |= {code for code, rx in ABBREVIATIONS.items() if rx.search(text)}
+    if re.search(r"north america", text, re.IGNORECASE):
+        found |= {"US", "CA"}
     if US_STATE.search(text):
         found.add("US")
     if CA_PROVINCE.search(text):
@@ -208,11 +210,50 @@ def onsite_abroad_effect(prefs: CareerPreferences, location: str, is_remote: Opt
     if home in named:
         return False, 0.0
     if is_remote:
-        if GLOBAL_MARKER.search(place) or not named:
+        if prefs.accept_country_locked_remote or GLOBAL_MARKER.search(place) or not named:
             return False, 0.0
     elif re.search(r"remote|anywhere|worldwide|work from home", place, re.IGNORECASE) and not named:
         return False, 0.0
     return (True, 0.0) if setting.mode == "veto" else (False, setting.penalty)
+
+
+PAY_CONTEXT = re.compile(r"salary|compensation|pay(?: range)?|base|rate|ote|usd|per (?:hour|month|year|annum)|/\s*(?:hr|hour|mo|month|yr|year)", re.IGNORECASE)
+PAY_RANGE = re.compile(
+    r"(?:US\$|USD\s*|\$)\s*(\d[\d,.]*)\s*([kK])?\s*(?:-|–|—|to)\s*(?:US\$|USD\s*|\$)?\s*(\d[\d,.]*)\s*([kK])?"
+    r"(?:\s*(?:USD|US\$))?\s*(?:/|per|an?|each)?\s*(hour|hr|month|mo|year|yr|annum|annually)?",
+    re.IGNORECASE,
+)
+HOURS_PER_MONTH = 168.0
+
+
+def posted_monthly_pay(description: str) -> Optional[float]:
+    """The top of a USD pay range stated in the posting, per month. None when no range with pay context is found."""
+    best: Optional[float] = None
+    for m in PAY_RANGE.finditer(description or ""):
+        context = description[max(0, m.start() - 120):m.end() + 40]
+        if not PAY_CONTEXT.search(context):
+            continue
+        try:
+            high = float(m.group(3).replace(",", "").rstrip(".")) * (1000 if m.group(4) else 1)
+        except ValueError:
+            continue
+        period = (m.group(5) or "").lower()
+        if not period:
+            period = "hour" if high < 300 else "year" if high > 20000 else "month"
+        monthly = high * HOURS_PER_MONTH if period in ("hour", "hr") else high / 12 if period in ("year", "yr", "annum", "annually") else high
+        best = monthly if best is None else max(best, monthly)
+    return best
+
+
+def below_salary_floor(prefs: CareerPreferences, description: str) -> Optional[str]:
+    """A note when the posting states pay whose top is under the candidate's floor; None when it meets it or says nothing."""
+    if not prefs.salary_floor_usd:
+        return None
+    floor = prefs.salary_floor_usd * {"hour": HOURS_PER_MONTH, "month": 1.0, "year": 1 / 12}[prefs.salary_floor_period]
+    pay = posted_monthly_pay(description)
+    if pay is not None and pay < floor:
+        return f"posted pay tops out at about USD {pay:,.0f}/month, under the USD {floor:,.0f}/month floor"
+    return None
 
 
 def describe_preferences(prefs: CareerPreferences) -> str:

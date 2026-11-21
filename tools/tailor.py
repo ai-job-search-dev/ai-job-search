@@ -141,7 +141,7 @@ def relevance(text: str, keywords: Sequence[str]) -> int:
 
 TITLE_HINTS = {
     "Quantum Computing": ("quantum", "qubit", "qiskit"),
-    "Frontend & UI": ("frontend", "front-end", "front end", "full stack", "full-stack", "fullstack", "ui", "web", "angular", "typescript", "react"),
+    "Frontend & UI": ("frontend", "front-end", "front end", "ui", "web", "angular", "typescript", "react"),
     "Backend & APIs": ("backend", "back-end", "back end", "api", "platform", "server"),
     "AI & Machine Learning": ("machine learning", "ml", "deep learning", "data scientist", "computer vision", "nlp"),
     "Cloud & DevOps": ("devops", "cloud", "infrastructure", "sre", "platform"),
@@ -390,6 +390,31 @@ def verify_documents(
     return ats_ok, layout_ok, messages
 
 
+def company_paragraph(conn: Any, profile: MasterProfile, job_id: int, company: str, title: str, posting: str) -> Optional[str]:
+    """Two sentences on why this company, from the approved motivation entry and what the posting says the company does.
+
+    Written by the configured model and kept only if it passes the answer bank's provenance checks; None otherwise.
+    """
+    from tools.answer_bank import STOCK, compose, unsupported, unsupported_claims, vocabulary
+    from tools.llm import LLMGateway, llm_configured
+    entries = [e for e in profile.answer_bank.entries if e.approved and "motivation" in e.topics]
+    if not entries or not posting or not llm_configured():
+        return None
+    job = {"job_id": job_id, "company": company, "title": title, "description": posting}
+    question = (f"In two sentences for a cover letter: what draws you to {company} and this role? Name what {company} builds, "
+                "as the posting describes it, and connect it to your own motivation.")
+    try:
+        text = compose(LLMGateway(conn, use_cache=True), profile, job, question, entries, "en")
+    except Exception:
+        return None
+    if not text or company.casefold() not in text.casefold() or STOCK.search(text) or len(text.split()) > 70:
+        return None
+    allowed = vocabulary(profile, f"{posting} {company} {title}")
+    if unsupported(text, allowed) or unsupported_claims(text, vocabulary(profile)):
+        return None
+    return text
+
+
 def tailor_job(
     conn: Any,
     job: Any,
@@ -420,6 +445,9 @@ def tailor_job(
     cv_typ, letter_typ = folder / "cv.typ", folder / "cover_letter.typ"
     posting = (job["cleaned_description"] or job["raw_description"] or "") if "cleaned_description" in job.keys() else ""
     paragraphs = build_cover_letter(profile, company, job["title"], cv.matched, missing, cv, remote=bool(job["is_remote"]), posting=posting)
+    company_line = company_paragraph(conn, profile, job_id, company, job["title"], posting)
+    if company_line:
+        paragraphs.insert(-1, company_line)
     letter_typ.write_text(render_letter(profile, paragraphs), encoding="utf-8")
     cv_pdf, letter_pdf = folder / "cv.pdf", folder / "cover_letter.pdf"
     cv = compile_cv_to_fit(profile, matched_in, cv_typ, cv_pdf, job_title=job["title"])

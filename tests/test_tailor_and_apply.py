@@ -98,7 +98,7 @@ class TailorContentTests(unittest.TestCase):
         profile.skills += [SkillItem(name="Angular", category="Frontend & UI"), SkillItem(name="Qiskit2", category="Quantum Computing")]
         profile.education[0].completed = False
         profile.education[0].period = "2025-03 - 2026-09"
-        ui = tailor.build_cv(profile, ["Python"], job_title="Full Stack Engineer")
+        ui = tailor.build_cv(profile, ["Python"], job_title="Frontend Engineer")
         quantum = tailor.build_cv(profile, ["Python"], job_title="Quantum Software Engineer")
         self.assertEqual(ui.skill_groups[0][0], "Frontend & UI")
         self.assertEqual(quantum.skill_groups[0][0], "Quantum Computing")
@@ -384,7 +384,6 @@ class PreflightTests(unittest.TestCase):
                                                     left=["This role is open to candidates in the US or Canada. Do you currently live in this region?"])
             open_role = preflight.deterministic_checks("Acme", "QSE", self.letter(), "cv", self.root, self.profile, location="Remote, Global", is_remote=True)
         self.assertTrue(any(p.startswith("ELIGIBILITY") for p in locked))
-        self.assertTrue(any("asks where you live" in p for p in locked))
         self.assertEqual(open_role, [])
 
     def test_model_form_issues_that_only_repeat_the_fields_left_for_the_human_are_dropped(self):

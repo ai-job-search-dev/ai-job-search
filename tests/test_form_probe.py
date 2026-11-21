@@ -249,7 +249,7 @@ class RunApplyUrlTests(unittest.TestCase):
         job_id = self.ready_job("https://jobs.lever.co/acme/abc", "lever:acme")
         _, out = self.apply(job_id)
         self.assertNotIn("No application form was recognised", out)
-        self.assertIn("Filled:   8 field(s)", out)
+        self.assertIn("Filled:   9 field(s)", out)  # current company is now filled too
         self.assertEqual(self.page.filled['[data-aja-idx="1"]'], "Ada Example")
 
 

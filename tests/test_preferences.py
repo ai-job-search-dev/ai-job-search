@@ -334,6 +334,22 @@ class OnsiteAbroadTests(unittest.TestCase):
         self.assertEqual(prefmod.onsite_abroad_effect(p, "Peru - Fully Remote", True), (False, 3.0))
         self.assertEqual(prefmod.onsite_abroad_effect(p, "Argentina - Fully Remote", True), (False, 0.0))
 
+    def test_country_locked_remote_roles_can_be_accepted(self):
+        p = self.prefs()
+        p.accept_country_locked_remote = True
+        self.assertEqual(prefmod.onsite_abroad_effect(p, "Peru - Fully Remote", True), (False, 0.0))
+        self.assertEqual(prefmod.onsite_abroad_effect(p, "Berlin, Germany", False), (False, 3.0))
+
+    def test_posted_pay_below_the_floor_is_detected_and_unstated_pay_is_not(self):
+        p = self.prefs()
+        p.salary_floor_usd, p.salary_floor_period = 2600, "month"
+        self.assertIsNotNone(prefmod.below_salary_floor(p, "Compensation: $8 - $12 per hour, paid weekly."))
+        self.assertIsNotNone(prefmod.below_salary_floor(p, "The salary range is $18,000 - $24,000 per year."))
+        self.assertIsNone(prefmod.below_salary_floor(p, "The base salary range is $120,000 - $150,000 annually."))
+        self.assertIsNone(prefmod.below_salary_floor(p, "We raised $10 - $20 million in our Series A."))
+        self.assertIsNone(prefmod.below_salary_floor(p, "Competitive pay."))
+        self.assertAlmostEqual(prefmod.posted_monthly_pay("Pay: $15 - $25 per hour"), 25 * 168)
+
     def test_remote_home_country_unknown_and_relocation_cases_are_untouched(self):
         p = self.prefs()
         for location, remote in (("Buenos Aires, Argentina", False), ("", False), ("Delft, NL", None)):

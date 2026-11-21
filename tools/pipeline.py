@@ -415,6 +415,61 @@ def render_prepare_summary(outcome: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def apply_ready(
+    job_ids: Optional[List[int]] = None,
+    limit: Optional[int] = None,
+    cdp_url: Optional[str] = None,
+    check_only: bool = False,
+    db_path: Optional[Path] = None,
+    reports_dir: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Send the READY_TO_APPLY applications, best score first, one per company, without asking.
+
+    Each one goes through browser_apply's gates (form recognised, nothing required left empty, pre-flight checks,
+    no HOLD); a job that fails a gate stays READY_TO_APPLY and is listed in the report with the reason. The model
+    review is advisory here. `check_only` fills and reviews but sends nothing.
+    """
+    import contextlib
+    import io
+    from tools import browser_apply
+
+    with get_db(db_path) as conn:
+        rows = conn.execute(
+            "SELECT j.id, c.name AS company, j.title, e.overall_score AS score FROM jobs j JOIN companies c ON c.id = j.company_id "
+            "LEFT JOIN evaluations e ON e.id = (SELECT MAX(id) FROM evaluations WHERE job_id = j.id) "
+            "WHERE j.status = 'READY_TO_APPLY' ORDER BY e.overall_score DESC").fetchall()
+    if job_ids:
+        order = {j: n for n, j in enumerate(job_ids)}
+        rows = sorted((r for r in rows if r["id"] in order), key=lambda r: order[r["id"]])
+    results: List[Dict[str, Any]] = []
+    companies: set = set()
+    for row in rows:
+        if limit and sum(1 for r in results if r["outcome"] == "applied") >= limit:
+            break
+        if row["company"] in companies:
+            results.append({**dict(row), "outcome": "skipped", "log": "another role at this company is in this batch"})
+            continue
+        companies.add(row["company"])
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                outcome = browser_apply.run_apply(
+                    row["id"], db_path=db_path, cdp_url=cdp_url, input_fn=lambda _: "skip", submit=not check_only,
+                    confirm_company=row["company"], allow_model_fix=True, check_only=check_only)
+        except Exception as exc:
+            outcome = f"error: {str(exc).splitlines()[0][:120]}"
+        results.append({**dict(row), "outcome": outcome, "log": out.getvalue()})
+        safe_print(f"  [{outcome}] #{row['id']} {row['company']} - {row['title']}")
+    folder = Path(reports_dir) if reports_dir else REPORTS_DIR
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"apply-batch-{datetime.now().strftime('%Y%m%d-%H%M%S')}.md"
+    lines = [f"# Apply batch ({'check only' if check_only else 'submit'})", ""]
+    for r in results:
+        lines += [f"## [{r['outcome']}] #{r['id']} {r['company']} - {r['title']}", "", "```text", r["log"].strip() or "(no output)", "```", ""]
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return {"results": results, "report": path}
+
+
 def plan_run(opts: Options, db_path: Optional[Path] = None, profile_path: Optional[Path] = None) -> Dict[str, Any]:
     """What a run would do, without touching the network or writing anything."""
     path = resolve_db_path(db_path)
@@ -538,12 +593,19 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--close-stale-days", type=int, default=None, help="Close postings no ingestion has seen for N days")
     run.add_argument("--jobspy-max-queries", type=int, default=None)
     run.add_argument("--prepare", type=int, default=None, metavar="N", help="After ranking, tailor documents for the best N shortlisted jobs")
+    run.add_argument("--apply", action="store_true", help="After --prepare, send the prepared applications that pass every gate")
+    run.add_argument("--cdp-url", default=None)
     run.add_argument("--dry-run", action="store_true")
     prepare = sub.add_parser("prepare", help="Tailor documents for the best shortlisted jobs and list what is ready to apply")
     prepare.add_argument("--limit", type=int, default=3, help="How many shortlisted jobs to prepare (best score first)")
     prepare.add_argument("--job-id", type=int, action="append", default=None, help="Prepare this job (repeatable)")
     prepare.add_argument("--min-score", type=float, default=None)
     prepare.add_argument("--redo", action="store_true", help="Also re-tailor jobs already TAILORED or READY_TO_APPLY")
+    apply = sub.add_parser("apply", help="Send READY_TO_APPLY applications that pass every gate, one per company")
+    apply.add_argument("--job-id", type=int, action="append", default=None)
+    apply.add_argument("--limit", type=int, default=None, help="Stop after this many submitted")
+    apply.add_argument("--cdp-url", default=None, help="Attach to the Chrome started by tools/browser_profile.py")
+    apply.add_argument("--check", action="store_true", help="Fill and review only; send nothing")
     sub.add_parser("status", help="Show runs, counts, LLM spend and backups")
     digest = sub.add_parser("digest", help="Print shortlisted jobs evaluated recently")
     digest.add_argument("--hours", type=float, default=24.0)
@@ -561,6 +623,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         except ValueError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
+        return 0
+    if args.command == "apply":
+        outcome = apply_ready(args.job_id, args.limit, args.cdp_url, args.check)
+        sent = sum(1 for r in outcome["results"] if r["outcome"] == "applied")
+        safe_print(f"{sent} submitted, {len(outcome['results']) - sent} not. Report: {outcome['report']}")
         return 0
     if args.command == "digest":
         init_db()
@@ -584,7 +651,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
     safe_print(render_summary(report))
     if args.prepare and report.exit_code == 0:
-        safe_print(render_prepare_summary(prepare_applications(args.prepare)))
+        prepared = prepare_applications(args.prepare)
+        safe_print(render_prepare_summary(prepared))
+        if args.apply:
+            ready = [p["job_id"] for p in prepared["packets"] if p["command"]]
+            safe_print(f"Report: {apply_ready(ready, cdp_url=args.cdp_url)['report']}")
     METRICS.print_summary()
     return report.exit_code
 

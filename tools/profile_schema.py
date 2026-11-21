@@ -170,7 +170,10 @@ class CareerPreferences(BaseModel):
     target_roles: List[str] = Field(default_factory=list)
     remote_only: bool = True
     salary_floor_usd: Optional[float] = None
+    salary_floor_period: Literal["hour", "month", "year"] = Field("month", description="Period of salary_floor_usd")
     relocation: bool = Field(False, description="Willing to relocate for an on-site role")
+    accept_country_locked_remote: bool = Field(
+        False, description="Treat remote postings tied to one country (e.g. 'Remote, Peru') like any remote posting")
     deal_breakers: List[str] = Field(default_factory=list)
     preferred_locations: List[str] = Field(default_factory=list)
     shortlist_threshold: float = Field(7.5, ge=0.0, le=10.0, description="Minimum overall score to shortlist")
