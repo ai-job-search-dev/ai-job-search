@@ -40,7 +40,7 @@ class InterviewWiring(unittest.TestCase):
     def test_step1_handles_refused_verdict(self):
         text = INTERVIEW.read_text(encoding="utf-8")
         step1 = re.search(r"## Step 1: Load the Application Context(.*?)(?=\n## Step 2)", text, re.DOTALL).group(1)
-        self.assertIn("refused", step1)
+        self.assertIn("refused (no text to evaluate)", step1)
 
 
 class RefusedVerdictWiring(unittest.TestCase):
