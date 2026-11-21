@@ -56,7 +56,8 @@ with --json), then `--- text ---` and the cleaned text, or `saved=<path>` when
 --out is given. Exit 0 when a posting is evaluated; 1 when the input has no text
 to evaluate; 2 when --in cannot be read, is a hard link, or lies outside the
 temp directory, /tmp and documents/applications/, or --out cannot be written or
-points inside this repository or outside the temp directory and /tmp. --out is
+it or its directory points inside this repository or outside the temp directory
+and /tmp. --out is
 replaced, never written through (the cleaned posting is untrusted text and
 belongs in the session scratchpad, never next to the workflow's own files or the
 user's).
@@ -572,7 +573,7 @@ def main(argv=None) -> int:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--html", action="store_const", const="html", dest="mode")
     mode.add_argument("--text", action="store_const", const="text", dest="mode")
-    parser.add_argument("--out", type=Path, default=None, help="write the cleaned text here (system temp dir or /tmp) instead of stdout")
+    parser.add_argument("--out", type=Path, default=None, help="write the cleaned text here (the file and its directory in the system temp dir or /tmp) instead of stdout")
     parser.add_argument("--json", action="store_true", help="print findings as JSON")
     parser.set_defaults(mode="auto")
     args = parser.parse_args(argv)

@@ -20,8 +20,9 @@ Properties, each pinned by tests/test_fetch_page.py:
     message; no flag skips it. The retry is for firewalls on sites whose
     published policy allows access, never for sites that said no.
   * Fetched content never lands in the repo or outside the temp directory.
-    --out defaults to the system temp directory; a path that resolves inside
-    the repo root, or outside the system temp directory and /tmp, is refused.
+    --out defaults to the system temp directory; a path that, or whose
+    directory, resolves inside the repo root or outside the system temp
+    directory and /tmp is refused.
   * Bounded: 45 s, 5 redirects, 10 MB - on both the curl and the urllib path,
     and the size cap is applied after Content-Encoding is undone.
 
@@ -259,7 +260,7 @@ def main(argv=None) -> int:
     )
     parser.add_argument("url")
     parser.add_argument("--out", type=Path, default=None,
-                        help="where to save the body: the system temp dir or /tmp, never inside the repo (default: system temp dir)")
+                        help="where to save the body: the file and its directory must be in the system temp dir or /tmp, never inside the repo (default: system temp dir)")
     parser.add_argument("--text", action="store_true", help="also print the tag-stripped text")
     parser.add_argument("--max-chars", type=int, default=6000, help="cap for --text (default 6000)")
     args = parser.parse_args(argv)
