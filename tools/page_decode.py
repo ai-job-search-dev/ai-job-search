@@ -7,8 +7,10 @@ windows-1252 reached the gate and the scorer as replacement characters.
 
 Valid UTF-8 always wins, so a page that decoded cleanly before decodes to the
 same string. Only bytes that are not valid UTF-8 fall back to what the page
-declares: a UTF-16 byte order mark, then `<meta charset>` or the http-equiv
-Content-Type in the first 1024 bytes (the window the HTML prescan reads). A
+declares: a UTF-16 byte order mark, then the charset of the HTTP Content-Type
+header when the caller has it (fetch_page.py passes the final response's),
+then `<meta charset>` or the http-equiv Content-Type in the first 1024 bytes
+(the window the HTML prescan reads). A
 label is mapped to the codec browsers use for it ("euc-kr" is read as CP949,
 "iso-8859-1" as windows-1252). A missing or unknown label keeps UTF-8 with
 replacement, and only the labels below are honoured, so a page cannot select
@@ -45,20 +47,27 @@ _CODECS = {
 LABEL_TO_CODEC = {label: codec for codec, labels in _CODECS.items() for label in labels}
 
 
-def declared_codec(raw: bytes):
-    """The codec a page declares through a UTF-16 BOM or a <meta> tag, or None."""
+def declared_codec(raw: bytes, http_charset: str | None = None):
+    """The codec a page declares: a UTF-16 BOM, else the HTTP Content-Type
+    charset the caller passes, else a <meta> tag; None when nothing usable."""
     if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
         return "utf-16"
+    if http_charset:
+        # Browsers read the transport's declaration before the page's own,
+        # and many legacy portals declare only there.
+        codec = LABEL_TO_CODEC.get(http_charset.strip().strip("\"'").lower())
+        if codec:
+            return codec
     match = META_CHARSET.search(raw[:PRESCAN_BYTES])
     if match is None:
         return None
     return LABEL_TO_CODEC.get(match.group(1).decode("ascii").lower())
 
 
-def decode_page(raw: bytes) -> str:
+def decode_page(raw: bytes, http_charset: str | None = None) -> str:
     """Text of a saved page: UTF-8 when valid, else its declared charset, else UTF-8 with replacement."""
     try:
         return raw.decode("utf-8")
     except UnicodeDecodeError:
         pass
-    return raw.decode(declared_codec(raw) or "utf-8", errors="replace")
+    return raw.decode(declared_codec(raw, http_charset) or "utf-8", errors="replace")

@@ -78,5 +78,24 @@ class UnchangedBehaviour(unittest.TestCase):
         self.assertIsNone(declared_codec(raw))
 
 
+class HttpCharset(unittest.TestCase):
+    def test_http_charset_decodes_a_page_with_no_meta(self):
+        from page_decode import decode_page
+        raw = "<h1>백엔드 개발자 채용</h1>".encode("cp949")
+        self.assertEqual(decode_page(raw, "euc-kr"), "<h1>백엔드 개발자 채용</h1>")
+        self.assertEqual(decode_page(raw, '"EUC-KR"'), "<h1>백엔드 개발자 채용</h1>")
+        self.assertIn("\ufffd", decode_page(raw))
+
+    def test_http_charset_outranks_a_conflicting_meta(self):
+        from page_decode import decode_page
+        raw = '<meta charset="iso-8859-1"><h1>백엔드</h1>'.encode("cp949")
+        self.assertIn("백엔드", decode_page(raw, "euc-kr"))
+
+    def test_unknown_http_label_falls_through_to_meta(self):
+        from page_decode import decode_page
+        raw = '<meta charset="euc-kr"><h1>백엔드</h1>'.encode("cp949")
+        self.assertIn("백엔드", decode_page(raw, "utf-7"))
+
+
 if __name__ == "__main__":
     unittest.main()
