@@ -37,6 +37,7 @@ the upstream ref is unavailable, so a scheduled job degrades gracefully.
 from __future__ import annotations
 
 import argparse
+import os
 import shlex
 import subprocess
 import sys
@@ -152,11 +153,23 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--remote", default="upstream")
     ap.add_argument("--branch", default="master")
-    ap.add_argument("--wontport", default=".github/upstream-wontport.txt")
+    ap.add_argument("--wontport", default=None,
+                    help="won't-port list (default: .github/upstream-wontport.txt at the repository root)")
     args = ap.parse_args()
     ref = f"{args.remote}/{args.branch}"
     slug = remote_slug(args.remote)
-    wontport = load_wontport(args.wontport)
+    wontport_path = args.wontport
+    if wontport_path is None:
+        # Every git call here resolves the repository from any subdirectory,
+        # but a relative default resolved against the working directory: run
+        # from tools/ (or any other subdirectory) the list was "missing", read
+        # as empty, and every rejected commit came back as worth reviewing.
+        try:
+            top = git("rev-parse", "--show-toplevel").strip()
+        except subprocess.CalledProcessError:
+            top = "."
+        wontport_path = os.path.join(top, ".github", "upstream-wontport.txt")
+    wontport = load_wontport(wontport_path)
 
     try:
         git("rev-parse", "--verify", ref)

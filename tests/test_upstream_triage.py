@@ -284,6 +284,26 @@ class SuggestedCherryPickOrderTests(TriageRepoFixture):
 
 
 class WontPortTests(TriageRepoFixture):
+    def test_default_list_is_found_from_a_subdirectory(self):
+        # The default path was relative to the working directory, so running
+        # the documented command from tools/ read no list and reported the
+        # rejected commit as worth reviewing. git itself finds the repository
+        # from any subdirectory; the default now resolves against its root.
+        self.write("kept.py", "print('rejected feature')\n")
+        rejected = self.commit("upstream: feature the fork rejects")
+        self.set_upstream_to_head()
+        git(self.root, "reset", "--hard", "HEAD~1")
+        self.write(".github/upstream-wontport.txt", f"{rejected[:9]}\n")
+        self.commit("fork: won't-port list")
+
+        result = subprocess.run(
+            [sys.executable, str(self.root / "tools" / "upstream_triage.py")],
+            cwd=self.root / "tools", capture_output=True, text=True, encoding="utf-8",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("on the fork's won't-port list", result.stdout)
+        self.assertNotIn("git cherry-pick", result.stdout)
+
     def test_listed_sha_is_excluded(self):
         self.write("kept.py", "print('rejected feature')\n")
         rejected = self.commit("upstream: feature the fork rejects")
