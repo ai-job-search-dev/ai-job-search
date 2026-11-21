@@ -510,6 +510,8 @@ class PageRequestRoute(unittest.TestCase):
               "no_proxy": "other.example"}, "http://jobs.example/", {"http_proxy": "socks5://proxy.test:1080"}),
         ):
             with self.subTest(env=env):
+                if os.name == "nt" and "https_proxy" in env:
+                    self.skipTest("Windows environment names are case-insensitive")
                 code, output, seen = self._main(url, env, dns)
                 self.assertEqual(code, 0, output)
                 argv, curl_env = seen[0]
