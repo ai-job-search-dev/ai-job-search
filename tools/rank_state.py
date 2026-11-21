@@ -320,9 +320,12 @@ def _persist_guard(entry: dict, result: dict) -> None:
     # Normalised so Step 5's "anything other than clean" rule holds whether
     # the agent returned "clean" or the gate's first line verbatim: any clean
     # verdict (with or without its context parenthetical) stores as "clean";
-    # a ⚠ verdict stores without the "posting_guard:" prefix. A rescoring
-    # result without a guard drops a stale one - absence means "not run",
-    # and last run's verdict would mislabel this run's fetch.
+    # a ⚠ verdict stores without the "posting_guard:" prefix. A refusal
+    # verdict ("refused (no text to evaluate)") is kept for diagnosis on
+    # unreachable fetches but is exempt from Step 5's suspicious-posting ⚠
+    # marker rule. A rescoring result without a guard drops a stale one -
+    # absence means "not run", and last run's verdict would mislabel this
+    # run's fetch.
     guard = result.get("guard")
     if isinstance(guard, str) and guard.strip():
         text = guard.strip()

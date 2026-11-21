@@ -61,6 +61,7 @@ class RefusedVerdictWiring(unittest.TestCase):
         self.assertIn('"fetch_error": "no text to evaluate"', text)
         self.assertIn('"guard": "posting_guard: refused (no text to evaluate)"', text)
         self.assertIn("after exhausting escalation", text)
+        self.assertIn("exempt from this ⚠ marker rule", text)
 
     def test_fetch_agents_handle_refused_verdict(self):
         fetcher = (REPO / ".claude" / "agents" / "posting-fetcher.md").read_text(encoding="utf-8")
