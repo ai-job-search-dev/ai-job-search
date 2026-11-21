@@ -51,7 +51,9 @@ class DeflateBackend(unittest.TestCase):
                         stdout, stderr = io.StringIO(), io.StringIO()
                         # Select the existing urllib backend; robots.txt still
                         # goes through its real curl transport and parser.
+                        # The server listens on loopback, which the real gate refuses.
                         with patch.object(fetch_page.shutil, "which", return_value=None), \
+                             patch("robots_check._is_public", return_value=True), \
                              contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                             code = fetch_page.main([
                                 f"http://127.0.0.1:{server.server_port}{path}",

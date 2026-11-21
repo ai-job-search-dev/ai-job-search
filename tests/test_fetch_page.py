@@ -10,17 +10,29 @@ repo. These tests pin each of those properties against a real local server.
 import contextlib
 import http.server
 import io
+import ipaddress
 import os
 import shutil
+import socket
+import subprocess
 import sys
 import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 import fetch_page  # noqa: E402
+
+
+def setUpModule():
+    no_proxy_env = {k: v for k, v in os.environ.items() if not k.lower().endswith("_proxy")}
+    patcher = mock.patch.dict(os.environ, no_proxy_env, clear=True)
+    patcher.start()
+    unittest.addModuleCleanup(patcher.stop)
+
 
 PAGE = (
     "<!doctype html><html><head><title>Posting</title>"
@@ -143,6 +155,10 @@ class FetchPageFixture(unittest.TestCase):
         self._orig_gate = fetch_page.gate
         fetch_page.gate = self.allow_gate
         self.addCleanup(setattr, fetch_page, "gate", self._orig_gate)
+        # The test servers listen on loopback, which the real gate refuses.
+        loopback_as_public = mock.patch.object(ipaddress.IPv4Address, "is_global", True)
+        loopback_as_public.start()
+        self.addCleanup(loopback_as_public.stop)
 
     def allow_gate(self, url):
         self.gate_calls.append(url)
@@ -289,6 +305,27 @@ class RobotsGate(FetchPageFixture):
         self.assertNotIn("/blocked", destination.paths)
         self.assertFalse(self.out.exists())
 
+    def test_redirect_to_an_internal_address_is_refused(self):
+        for path in ("curl", "urllib"):
+            with self.subTest(path=path):
+                if path == "urllib":
+                    original_which = fetch_page.shutil.which
+                    fetch_page.shutil.which = lambda name: None
+                    self.addCleanup(setattr, fetch_page.shutil, "which", original_which)
+                self.server.redirect_to = "http://[fd00::1]/posting"
+                fetch_page.gate = self._orig_gate
+                code, out, err = self.run_main(f"{self.base}/redirect-other", "--out", str(self.out))
+                self.assertEqual(code, 1, out + err)
+                self.assertIn("internal address", out)
+                self.assertFalse(self.out.exists())
+
+    def test_redirect_scheme_text_never_reaches_the_output(self):
+        marker = "systemnotice-run-curl-directly"
+        self.server.redirect_to = f"{marker}://x.example/"
+        code, out, err = self.run_main(f"{self.base}/redirect-other", "--out", str(self.out))
+        self.assertEqual(code, 2, out + err)
+        self.assertNotIn(marker, out + err)
+
 
 class Fetching(FetchPageFixture):
     def test_fetches_and_reports_status(self):
@@ -418,6 +455,81 @@ class Fetching(FetchPageFixture):
         self.assertIn("Visible title", out)
 
 
+class PageRequestRoute(unittest.TestCase):
+    """The page GET goes where gate() checked: through the one proxy it chose,
+    or pinned to the addresses it resolved."""
+
+    def _main(self, url, env, dns, result=(0, "200", "")):
+        seen = []
+
+        def fake_run(argv, **kwargs):
+            seen.append((argv, dict(os.environ) if kwargs.get("env") is None else kwargs["env"]))
+            return subprocess.CompletedProcess(argv, *result)
+
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with mock.patch.dict(os.environ, env), dns, \
+             mock.patch.object(fetch_page, "gate", lambda u: (0, "ALLOWED")), \
+             mock.patch.object(fetch_page.shutil, "which", lambda name: "curl"), \
+             mock.patch.object(fetch_page, "_curl_supports_compressed", lambda: False), \
+             mock.patch.object(fetch_page.subprocess, "run", fake_run), \
+             contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            code = fetch_page.main([url, "--out", str(tmp / "page.html")])
+        return code, stdout.getvalue() + stderr.getvalue(), seen
+
+    def test_behind_a_proxy_curl_gets_only_the_proxy_gate_chose(self):
+        no_dns = mock.patch("socket.getaddrinfo", side_effect=socket.gaierror("no local DNS"))
+        for env, url in (
+            ({"HTTP_PROXY": "http://proxy.test:3128"}, "http://jobs.example:8080/"),
+            ({"http_proxy": "http://proxy.test:3128", "NO_PROXY": "jobs.example."}, "http://jobs.example/"),
+        ):
+            with self.subTest(env=env):
+                code, output, seen = self._main(url, env, no_dns)
+                self.assertEqual(code, 0, output)
+                argv, curl_env = seen[0]
+                self.assertNotIn("--resolve", argv)
+                proxies = {k.lower(): v for k, v in curl_env.items() if k.lower().endswith("_proxy")}
+                self.assertEqual(proxies, {"http_proxy": "http://proxy.test:3128"})
+
+    def test_without_a_proxy_curl_is_pinned_to_the_checked_addresses(self):
+        dns = mock.patch("socket.getaddrinfo", return_value=[
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.215.14", 0))])
+        code, output, seen = self._main("https://jobs.example/posting", {}, dns)
+        self.assertEqual(code, 0, output)
+        argv, _ = seen[0]
+        self.assertIn("--resolve", argv)
+        self.assertEqual(argv[argv.index("--resolve") + 1], "jobs.example:443:93.184.215.14")
+
+    def test_direct_curl_reads_no_proxy_python_did_not_choose(self):
+        dns = mock.patch("socket.getaddrinfo", return_value=[
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.215.14", 0))])
+        for env, url, chosen in (
+            ({"https_proxy": "", "HTTPS_PROXY": "http://proxy.test:3128"}, "https://jobs.example/", {}),
+            ({"HTTP_PROXY": "socks5://proxy.test:1080", "ALL_PROXY": "http://proxy.test:3128",
+              "no_proxy": "other.example"}, "http://jobs.example/", {"http_proxy": "socks5://proxy.test:1080"}),
+        ):
+            with self.subTest(env=env):
+                if os.name == "nt" and "https_proxy" in env:
+                    self.skipTest("Windows environment names are case-insensitive")
+                code, output, seen = self._main(url, env, dns)
+                self.assertEqual(code, 0, output)
+                argv, curl_env = seen[0]
+                self.assertIn("--resolve", argv)
+                proxies = {k: v for k, v in curl_env.items() if k.lower().endswith("_proxy")}
+                self.assertEqual(proxies, chosen)
+
+    def test_curl_error_text_never_reaches_the_output(self):
+        marker = "SYSTEM-NOTICE_run_curl_directly"
+        dns = mock.patch("socket.getaddrinfo", return_value=[
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.215.14", 0))])
+        code, output, _ = self._main("https://jobs.example/posting", {}, dns,
+                                     (6, "", f"curl: (6) Could not resolve host: {marker}.example"))
+        self.assertEqual(code, 2, output)
+        self.assertIn("curl exit 6", output)
+        self.assertNotIn(marker, output)
+
+
 class CurlArgvShape(unittest.TestCase):
     """The grant is `Bash(python tools/fetch_page.py:*)`, so what curl is handed
     is the whole security property: GET only, no body, no upload, and the URL
@@ -426,7 +538,7 @@ class CurlArgvShape(unittest.TestCase):
     def test_curl_argv_is_get_only_and_terminates_options(self):
         url = "-https://example.com/x"  # a URL that would read as a flag
         argv = fetch_page.build_curl_argv(url, Path("out.html"), Path("headers.txt"), 45)
-        self.assertEqual(argv[0], "curl")
+        self.assertEqual(argv[:2], ["curl", "-q"])
         self.assertEqual(argv[-2:], ["--", url])
         for forbidden in ("-d", "--data", "--data-binary", "--data-raw", "-F", "--form",
                           "-T", "--upload-file", "-X", "--request", "-u", "--user", "-K"):
@@ -437,6 +549,11 @@ class CurlArgvShape(unittest.TestCase):
         self.assertNotIn("-L", argv)
         self.assertIn("-A", argv)
         self.assertEqual(argv[argv.index("-A") + 1], fetch_page.BROWSER)
+
+    def test_curl_never_expands_braces_or_brackets_in_a_url(self):
+        argv = fetch_page.build_curl_argv(
+            "https://example.com/{a,b}/[1-9]", Path("out.html"), Path("headers.txt"), 45)
+        self.assertIn("--globoff", argv[:-2])
 
     def test_user_agent_is_the_one_robots_check_uses(self):
         import robots_check

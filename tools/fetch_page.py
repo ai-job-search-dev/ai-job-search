@@ -12,9 +12,18 @@ Properties, each pinned by tests/test_fetch_page.py:
 
   * GET only. The curl argv is fixed; there is no code path that sends a
     request body, a form, or a file, and the URL comes after `--` so it can
-    never be parsed as an option. The urllib fallback (used only when curl is
-    absent) has the same shape.
+    never be parsed as an option. The urllib fallback has the same shape; it
+    is effectively unreachable, since gate() itself needs curl and reports
+    UNCONFIRMED without it.
   * http(s) only. Any other scheme exits 2 before anything else happens.
+  * Public hosts only, with limits. gate() refuses a host that resolves to
+    any loopback, private, link-local or unique-local address, on every hop,
+    before a request is made to it; curl's URL globbing is off. The page GET
+    takes robots_check.route() too: direct, it is re-checked and pinned to the
+    checked addresses; behind a proxy that resolves names itself, it goes
+    through exactly the proxy gate() used and the host is only pre-screened
+    locally, since the proxy resolves the name again. Non-ASCII host names
+    must be given in punycode (xn--) form.
   * robots.txt is enforced, not advised. robots_check.gate() runs before each
     GET, including redirect targets, and a non-zero gate exits 1 with its
     message; no flag skips it. The retry is for firewalls on sites whose
@@ -22,7 +31,8 @@ Properties, each pinned by tests/test_fetch_page.py:
   * Fetched content never lands in the repo. --out defaults to the system temp
     directory and a path that resolves inside the repo root is refused.
   * Bounded: 45 s, 5 redirects, 10 MB - on both the curl and the urllib path,
-    and the size cap is applied after Content-Encoding is undone.
+    and the size cap is applied after Content-Encoding is undone. Local DNS
+    lookups have no time limit of their own, and the 45 s does not bound them.
 
 Usage:
   python3 tools/fetch_page.py <url> [--out PATH] [--text] [--max-chars N]
@@ -60,7 +70,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from page_decode import decode_page  # noqa: E402
-from robots_check import BROWSER, gate  # noqa: E402
+from robots_check import BROWSER, gate, route  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
@@ -86,15 +96,17 @@ def _curl_supports_compressed() -> bool:
     )
 
 
-def build_curl_argv(url: str, out: Path, headers: Path, timeout: float) -> list:
-    """One GET without automatic redirects, so the next hop can be gated."""
+def build_curl_argv(url: str, out: Path, headers: Path, timeout: float, opts=()) -> list:
+    """One GET without automatic redirects, so the next hop can be gated.
+    opts are robots_check.route()'s, which keep it on the host gate() checked."""
     compressed = ["--compressed"] if _curl_supports_compressed() else []
     return [
-        "curl", "-sS",
+        "curl", "-q", "-sS", "--globoff",
         "--max-redirs", "0",
         "--max-time", str(timeout),
         "--max-filesize", str(MAX_BYTES),
         *compressed,
+        *opts,
         "-A", BROWSER,
         "-H", f"Accept: {ACCEPT}",
         "-H", f"Accept-Language: {ACCEPT_LANGUAGE}",
@@ -122,13 +134,14 @@ def fetch_with_curl(url: str, out: Path, timeout: float) -> tuple[int, str | Non
     os.close(fd)  # curl must be able to open it on Windows too
     headers = Path(header_name)
     try:
+        opts, env = route(urlsplit(url))
         proc = subprocess.run(
-            build_curl_argv(url, out, headers, timeout),
+            build_curl_argv(url, out, headers, timeout, opts),
             capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=timeout + 15,
+            env=env, timeout=timeout + 15,
         )
         if proc.returncode != 0:
-            raise RuntimeError(f"curl exit {proc.returncode}: {proc.stderr.strip()}")
+            raise RuntimeError(f"curl exit {proc.returncode}")
         code = int(proc.stdout.strip())
         location = _location(headers.read_text(encoding="iso-8859-1"))
     finally:
@@ -277,7 +290,7 @@ def main(argv=None) -> int:
         for redirects in range(MAX_REDIRECTS + 1):
             scheme = urlsplit(current).scheme.lower()
             if scheme not in ("http", "https"):
-                raise ValueError(f"redirect target must be http(s), got scheme {scheme!r}")
+                raise ValueError("redirect target is not http(s)")
             rc, message = gate(current)
             print(message)
             if rc != 0:

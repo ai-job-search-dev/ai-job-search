@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.7
+framework_version: 1.1.8
 ---
 
 # Web Research and Fetching
@@ -41,7 +41,7 @@ The retry command below runs this check itself and refuses to fetch when it fail
 python3 tools/robots_check.py '<URL>'
 ```
 
-Exit status `0` means the retry may proceed; `1` means it must not, so go to escalation step 4. The rules it applies are deliberately on the cautious side: longest-match wins, a tie between `Allow` and `Disallow` goes to `Disallow`, and a disallow for **either** `*` or `Claude-User` blocks the retry. A `404` means the site publishes no policy, which is permission; **any other failure to read `robots.txt` leaves permission unconfirmed and the retry does not happen.**
+Exit status `0` means the retry may proceed; `1` means it must not, so go to escalation step 4. The rules it applies are deliberately on the cautious side: longest-match wins, a tie between `Allow` and `Disallow` goes to `Disallow`, and a disallow for **either** `*` or `Claude-User` blocks the retry. A `404` means the site publishes no policy, which is permission; **any other failure to read `robots.txt` leaves permission unconfirmed and the retry does not happen.** That includes a `robots.txt` over 500 KiB, a URL path plus query over 2048 characters, a host name that is not plain ASCII (give an international domain in its punycode `xn--` form), and a host - or a redirect target - that resolves to an address that is not globally routable (loopback, private, link-local, shared, unique-local or reserved). Behind an HTTP(S) proxy configured in the environment (Claude Code's Bash sandbox sets one), the host is only pre-screened locally: it is refused if local DNS says it is internal (internal IP literals and `localhost` are refused either way), but the proxy resolves the name again itself, so there the check is weaker than on a direct connection.
 
 Two details worth knowing, both covered by `tests/test_robots_check.py`:
 
@@ -54,7 +54,7 @@ Two details worth knowing, both covered by `tests/test_robots_check.py`:
 python3 tools/fetch_page.py '<URL>' --out "${SCRATCHPAD:?set this to the session scratchpad directory from your system prompt}/page.html" --text
 ```
 
-One command does the whole retry: it runs the `robots.txt` gate above before the first GET **and before each redirect target is fetched** (exit `1` and no fetch when the policy says no), GETs the page with browser headers, saves the body to `--out`, prints `HTTP <code> size=<bytes> saved=<path>`, and with `--text` prints the tag-stripped text (script, style, noscript, svg and comments removed, entities unescaped) capped at `--max-chars` (default 6000). It is GET-only with a fixed argv, http(s) only, bounded to 45 s, 5 redirects and 10 MB, and it refuses an `--out` inside the repo - fetched content is untrusted and belongs in the scratchpad. That fixed shape is why the workflow pre-approves `python3 tools/fetch_page.py` and not `curl`.
+One command does the whole retry: it runs the `robots.txt` gate above before the first GET **and before each redirect target is fetched** (exit `1` and no fetch when the policy says no), GETs the page with browser headers, saves the body to `--out`, prints `HTTP <code> size=<bytes> saved=<path>`, and with `--text` prints the tag-stripped text (script, style, noscript, svg and comments removed, entities unescaped) capped at `--max-chars` (default 6000). It is GET-only with a fixed argv and URL globbing off, http(s) only, bounded to 45 s, 5 redirects and 10 MB (local DNS lookups have no time limit of their own), and it refuses an `--out` inside the repo - fetched content is untrusted and belongs in the scratchpad. That fixed shape is why the workflow pre-approves `python3 tools/fetch_page.py` and not `curl`. The page GET is checked like the gate's own requests: pinned to the checked addresses on a direct connection, only pre-screened behind a proxy.
 
 The HTTP status is information, not a verdict: a `403` body still tells you what the site answered. Only exit `2` (unsupported scheme, transport failure, oversized response) means nothing was retrieved.
 
