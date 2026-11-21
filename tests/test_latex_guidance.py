@@ -203,12 +203,14 @@ class TestItemizeBulletStaysText(unittest.TestCase):
         r"\{\\strut\\textcolor\{color1\}\{\\large\\rmfamily\\textbullet\}\}"
     )
     MODERNCV_STYLE = re.compile(r"\\moderncvstyle\{")
+    # An unescaped `%` comments out the rest of the line, whether it opens the
+    # line or follows code on it.
+    LATEX_COMMENT = re.compile(r"(?<!\\)%.*")
 
     def assert_override_after_style(self, lines, name):
         style_at = override_at = None
         for lineno, line in enumerate(lines, 1):
-            if line.lstrip().startswith("%"):
-                continue
+            line = self.LATEX_COMMENT.sub("", line)
             if style_at is None and self.MODERNCV_STYLE.search(line):
                 style_at = lineno
             if override_at is None and self.TEXT_BULLET.search(line):
