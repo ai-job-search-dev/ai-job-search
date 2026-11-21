@@ -341,6 +341,22 @@ class Apply(RankStateCase):
         self.assertNotIn("guard", self.read_state()["a"])
         self.assertIsNone(out["ranked"][0]["guard"])
 
+    def test_apply_persists_guard_on_unreachable_entry(self):
+        self.write_state({"a": entry(status="new")})
+        out = self.run_tool("apply", "--results", self.results([
+            {"key": "a", "status": "unreachable", "fetch_error": "no text to evaluate", "guard": "posting_guard: refused (no text to evaluate)"}
+        ]))
+        self.assertEqual(self.read_state()["a"]["guard"], "refused (no text to evaluate)")
+        self.assertEqual(out["unreachable"][0]["guard"], "refused (no text to evaluate)")
+
+    def test_apply_drops_stale_guard_on_unreachable_entry_without_guard(self):
+        self.write_state({"a": entry(status="new", guard="⚠ old")})
+        out = self.run_tool("apply", "--results", self.results([
+            {"key": "a", "status": "unreachable", "fetch_error": "timeout"}
+        ]))
+        self.assertNotIn("guard", self.read_state()["a"])
+        self.assertIsNone(out["unreachable"][0]["guard"])
+
     def test_apply_truncates_and_rejects_non_string_guard(self):
         self.write_state({"a": entry(status="new"), "b": entry(status="new")})
         out = self.run_tool("apply", "--results", self.results([
