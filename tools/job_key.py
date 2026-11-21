@@ -58,7 +58,10 @@ import unicodedata
 from datetime import datetime
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from data_paths import data_root  # noqa: E402
+
+ROOT = data_root()
 STATE = ROOT / "job_scraper" / "seen_jobs.json"
 
 COMPANY_MAX = 40

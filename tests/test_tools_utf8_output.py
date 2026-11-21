@@ -89,7 +89,7 @@ class ToolsWriteUtf8(unittest.TestCase):
         # Copy the tool so its repo-relative history and tracker paths point at the temp dir.
         tools_dir = self.tmp / "tools"
         tools_dir.mkdir()
-        for name in ("scrape_state.py", "rank_state.py", "job_key.py"):
+        for name in ("scrape_state.py", "rank_state.py", "job_key.py", "data_paths.py"):
             shutil.copy(TOOLS / name, tools_dir / name)
         results = self.tmp / "hits.json"
         results.write_text(json.dumps([

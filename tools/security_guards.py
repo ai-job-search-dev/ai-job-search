@@ -74,6 +74,9 @@ ALLOWED_PERMISSIONS = {
     # here and in .claude/settings.json, per /add-portal.
     "Bash(python salary_lookup.py:*)",
     "Bash(python3 salary_lookup.py:*)",
+    # Prints the user's data root; --init only creates user_data/ in the main checkout.
+    "Bash(python tools/data_paths.py:*)",
+    "Bash(python3 tools/data_paths.py:*)",
     "Bash(python tools/rank_state.py:*)",
     "Bash(python3 tools/rank_state.py:*)",
     "Bash(python tools/job_key.py:*)",
@@ -206,6 +209,9 @@ REQUIRED_IGNORE_RULES = [
     # from commands, not a skill, so a plain rooted rule is correct here -
     # unlike the **/-prefixed job_scraper/upskill rules above.
     "company_research/*.json",
+    # The user's data root (tools/data_paths.py): the whole profile and state
+    # tree once a workspace opts in, so it must never be trackable here.
+    "/user_data/",
     # Machine-local Claude Code user configuration and ad-hoc permissions approvals.
     ".claude/settings.local.json",
 ]

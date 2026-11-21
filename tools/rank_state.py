@@ -48,7 +48,12 @@ from datetime import date, datetime, timedelta, timezone
 from fractions import Fraction
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from data_paths import data_root  # noqa: E402
+
+# The data root: user_data/ in the main checkout when present (shared by linked
+# worktrees), else this checkout.
+ROOT = data_root()
 STATE = ROOT / "job_scraper" / "seen_jobs.json"
 TRACKER = ROOT / "job_search_tracker.csv"
 

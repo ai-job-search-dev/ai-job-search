@@ -121,3 +121,8 @@ company_research/*.json
 
 # Brainstorm mockups (superpowers visual companion) - never ship
 .superpowers/
+
+# The user's data root (tools/data_paths.py): profile, scrape history, tracker,
+# CVs and letters, shared by every worktree of this checkout. Never tracked
+# here - sync it with a cloud folder or a private repo of its own instead.
+/user_data/

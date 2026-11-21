@@ -93,6 +93,15 @@ automatically from your Languages table above - don't duplicate them here. -->
 - `.claude/skills/` - AI skill definitions for the application workflow
 - `.agents/skills/` - Job portal CLIs copied in from community-portals (none shipped)
 
+## Where the User's Data Lives
+This repo is the plugin; the profile, scrape history, tracker, CVs and letters are the user's and may live outside the checkout. **Before reading or writing any user data, run `python3 tools/data_paths.py`** (`python` on Windows) - it prints the data root, and the `tools/` scripts already resolve their files through it.
+
+- **It prints this checkout's root:** nothing changes, every path below is relative to the repo.
+- **It prints another directory** (`user_data/` in the main checkout, shared by every git worktree, or `JOB_SEARCH_DATA_DIR`): every user-data path a command or skill names keeps its relative path but resolves under that root - `job_scraper/`, `job_search_tracker.csv`, `company_research/`, `documents/`, `gmail_sync/`, `reports/`, `upskill/report-*.md`, `salary_data.json`, `cv/main_*`, `cover_letters/cover_*`. Never write those into the checkout.
+- **Profile files** follow the same rule: when `<data root>/CLAUDE.md`, `<data root>/.claude/skills/job-application-assistant/0[1-7]-*.md` or `<data root>/.claude/skills/job-scraper/search-queries.md` exists, it **replaces** the template of the same path in the repo - read it instead, and write profile updates there. The placeholders in this file are then the unfilled template, not the candidate.
+- Code and templates stay in the repo: `tools/`, `.claude/`, `cv/main_example.tex`, `cover_letters/cover.cls`, `cover_letters/OpenFonts/`. A cover letter compiles only with `cover.cls` and `OpenFonts/` beside it, so copy both into `<data root>/cover_letters/` when they are missing there.
+- `python3 tools/data_paths.py --init` creates `user_data/` in the main checkout (or `JOB_SEARCH_DATA_DIR` when set). `user_data/` is gitignored and never committed here; a `JOB_SEARCH_DATA_DIR` that points inside the checkout is **not** covered by that rule, so keep an override outside the repo. Once it exists it takes precedence over the checkout, so move existing user files into it before the next `/scrape`, `/rank` or `/apply`; the checkout's copies are no longer read.
+
 ## Workflow for New Job Applications
 1. User provides a job posting (URL or text)
 2. **Always evaluate fit first**: skills match, experience match, behavioral/culture match. Present this assessment to the user before proceeding.

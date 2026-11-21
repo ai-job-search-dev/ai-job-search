@@ -339,6 +339,10 @@ To wipe your profile data and start fresh:
 
 `/reset` shows exactly what will be deleted and requires you to type `RESET` to confirm. Nothing is deleted until you do.
 
+### Keeping your data out of the checkout
+
+By default your profile, scrape history, tracker, CVs and letters sit in the checkout itself. To separate them from the plugin - so upstream updates merge cleanly and every git worktree sees the same data - run `python3 tools/data_paths.py --init` (on Windows: `python tools/data_paths.py --init`). It creates a gitignored `user_data/` in the main checkout; move your files there under the same relative paths (`job_scraper/seen_jobs.json`, `job_search_tracker.csv`, `cv/main_*`, `CLAUDE.md`, the profile files `.claude/skills/job-application-assistant/0[1-7]-*.md` and `.claude/skills/job-scraper/search-queries.md`, ...) before the next `/scrape`, `/rank` or `/apply`, because the checkout's copies are no longer read once it exists. Set `JOB_SEARCH_DATA_DIR` to keep them somewhere else entirely, such as a cloud-synced folder - outside the checkout, since only `user_data/` is gitignored. `python3 tools/data_paths.py` prints the root in use; [CLAUDE.md](CLAUDE.md#where-the-users-data-lives) has the rules the workflows follow.
+
 ### Staying up to date
 
 Upstream moves fast. Rather than pulling raw `master` and hoping, update your fork to a tagged [release](../../releases) - a weekly checkpoint that passed CI, with its changes listed on the release page. `python3 tools/check_upstream_updates.py` previews exactly which of your personalized files an update touches before you merge, and `python3 tools/upstream_triage.py` sorts the commits you're behind into "worth reviewing" vs "probably skip" (a weekly workflow can post this to a rolling issue). Full walkthrough in [SETUP.md, section 8](SETUP.md#8-pulling-upstream-updates-into-your-fork).

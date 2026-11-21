@@ -360,12 +360,21 @@ class DumpTargetTests(unittest.TestCase):
         self.assertIsNone(check_dump_target(self.root / "cv" / "main_acme_analyst.txt", self.root))
         self.assertIsNone(check_dump_target(ROOT / "cv" / "main_acme_analyst.txt"))
 
+    def test_data_root_output_dirs_are_allowed(self):
+        data = self.root / "user_data"
+        (data / "cv").mkdir(parents=True)
+        self.assertIsNone(check_dump_target(data / "cv" / "main_acme.txt", self.root, data))
+        self.assertIsNone(check_dump_target(data / "cover_letters" / "cover_acme.txt", self.root, data))
+        self.assertIn("inside cv/", check_dump_target(data / "notes.txt", self.root, data))
+        # Without the data root the same path is outside every allowed directory.
+        self.assertIn("inside cv/", check_dump_target(data / "cv" / "main_acme.txt", self.root, self.root))
+
     def test_targets_outside_the_output_dirs_are_refused(self):
         outside = Path(self.temp_dir.name).parent / "elsewhere.txt"
         for path, reason in [
-            (outside, "inside this repo's cv/"),
-            (self.root / "tools" / "notes.txt", "inside this repo's cv/"),
-            (self.root / "cv" / ".." / "tools" / "x.txt", "inside this repo's cv/"),
+            (outside, "inside cv/ or cover_letters/"),
+            (self.root / "tools" / "notes.txt", "inside cv/ or cover_letters/"),
+            (self.root / "cv" / ".." / "tools" / "x.txt", "inside cv/ or cover_letters/"),
             (self.root / "cv" / "main_acme.py", "must name a .txt file"),
             (Path.home() / ".zshrc", "must name a .txt file"),
         ]:

@@ -23,6 +23,9 @@ import sys
 import unicodedata
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from data_paths import data_root  # noqa: E402
+
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -38,7 +41,7 @@ class VerificationError(Exception):
     """Raised when a generated PDF does not satisfy its checks."""
 
 
-def check_dump_target(path, root=ROOT):
+def check_dump_target(path, root=ROOT, data=None):
     """Return why `--dump-text` may not write to `path`, or None if it may."""
     path = Path(path)
     if path.suffix != ".txt":
@@ -46,8 +49,10 @@ def check_dump_target(path, root=ROOT):
     if path.is_symlink():
         return "must not be a symlink"
     parent = path.resolve().parent
-    if not any(parent.is_relative_to((root / d).resolve()) for d in DUMP_TEXT_DIRS):
-        return "must be inside this repo's " + " or ".join(f"{d}/" for d in DUMP_TEXT_DIRS)
+    # The CV may live in the user's data root rather than in this checkout.
+    roots = {root, data_root() if data is None else data}
+    if not any(parent.is_relative_to((r / d).resolve()) for r in roots for d in DUMP_TEXT_DIRS):
+        return "must be inside " + " or ".join(f"{d}/" for d in DUMP_TEXT_DIRS) + " of this repo or of the data root"
     return None
 
 
@@ -341,7 +346,10 @@ def build_parser():
     parser.add_argument(
         "--dump-text",
         type=Path,
-        help="write the extracted text layer to this .txt path under cv/ or cover_letters/ (UTF-8)",
+        help=(
+            "write the extracted text layer to this .txt path under cv/ or cover_letters/ "
+            "of this repo or of the data root (UTF-8)"
+        ),
     )
     parser.add_argument(
         "--ascii-dates",
