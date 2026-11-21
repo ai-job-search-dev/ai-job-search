@@ -926,6 +926,25 @@ class LocalNegationsTests(GuardRepoFixture):
         self.assertIn("is not a negation", result.stdout)
         self.assertIn("security-guards-local.txt:1", result.stdout)
 
+    def test_bom_prefixed_local_file_is_honoured(self):
+        # Windows editors prepend a BOM; the first negation must still count,
+        # not be reported as "not a negation".
+        self.with_negation("!leads/.gitkeep")
+        path = self.write_local("!leads/.gitkeep\n")
+        path.write_bytes(b"\xef\xbb\xbf" + path.read_bytes())
+        result = run_guards(self.root, self.FORK)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_non_utf8_local_file_fails_cleanly(self):
+        # What PowerShell 5.1 `>` / Out-File write by default.
+        self.with_negation("!leads/.gitkeep")
+        path = self.write_local("!leads/.gitkeep\n")
+        path.write_bytes("!leads/.gitkeep\n".encode("utf-16"))
+        result = run_guards(self.root, self.FORK)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("security-guards-local.txt: unreadable (must be UTF-8)", result.stdout)
+        self.assertNotIn("Traceback", result.stderr)
+
     def test_local_negation_cannot_cancel_a_required_rule(self):
         # Every required rule is a personal-data guard; none may be re-included
         # locally, whatever the spelling git would fold to the same pattern.
