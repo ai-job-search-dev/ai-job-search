@@ -211,11 +211,14 @@ jobs:
             --pages 2 \
             --ascii-dates \
             --contains '[your.email@example.com]' \
+            --contains 'linkedin.com/in/your-profile' \
+            --contains 'github.com/your-username' \
             --contains 'Professional Experience' \
             --contains 'Achievement'
           python3 tools/verify_pdf.py cover_letters/cover_example.pdf \
             --pages 1 \
             --contains 'your.email@example.com' \
+            --contains 'linkedin.com/in/yourprofile' \
             --contains 'Dear [Hiring Manager / Team]'
 
   discover-clis:
