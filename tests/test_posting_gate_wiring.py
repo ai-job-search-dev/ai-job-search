@@ -37,6 +37,36 @@ class InterviewWiring(unittest.TestCase):
         self.assertIn("posting_guard", step1)
         self.assertIn("--text", step1)
 
+    def test_step1_handles_refused_verdict(self):
+        text = INTERVIEW.read_text(encoding="utf-8")
+        step1 = re.search(r"## Step 1: Load the Application Context(.*?)(?=\n## Step 2)", text, re.DOTALL).group(1)
+        self.assertIn("refused", step1)
+
+
+class RefusedVerdictWiring(unittest.TestCase):
+    """Every caller of posting_guard specifies what to do when the gate
+    refuses an empty posting (posting_guard: refused (no text to evaluate))."""
+
+    def test_apply_handles_refused_verdict(self):
+        text = APPLY.read_text(encoding="utf-8")
+        self.assertIn("refused (no text to evaluate)", text)
+        self.assertIn("Never evaluate fit on an empty posting", text)
+
+    def test_rank_handles_refused_verdict(self):
+        text = (REPO / ".claude" / "commands" / "rank.md").read_text(encoding="utf-8")
+        self.assertIn("posting_guard: refused (no text to evaluate)", text)
+        self.assertIn("no text to evaluate", text)
+
+    def test_fetch_agents_handle_refused_verdict(self):
+        fetcher = (REPO / ".claude" / "agents" / "posting-fetcher.md").read_text(encoding="utf-8")
+        scorer = (REPO / ".claude" / "agents" / "posting-scorer.md").read_text(encoding="utf-8")
+        self.assertIn("refused (no text to evaluate)", fetcher)
+        self.assertIn("refused (no text to evaluate)", scorer)
+
+    def test_skill_step1_handles_refused_verdict(self):
+        text = (REPO / ".claude" / "skills" / "job-application-assistant" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("refused (no text to evaluate)", text)
+
 
 class OtherFrontDoors(unittest.TestCase):
     """The skill's own Step 1, /outcome's fresh-fetch archive and /interview's

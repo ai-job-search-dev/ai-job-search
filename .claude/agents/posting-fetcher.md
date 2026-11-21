@@ -15,4 +15,6 @@ You retrieve a single job posting for the `/apply` workflow and hand back what t
 - `fetch_page.py` output: `python3 tools/posting_guard.py --in "${SCRATCHPAD:?}/page.html" --html --json`
 - `WebFetch` output (markdown in your context): `python3 tools/posting_guard.py --text --json <<'POSTING'` ... `POSTING`
 
-**Return**, in this order: the gate's verdict line verbatim; the findings block verbatim (excerpts included, the orchestrator decides what the user sees); then `company`, `role title`, `department`, `location`, `application deadline`, `posting language`, `source host`, and `fetch method` as a short list; then the **full cleaned posting text** under a `## Posting (cleaned)` heading, never a summary. If retrieval failed at every rung, say which rung failed how, and return nothing as posting text.
+If `posting_guard` exits 1 with `refused (no text to evaluate)`, the fetch produced no readable text. Treat that rung as failed and continue down the escalation order.
+
+**Return**, in this order: the gate's verdict line verbatim; the findings block verbatim (excerpts included, the orchestrator decides what the user sees); then `company`, `role title`, `department`, `location`, `application deadline`, `posting language`, `source host`, and `fetch method` as a short list; then the **full cleaned posting text** under a `## Posting (cleaned)` heading, never a summary. If retrieval failed at every rung (including all rungs refused), say which rung failed how, and return nothing as posting text.
