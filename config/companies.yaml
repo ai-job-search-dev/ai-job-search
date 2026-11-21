@@ -1,0 +1,182 @@
+# ==============================================================================
+# Curated Target Companies: Quantum Computing & High-Performance Software
+# ==============================================================================
+# Fields per company:
+#   name: Display name
+#   ats_provider: greenhouse | lever | ashby
+#   slug: Board slug on public ATS API
+#   domain: Official company domain
+#   focus: Primary technical focus (quantum_software, algorithms, sdk, cloud)
+#   notes: Optional context or guidance
+#   enabled: false skips the company (default true)
+
+companies:
+  - name: "SandboxAQ"
+    ats_provider: "ashby"
+    slug: "sandboxaq"
+    domain: "sandboxaq.com"
+    focus: "quantum_software"
+    notes: "AI + Quantum simulations and enterprise cryptographic agility."
+
+  - name: "Rigetti Computing"
+    ats_provider: "lever"
+    slug: "rigetti"
+    domain: "rigetti.com"
+    focus: "quantum_software"
+    notes: "PyQuil, Quilc, Quantum Cloud Services (QCS) and hybrid algorithms."
+
+  - name: "IonQ"
+    ats_provider: "greenhouse"
+    slug: "ionq"
+    domain: "ionq.com"
+    focus: "quantum_software"
+    notes: "Trapped ion hardware, cloud compilers and quantum algorithms."
+
+  - name: "PsiQuantum"
+    ats_provider: "greenhouse"
+    slug: "psiquantum"
+    domain: "psiquantum.com"
+    focus: "quantum_software"
+    notes: "Fault-tolerant photonic architecture, quantum SDKs and systems software."
+
+  - name: "Xanadu"
+    enabled: false  # slug not found on Greenhouse/Lever/Ashby; use JobSpy or the careers page
+    ats_provider: "greenhouse"
+    slug: "xanadu"
+    domain: "xanadu.ai"
+    focus: "quantum_software"
+    notes: "Creators of PennyLane (quantum differentiable programming), Strawberry Fields."
+
+  - name: "Zapata AI"
+    enabled: false  # slug not found on Greenhouse/Lever/Ashby; use JobSpy or the careers page
+    ats_provider: "lever"
+    slug: "zapata"
+    domain: "zapata.ai"
+    focus: "quantum_software"
+    notes: "Industrial generative AI & quantum algorithms (Orquestra platform)."
+
+  - name: "Classiq Technologies"
+    enabled: false  # slug not found on Greenhouse/Lever/Ashby; use JobSpy or the careers page
+    ats_provider: "greenhouse"
+    slug: "classiq"
+    domain: "classiq.io"
+    focus: "quantum_software"
+    notes: "Quantum algorithm design platform, high-level synthesis and compilation."
+
+  - name: "Algorithmiq"
+    enabled: false  # slug not found on Greenhouse/Lever/Ashby; use JobSpy or the careers page
+    ats_provider: "ashby"
+    slug: "algorithmiq"
+    domain: "algorithmiq.pro"
+    focus: "algorithms"
+    notes: "Quantum algorithms for life sciences and noise mitigation (Aurora)."
+
+  - name: "Riverlane"
+    ats_provider: "greenhouse"
+    slug: "riverlane"
+    domain: "riverlane.com"
+    focus: "quantum_software"
+    notes: "Quantum Error Correction (QEC) operating systems and decoders (Deltaflow)."
+
+  - name: "QC Ware"
+    enabled: false  # slug not found on Greenhouse/Lever/Ashby; use JobSpy or the careers page
+    ats_provider: "lever"
+    slug: "qcware"
+    domain: "qcware.com"
+    focus: "quantum_software"
+    notes: "Enterprise quantum software (Forge) and quantum machine learning."
+
+  - name: "Q-CTRL"
+    ats_provider: "lever"
+    slug: "q-ctrl"
+    domain: "q-ctrl.com"
+    focus: "quantum_software"
+    notes: "Quantum firmware, error mitigation software (Fire Opal) and infrastructure."
+
+  - name: "D-Wave Systems"
+    enabled: false  # slug not found on Greenhouse/Lever/Ashby; use JobSpy or the careers page
+    ats_provider: "greenhouse"
+    slug: "dwavesys"
+    domain: "dwavesys.com"
+    focus: "quantum_software"
+    notes: "Quantum annealing & gate-model cloud APIs (Ocean SDK)."
+  - name: "Atom Computing"
+    ats_provider: "lever"
+    slug: "atomcomputing"
+    domain: "atom-computing.com"
+    focus: "quantum_software"
+    notes: "Neutral-atom quantum computers; control software and systems."
+  - name: "Multiverse Computing"
+    ats_provider: "ashby"
+    slug: "multiverse"
+    domain: "multiversecomputing.com"
+    focus: "algorithms"
+    notes: "Quantum and AI software for finance and industry."
+
+  # ---------------------------------------------------------------------------
+  # Remote TypeScript / Angular employers that hire in Europe or worldwide.
+  # Chosen by probing each public board for remote postings that mention TypeScript or Angular and
+  # whose location is global or an EU country (a US-only remote role would need a visa). Large
+  # boards: the ranker screens them, so most postings end up IGNORED.
+  # ---------------------------------------------------------------------------
+  - name: "Canonical"
+    ats_provider: "greenhouse"
+    slug: "canonical"
+    domain: "canonical.com"
+    focus: "frontend_typescript"
+    notes: "Ubuntu publisher; many 'Home based - Worldwide' engineering roles, TypeScript and Python."
+  - name: "Supabase"
+    ats_provider: "ashby"
+    slug: "supabase"
+    domain: "supabase.com"
+    focus: "frontend_typescript"
+    notes: "Open-source Postgres platform; global remote, TypeScript and React."
+  - name: "Grafana Labs"
+    ats_provider: "greenhouse"
+    slug: "grafanalabs"
+    domain: "grafana.com"
+    focus: "frontend_typescript"
+    notes: "Observability; remote roles in Europe, TypeScript and React frontend teams."
+  - name: "Dropbox"
+    ats_provider: "greenhouse"
+    slug: "dropbox"
+    domain: "dropbox.com"
+    focus: "frontend_typescript"
+    notes: "Remote full-stack roles in Europe, TypeScript."
+  - name: "GitLab"
+    ats_provider: "greenhouse"
+    slug: "gitlab"
+    domain: "gitlab.com"
+    focus: "frontend_typescript"
+    notes: "All-remote company; some EMEA roles, TypeScript and Vue."
+  - name: "Affirm"
+    ats_provider: "greenhouse"
+    slug: "affirm"
+    domain: "affirm.com"
+    focus: "frontend_typescript"
+    notes: "Fintech; remote roles in Spain, TypeScript frontend and mobile."
+  - name: "Anyone AI"
+    ats_provider: "ashby"
+    slug: "anyone-ai"
+    domain: "anyoneai.com"
+    focus: "frontend_typescript"
+    notes: "LATAM remote engineering roles, including Argentina; Python and platform work."
+
+  # ---------------------------------------------------------------------------
+  # Remote web-engineering employers found by probing public boards for remote roles
+  # (worldwide, Americas, or a single country, which the profile accepts for remote work).
+  # ---------------------------------------------------------------------------
+  - {name: "Mozilla", ats_provider: "greenhouse", slug: "mozilla", domain: "mozilla.org", focus: "frontend_typescript", notes: "Remote roles in many countries; web platform and Firefox."}
+  - {name: "Railway", ats_provider: "ashby", slug: "railway", domain: "railway.com", focus: "frontend_typescript", notes: "Global remote; TypeScript product engineering."}
+  - {name: "Resend", ats_provider: "ashby", slug: "resend", domain: "resend.com", focus: "frontend_typescript", notes: "Americas remote; TypeScript developer tools."}
+  - {name: "Linear", ats_provider: "ashby", slug: "linear", domain: "linear.app", focus: "frontend_typescript", notes: "Remote in Europe and North America; TypeScript."}
+  - {name: "Netlify", ats_provider: "greenhouse", slug: "netlify", domain: "netlify.com", focus: "frontend_typescript", notes: "Remote; web platform."}
+  - {name: "Wikimedia Foundation", ats_provider: "greenhouse", slug: "wikimedia", domain: "wikimediafoundation.org", focus: "frontend_typescript", notes: "Remote worldwide, some contract roles."}
+  - {name: "Temporal", ats_provider: "ashby", slug: "temporal", domain: "temporal.io", focus: "frontend_typescript", notes: "Remote; TypeScript SDKs and cloud."}
+  - {name: "Cohere", ats_provider: "ashby", slug: "cohere", domain: "cohere.com", focus: "frontend_typescript", notes: "Remote in Canada, US and UK; full-stack on AI products."}
+  - {name: "LiveKit", ats_provider: "ashby", slug: "livekit", domain: "livekit.io", focus: "frontend_typescript", notes: "Remote North America; real-time and agents SDKs."}
+  - {name: "Vanta", ats_provider: "ashby", slug: "vanta", domain: "vanta.com", focus: "frontend_typescript", notes: "Remote US and Ireland; TypeScript full-stack."}
+  - {name: "Sanity", ats_provider: "ashby", slug: "sanity", domain: "sanity.io", focus: "frontend_typescript", notes: "Remote US and Europe; TypeScript content platform."}
+  - {name: "n8n", ats_provider: "ashby", slug: "n8n", domain: "n8n.io", focus: "frontend_typescript", notes: "Remote Europe; TypeScript, Node.js and Vue."}
+  - {name: "Twilio", ats_provider: "greenhouse", slug: "twilio", domain: "twilio.com", focus: "frontend_typescript", notes: "Remote in several countries."}
+  - {name: "LangChain", ats_provider: "ashby", slug: "langchain", domain: "langchain.com", focus: "frontend_typescript", notes: "Remote US; TypeScript frontend for AI observability."}

@@ -91,6 +91,8 @@ automatically from your Languages table above - don't duplicate them here. -->
 - `cv/` - LaTeX CV variants (moderncv template, banking style)
 - `cover_letters/` - LaTeX cover letters (custom cover.cls template)
 - `.claude/skills/` - AI skill definitions for the application workflow
+- `tools/` - Automated pipeline (ingest, rank, tailor, HITL apply); see `.claude/skills/quantum-pipeline/SKILL.md`
+- `profile/master_profile.yaml` - Local, git-ignored candidate profile and screening `preferences:` (template: `profile/master_profile.example.yaml`)
 - `.agents/skills/` - Job portal CLIs copied in from community-portals (none shipped)
 
 ## Workflow for New Job Applications

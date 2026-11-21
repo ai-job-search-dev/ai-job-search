@@ -1,0 +1,26 @@
+;; macOS sandbox profile for a local Ollama server used by the ranker.
+;; Run through tools/local_llm.sh, which passes -D HOME_DIR=..., -D NETWORK=pull|serve and the three parent
+;; directories of HOME_DIR (A1..A3), which only need to be stat-able, not listable.
+;;
+;; What it enforces:
+;;   - No read or write access anywhere under /Users or /Volumes except the dedicated model home (HOME_DIR).
+;;     Your repositories, dotfiles, SSH keys and browser data are unreadable to the process.
+;;   - In "serve" mode the only network allowed is loopback: the API on 127.0.0.1:11434, the model runner's own
+;;     loopback port and local sockets. Nothing can reach out to the internet.
+;;   - In "pull" mode all network is allowed so a model can be downloaded; the file restrictions still apply.
+(version 1)
+(allow default)
+
+(deny file-read* file-write* (subpath "/Users"))
+(deny file-read* file-write* (subpath "/Volumes"))
+(allow file-read-metadata (literal "/Users") (literal (param "A1")) (literal (param "A2")) (literal (param "A3")))
+(allow file-read* file-write* (subpath (param "HOME_DIR")))
+
+(if (string=? (param "NETWORK") "pull")
+    (allow network*)
+    (begin
+      (deny network*)
+      (allow network-bind (local ip "localhost:*"))
+      (allow network-inbound (local ip "localhost:*"))
+      (allow network-outbound (remote ip "localhost:*"))
+      (allow network* (local unix-socket) (remote unix-socket))))

@@ -1,0 +1,54 @@
+# ==============================================================================
+# Search Portals & Aggregators Configuration
+# ==============================================================================
+
+# python-jobspy generalist search parameters
+jobspy:
+  # Google Jobs returned no data in testing (blocked), so it is left out. Add "google" to retry it.
+  sites:
+    - "linkedin"
+    - "indeed"
+    - "glassdoor"
+  search_terms:
+    - "Quantum Software Engineer"
+    - "Quantum SDK Developer"
+    - "Quantum Algorithms Python"
+    - "Quantum Compiler Engineer"
+    - "Junior Quantum Software"
+    - "Quantum Computing Residency"
+  # Every term runs in every region. Indeed uses country_indeed, so each region sets its own.
+  regions:
+    - { name: "Worldwide remote", location: "Remote", country_indeed: "usa" }
+    - { name: "United States", location: "United States", country_indeed: "usa" }
+    - { name: "Canada", location: "Canada", country_indeed: "canada" }
+    - { name: "United Kingdom", location: "United Kingdom", country_indeed: "uk" }
+    - { name: "Ireland", location: "Ireland", country_indeed: "ireland" }
+    - { name: "Germany", location: "Germany", country_indeed: "germany" }
+    - { name: "Netherlands", location: "Netherlands", country_indeed: "netherlands" }
+    - { name: "Spain", location: "Spain", country_indeed: "spain" }
+    - { name: "Australia", location: "Australia", country_indeed: "australia" }
+    - { name: "Argentina", location: "Argentina", country_indeed: "argentina" }
+  results_wanted: 25
+  hours_old: 120
+  # A posting is stored only if its title or description contains one of these (drops "Account Manager" noise).
+  require_keywords: ["quantum", "qiskit", "qubit"]
+  # remote_only is read from profile/master_profile.yaml (preferences.remote_only); set it here only to override.
+  linkedin_fetch_description: true   # LinkedIn returns no description otherwise, so the ranker would score blind
+  delay_seconds: 4           # pause between queries to avoid blocks
+  description_format: "markdown"
+# Niche portals and community boards for specialized crawlers (Crawl4AI)
+# parser: unitary_fund | generic_page (stores the whole page as ONE posting; only for single-job URLs)
+niche_portals:
+  - name: "Unitary Fund Job Board"
+    url: "https://unitary.fund/jobs/"
+    category: "quantum_open_source"
+    enabled: false
+    parser: "unitary_fund"
+    notes: "Disabled: moved to unitary.foundation and no longer publishes a job list (HTTP 404)."
+
+  - name: "Quantum Jobs Org"
+    url: "https://quantumjobs.org/"
+    category: "quantum_niche"
+    enabled: false
+    parser: "quantum_jobs"
+    notes: "Disabled: the domain is parked for sale and has no listings."
