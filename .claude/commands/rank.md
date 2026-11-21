@@ -32,7 +32,7 @@ Never read `job_scraper/seen_jobs.json` into the conversation. It holds every jo
 python3 tools/rank_state.py candidates --limit 10          # add --all / --focus "<text>" per Step 0
 ```
 
-It applies the status filter (`new` and `unreachable`, or any status with `--all`), the tracker exclusion (any company+role already in `job_search_tracker.csv` is out of scope regardless of flags - it has been applied to or consciously tracked), the focus filter, and `--limit`, then prints one compact object per candidate (`key`, `title`, `company`, `url`, `portal`, `deadline`, `posted_date`) plus the counts: `eligible`, `deferred` (eligible beyond the limit, kept at their current status so a later run continues the backlog), `excluded_by_tracker`.
+It applies the status filter (`new` and `unreachable`, or any status with `--all`), the tracker exclusion (any company+role already in `job_search_tracker.csv` is out of scope regardless of flags - it has been applied to or consciously tracked), the focus filter, and `--limit`, then prints one compact object per candidate (`key`, `title`, `company`, `url`, `portal`, `deadline`, `posted_date`, `employment_type`) plus the counts: `eligible`, `deferred` (eligible beyond the limit, kept at their current status so a later run continues the backlog), `excluded_by_tracker`.
 
 If it exits with "not found", tell the user to run `/scrape` first and stop.
 

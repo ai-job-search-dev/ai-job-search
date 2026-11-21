@@ -214,6 +214,7 @@ def cmd_candidates(args) -> int:
                 "portal": entry.get("portal"),
                 "deadline": entry.get("deadline"),
                 "posted_date": entry.get("posted_date"),
+                "employment_type": entry.get("employment_type"),
             }
         )
 
@@ -485,6 +486,7 @@ def cmd_apply(args) -> int:
                 "language_note": entry.get("language_note"),
                 "deadline": entry.get("deadline"),
                 "posted_date": entry.get("posted_date"),
+                "employment_type": entry.get("employment_type"),
                 "urgent": bool(parsed and today <= parsed <= today + timedelta(days=URGENT_DAYS)),
                 "strengths": entry.get("strengths", []),
                 "gaps": entry.get("gaps", []),
