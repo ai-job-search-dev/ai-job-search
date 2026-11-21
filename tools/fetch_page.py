@@ -270,14 +270,14 @@ def main(argv=None) -> int:
         return 2
 
     out = (args.out if args.out is not None else _default_out(args.url)).expanduser()
-    if _inside_repo(out.resolve()):
+    if _inside_repo(out.resolve()) or _inside_repo(out.parent.resolve()):
         print(
             f"fetch_page: refusing to write inside the repo ({out}); fetched content is "
             "untrusted and belongs in the session scratchpad or the temp directory",
             file=sys.stderr,
         )
         return 2
-    if not _inside_temp(out):
+    if not (_inside_temp(out) and _inside_temp(out.parent)):
         print(
             f"fetch_page: refusing to write outside the temp directory ({out}); fetched content "
             "is untrusted and belongs in the session scratchpad or the temp directory",

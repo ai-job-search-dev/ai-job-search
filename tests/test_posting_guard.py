@@ -777,6 +777,19 @@ class InputHandling(GuardFixture):
         self.assertFalse(link.is_symlink())
         self.assertEqual(link.read_text(encoding="utf-8"), "Job.\n")
 
+    def test_out_through_a_repo_symlink_into_the_temp_directory_is_refused(self):
+        target = self.tmp / "target.txt"
+        link = REPO_ROOT / f".posting_guard_symlink_test_{os.getpid()}"
+        try:
+            link.symlink_to(target)
+        except OSError as exc:
+            self.skipTest(f"symlinks unavailable: {exc}")
+        self.addCleanup(lambda: link.unlink(missing_ok=True))
+        code, out, err = self.run_main("--text", "--out", str(link), stdin_text="Job.\n")
+        self.assertEqual(code, 2, err)
+        self.assertTrue(link.is_symlink())
+        self.assertFalse(target.exists())
+
     def test_out_outside_the_repo_still_writes(self):
         target = self.tmp / "cleaned.txt"
         code, out, err = self.run_main("--text", "--out", str(target), stdin_text="Job.\nPlain.\n")

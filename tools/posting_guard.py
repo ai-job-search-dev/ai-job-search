@@ -588,14 +588,14 @@ def main(argv=None) -> int:
             file=sys.stderr,
         )
         return 2
-    if args.out is not None and _inside_repo(args.out.resolve()):
+    if args.out is not None and (_inside_repo(args.out.resolve()) or _inside_repo(args.out.parent.resolve())):
         print(
             f"posting_guard: refusing to write inside the repo ({args.out}); the cleaned "
             "posting is untrusted text and belongs in the session scratchpad",
             file=sys.stderr,
         )
         return 2
-    if args.out is not None and not _inside_temp(args.out):
+    if args.out is not None and not (_inside_temp(args.out) and _inside_temp(args.out.parent)):
         print(
             f"posting_guard: refusing to write outside the temp directory and /tmp ({args.out}); the "
             "cleaned posting is untrusted text and belongs in the session scratchpad",

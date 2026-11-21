@@ -223,8 +223,23 @@ class SchemeAndPathGuards(FetchPageFixture):
             os.link(outside, self.out)
         except OSError as exc:
             self.skipTest(f"hardlinks unavailable: {exc}")
-        self.run_main(f"{self.base}/ok.html", "--out", str(self.out))
+        code, out, err = self.run_main(f"{self.base}/ok.html", "--out", str(self.out))
+        self.assertEqual(code, 0, err)
         self.assertEqual(outside.read_text(encoding="utf-8"), "Original.")
+        self.assertNotEqual(self.out.read_text(encoding="utf-8"), "Original.")
+
+    def test_refuses_out_through_a_repo_symlink_into_the_temp_directory(self):
+        link = REPO_ROOT / f".fetch_page_symlink_test_{os.getpid()}"
+        try:
+            link.symlink_to(self.out)
+        except OSError as exc:
+            self.skipTest(f"symlinks unavailable: {exc}")
+        self.addCleanup(lambda: link.unlink(missing_ok=True))
+        code, out, err = self.run_main(f"{self.base}/ok.html", "--out", str(link))
+        self.assertEqual(code, 2, err)
+        self.assertEqual(self.gate_calls, [])
+        self.assertTrue(link.is_symlink())
+        self.assertFalse(self.out.exists())
 
     def test_refuses_out_inside_repo_before_any_network(self):
         fetch_page.gate = lambda url: self.fail("gate must not run for a refused --out")
