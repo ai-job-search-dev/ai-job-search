@@ -22,39 +22,76 @@ Rules implemented (RFC 9309), deliberately on the cautious side:
   * only an http or https URL with a host is checked at all; anything else
     is unconfirmed without a request, and curl itself is pinned to http(s)
     on the first hop and on every redirect
+  * every hop, the first included, goes only to a host whose every resolved
+    address is globally routable; loopback, private, link-local, shared and
+    unique-local addresses are unconfirmed without a request, and curl is
+    pinned to the addresses that were checked
+  * a robots.txt over 500 KiB (the size RFC 9309 asks parsers to handle) or
+    a URL path over MAX_PATH characters is unconfirmed
 
 Usage:  python3 tools/robots_check.py <url>
 Exit 0 = the retry may proceed. Exit 1 = do not retry; go to escalation step 3.
 """
 
-import re, subprocess, sys
+import ipaddress, socket, subprocess, sys, time
 from urllib.parse import urlsplit, unquote
 
 BROWSER = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
            '(KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36')
+MAX_ROBOTS_BYTES = 500 * 1024
+MAX_PATH = 2048
+MAX_REDIRECTS = 5
+
+def _public_addresses(host, port):
+    """Every address host resolves to, or RuntimeError if any is not global."""
+    addrs = sorted({info[4][0] for info in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)})
+    for addr in addrs:
+        ip = ipaddress.ip_address(addr.split('%')[0])
+        if not (getattr(ip, 'ipv4_mapped', None) or ip).is_global:
+            raise RuntimeError(f'{host} resolves to internal address {addr}')
+    return addrs
 
 def _fetch(url, ua):
     """curl, not urllib: some hosts (jobup.ch) hang urllib indefinitely while
-    answering curl in under a second, and --max-time is a hard ceiling."""
-    # "--" terminates option parsing, so a URL beginning with a dash can never
-    # be read by curl as a flag. gate() rebuilds the target as
-    # scheme://host/robots.txt before calling here, so this is hardening for
-    # direct callers rather than a hole in the gate path itself.
-    # --proto pins the first hop to http(s) and --proto-redir every redirect
-    # -L follows, so neither the caller nor the site can steer curl to file:,
-    # gopher:, ftp: or any other protocol it was built with (GHSA-h8vc-753p-wpmh).
-    r = subprocess.run(
-        ['curl', '-sS', '-L', '--proto', '=http,https', '--proto-redir', '=http,https',
-         '--max-redirs', '5', '--max-time', '12', '-A', ua,
-         '-H', 'Accept: text/plain,*/*', '-w', '\n%{http_code}', '--', url],
-        # robots.txt is UTF-8 (RFC 9309). Unpinned, Turkish Windows decoded it as
-        # cp1254, where bytes like 0x81 are undefined: the pipe reader thread died,
-        # stdout came back None, and tr.indeed.com read as UNCONFIRMED.
-        capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=20)
-    if r.returncode != 0:
-        raise RuntimeError('curl exit %d' % r.returncode)
-    body, _, code = r.stdout.rpartition('\n')
-    return body, int(code or 0)
+    answering curl in under a second, and --max-time is a hard ceiling.
+
+    Redirects are followed here rather than by curl -L, so that every hop's
+    scheme and resolved addresses are checked before curl connects to it, and
+    --resolve pins curl to the addresses that were checked."""
+    deadline = time.monotonic() + 12
+    for _ in range(MAX_REDIRECTS + 1):
+        parts = urlsplit(url)
+        if parts.scheme not in ('http', 'https') or not parts.hostname:
+            raise RuntimeError(f'refusing non-http(s) URL {url!r}')
+        port = parts.port or (443 if parts.scheme == 'https' else 80)
+        addrs = _public_addresses(parts.hostname, port)
+        pin = [] if parts.hostname in addrs else [
+            '--resolve', f'{parts.hostname}:{port}:' + ','.join(f'[{a}]' if ':' in a else a for a in addrs)]
+        remaining = deadline - time.monotonic()
+        if remaining < 1:
+            raise TimeoutError('robots.txt fetch exceeded the time limit')
+        # "--" terminates option parsing, so a URL beginning with a dash can never
+        # be read by curl as a flag. --proto pins the request to http(s)
+        # (GHSA-h8vc-753p-wpmh); --globoff keeps {a,b} and [1-9] literal, one URL.
+        r = subprocess.run(
+            ['curl', '-sS', '--globoff', '--proto', '=http,https', '--proto-redir', '=http,https',
+             '--max-redirs', '0', '--max-time', '%.1f' % remaining,
+             '--max-filesize', str(MAX_ROBOTS_BYTES), *pin, '-A', ua,
+             '-H', 'Accept: text/plain,*/*', '-w', '\n%{http_code} %{redirect_url}', '--', url],
+            # robots.txt is UTF-8 (RFC 9309). Unpinned, Turkish Windows decoded it as
+            # cp1254, where bytes like 0x81 are undefined: the pipe reader thread died,
+            # stdout came back None, and tr.indeed.com read as UNCONFIRMED.
+            capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=20)
+        if r.returncode != 0:
+            raise RuntimeError('curl exit %d' % r.returncode)
+        body, _, status = r.stdout.rpartition('\n')
+        code, _, location = status.partition(' ')
+        if len(body) > MAX_ROBOTS_BYTES:
+            raise RuntimeError('robots.txt is larger than %d bytes' % MAX_ROBOTS_BYTES)
+        if not location.strip():
+            return body, int(code or 0)
+        url = location.strip()
+    raise RuntimeError('more than %d redirects' % MAX_REDIRECTS)
 
 
 def is_robots_body(text):
@@ -132,38 +169,35 @@ def _match(pattern, path):
     Under RFC 9309 section 2.2.2, '$' anchors the end of the URL only when
     at the end of the pattern; mid-pattern '$' is matched literally.
 
-    Matching is a table walk in O(len(pattern) * len(path)), never a regex.
-    Each '*' used to become '.*', and a non-matching rule with repeated
-    wildcard segments ("/*a*a*a...*b$") sent Python's backtracking engine into
-    exponential time - minutes at 16 segments - on a file the site controls
-    (GHSA-xhqf-8q8x-4jwm). Consecutive '*' match as one, as RFC 9309 implies.
+    Matching is a greedy left-to-right search (str.find) for the literal pieces
+    between '*'s, never a regex. Each '*' used to become '.*', and a
+    non-matching rule with repeated wildcard segments ("/*a*a*a...*b$") sent
+    Python's backtracking engine into exponential time - minutes at 16
+    segments - on a file the site controls (GHSA-xhqf-8q8x-4jwm). With only '*'
+    wildcards, the leftmost place for each piece leaves the most room for the
+    rest, so greedy search never misses a match. Consecutive '*' match as one.
     """
     if pattern == '':
         return -1
     pattern = unquote(pattern)
     end_anchor = pattern.endswith('$')
-    pat = re.sub(r'\*{2,}', '*', pattern[:-1] if end_anchor else pattern)
-    # reach[j] is True when the first j pattern characters match the path
-    # consumed so far. A '*' extends a match over any character (reach[j]
-    # carries forward) and also matches nothing (reach[j-1] on the same row).
-    reach = [True] + [False] * len(pat)
-    for j, c in enumerate(pat, 1):
-        if c != '*':
-            break
-        reach[j] = True
-    if reach[-1] and not end_anchor:
-        return len(pattern)
-    for ch in path:
-        step = [False] * (len(pat) + 1)
-        for j, c in enumerate(pat, 1):
-            if c == '*':
-                step[j] = step[j - 1] or reach[j]
-            elif c == ch:
-                step[j] = reach[j - 1]
-        reach = step
-        if reach[-1] and not end_anchor:
-            return len(pattern)      # a prefix match is enough without '$'
-    return len(pattern) if reach[-1] else -1
+    pieces = (pattern[:-1] if end_anchor else pattern).split('*')
+    if not path.startswith(pieces[0]):
+        return -1
+    pos, end = len(pieces[0]), len(path)
+    if end_anchor:
+        if len(pieces) == 1:
+            return len(pattern) if pos == end else -1
+        tail = pieces.pop()
+        if not path.endswith(tail):
+            return -1
+        end -= len(tail)
+    for piece in pieces[1:]:
+        pos = path.find(piece, pos, end)
+        if pos < 0:
+            return -1
+        pos += len(piece)
+    return len(pattern) if pos <= end else -1
 
 def allowed(text, agent, path):
     g = _groups(text)
@@ -186,13 +220,15 @@ def gate(url):
     path = unquote(parts.path) or '/'
     if parts.query:
         path += '?' + unquote(parts.query)
+    if len(path) > MAX_PATH:
+        return 1, f'UNCONFIRMED (path longer than {MAX_PATH} characters) - do not retry, go to step 3'
     robots = f'{parts.scheme}://{parts.netloc}/robots.txt'
     body, last = None, 'no attempt'
     for ua in ('Claude-User', BROWSER):
         try:
             text, code = _fetch(robots, ua)
         except Exception as e:
-            last = type(e).__name__; continue
+            last = str(e) if type(e) is RuntimeError else type(e).__name__; continue
         if code == 404:
             return 0, 'ALLOWED - no robots.txt published'
         if code == 200:
@@ -206,7 +242,8 @@ def gate(url):
         last = 'HTTP %d' % code
     if body is None:
         return 1, 'UNCONFIRMED (%s) - do not retry, go to step 3' % last
-    for a in ('Claude-User', '*'):
+    # Without a Claude-User group both checks read the same '*' rules.
+    for a in ('Claude-User', '*') if 'claude-user' in _groups(body) else ('Claude-User',):
         if not allowed(body, a, path):
             return 1, f'DISALLOWED for {a} - do not retry, go to step 3'
     return 0, 'ALLOWED - robots.txt permits this path'

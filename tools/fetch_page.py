@@ -15,6 +15,9 @@ Properties, each pinned by tests/test_fetch_page.py:
     never be parsed as an option. The urllib fallback (used only when curl is
     absent) has the same shape.
   * http(s) only. Any other scheme exits 2 before anything else happens.
+  * Public hosts only. gate() refuses a host that resolves to any loopback,
+    private, link-local or unique-local address, on every hop, before a
+    request is made to it; curl's URL globbing is off.
   * robots.txt is enforced, not advised. robots_check.gate() runs before each
     GET, including redirect targets, and a non-zero gate exits 1 with its
     message; no flag skips it. The retry is for firewalls on sites whose
@@ -90,7 +93,7 @@ def build_curl_argv(url: str, out: Path, headers: Path, timeout: float) -> list:
     """One GET without automatic redirects, so the next hop can be gated."""
     compressed = ["--compressed"] if _curl_supports_compressed() else []
     return [
-        "curl", "-sS",
+        "curl", "-sS", "--globoff",
         "--max-redirs", "0",
         "--max-time", str(timeout),
         "--max-filesize", str(MAX_BYTES),

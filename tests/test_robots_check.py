@@ -476,7 +476,8 @@ class TestNonAsciiCurlOutput(unittest.TestCase):
 
         robots_check.subprocess.run = fake_curl
         try:
-            return robots_check.gate(url)
+            with resolve_to("93.184.215.14"):
+                return robots_check.gate(url)
         finally:
             robots_check.subprocess.run = real_run
 
@@ -557,7 +558,8 @@ class TestSchemeHardening(unittest.TestCase):
         original = robots_check.subprocess.run
         robots_check.subprocess.run = fake_run
         try:
-            body, code = robots_check._fetch("https://x.example/robots.txt", "Claude-User")
+            with resolve_to("93.184.215.14"):
+                body, code = robots_check._fetch("https://x.example/robots.txt", "Claude-User")
         finally:
             robots_check.subprocess.run = original
         self.assertEqual(code, 404)
@@ -578,3 +580,226 @@ class TestSchemeHardening(unittest.TestCase):
         target = (REPO_ROOT / "tools" / "robots_check.py").resolve().as_uri()
         with self.assertRaises(RuntimeError):
             robots_check._fetch(target, "Claude-User")
+
+
+def resolve_to(*addrs):
+    """Stand in for DNS: every name resolves to exactly these addresses."""
+    import socket
+    from unittest import mock
+
+    infos = [
+        (socket.AF_INET6 if ":" in a else socket.AF_INET, socket.SOCK_STREAM, 6, "", (a, 0))
+        for a in addrs
+    ]
+    return mock.patch("socket.getaddrinfo", return_value=infos)
+
+
+class TestInternalTargets(unittest.TestCase):
+    """Only hosts whose every address is globally routable are contacted, on the
+    first hop and on every redirect."""
+
+    def _gate_recording_curl(self, url):
+        import robots_check
+
+        calls = []
+        original = robots_check.subprocess.run
+        robots_check.subprocess.run = lambda argv, **kw: calls.append(argv)
+        try:
+            result = robots_check.gate(url)
+        finally:
+            robots_check.subprocess.run = original
+        return result, calls
+
+    def test_internal_address_is_unconfirmed_without_a_request(self):
+        for url in (
+            "http://127.0.0.1/jobs",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://10.0.0.5/jobs",
+            "http://192.168.1.1/",
+            "http://100.64.0.1/",
+            "http://0.0.0.0/",
+            "http://[::1]/",
+            "http://[fd00::1]/",
+            "http://[fe80::1]/",
+            "http://[::ffff:127.0.0.1]/",
+        ):
+            with self.subTest(url=url):
+                (rc, msg), calls = self._gate_recording_curl(url)
+                self.assertEqual(rc, 1, msg)
+                self.assertTrue(msg.startswith("UNCONFIRMED"), msg)
+                self.assertIn("internal address", msg)
+                self.assertEqual(calls, [])
+
+    def test_a_name_is_judged_by_every_address_it_resolves_to(self):
+        for addrs in (("169.254.169.254",), ("93.184.215.14", "10.0.0.1"), ("93.184.215.14", "fd00::1")):
+            with self.subTest(addrs=addrs), resolve_to(*addrs):
+                (rc, msg), calls = self._gate_recording_curl("https://jobs.example/posting")
+                self.assertEqual(rc, 1, msg)
+                self.assertIn("internal address", msg)
+                self.assertEqual(calls, [])
+
+    def test_unresolvable_host_is_unconfirmed_without_a_request(self):
+        import socket
+        from unittest import mock
+
+        with mock.patch("socket.getaddrinfo", side_effect=socket.gaierror("no such name")):
+            (rc, msg), calls = self._gate_recording_curl("https://nowhere.example/x")
+        self.assertEqual(rc, 1, msg)
+        self.assertEqual(calls, [])
+
+    def test_redirect_to_an_internal_host_is_not_followed(self):
+        """The public host answers /robots.txt with a redirect to a loopback
+        address. Real curl, real server: the redirect target is never requested."""
+        import http.server
+        import os
+        import shutil
+        import threading
+        from unittest import mock
+
+        import robots_check
+
+        if not shutil.which("curl"):
+            self.skipTest("curl is not installed")
+        seen = []
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802
+                seen.append((self.headers.get("Host"), self.path))
+                self.send_response(302)
+                self.send_header("Location", f"http://127.0.0.1:{port}/internal")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        port = server.server_address[1]
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+
+        real = robots_check._public_addresses
+
+        def public_origin(host, port):
+            # The test server can only listen on loopback; pretend its name is public.
+            return ["127.0.0.1"] if host == "public.test" else real(host, port)
+
+        with mock.patch.object(robots_check, "_public_addresses", public_origin), \
+             mock.patch.dict(os.environ, {"NO_PROXY": "*", "no_proxy": "*"}):
+            rc, msg = robots_check.gate(f"http://public.test:{port}/jobs")
+        self.assertIn((f"public.test:{port}", "/robots.txt"), seen)
+        self.assertNotIn("/internal", [path for _, path in seen])
+        self.assertEqual(rc, 1, msg)
+        self.assertIn("internal address", msg)
+
+
+class TestCurlUrlGlobbing(unittest.TestCase):
+    def test_curl_never_expands_braces_or_brackets_in_a_url(self):
+        import robots_check
+
+        seen = []
+
+        class Done:
+            returncode, stdout, stderr = 0, "\n404", ""
+
+        original = robots_check.subprocess.run
+        robots_check.subprocess.run = lambda argv, **kw: seen.append(argv) or Done()
+        try:
+            with resolve_to("93.184.215.14"):
+                robots_check._fetch("https://x.example/{a,b}/[1-9].txt", "Claude-User")
+        finally:
+            robots_check.subprocess.run = original
+        self.assertIn("--globoff", seen[0])
+        self.assertLess(seen[0].index("--globoff"), seen[0].index("--"))
+
+
+class TestSizeLimits(unittest.TestCase):
+    """RFC 9309 asks parsers to handle at least 500 KiB; nothing larger is read,
+    and the worst-case body and path decide in well under a second."""
+
+    def _gate_with_body(self, url, body):
+        import robots_check
+
+        original = robots_check._fetch
+        robots_check._fetch = lambda url, ua: (body, 200)
+        try:
+            return robots_check.gate(url)
+        finally:
+            robots_check._fetch = original
+
+    def test_curl_is_told_the_size_limit(self):
+        import robots_check
+
+        seen = []
+
+        class Done:
+            returncode, stdout, stderr = 0, "\n404", ""
+
+        original = robots_check.subprocess.run
+        robots_check.subprocess.run = lambda argv, **kw: seen.append(argv) or Done()
+        try:
+            with resolve_to("93.184.215.14"):
+                robots_check._fetch("https://x.example/robots.txt", "Claude-User")
+        finally:
+            robots_check.subprocess.run = original
+        self.assertIn("--max-filesize", seen[0])
+        self.assertEqual(seen[0][seen[0].index("--max-filesize") + 1], str(500 * 1024))
+
+    def test_body_over_500_kib_is_unconfirmed(self):
+        import robots_check
+
+        body = "User-agent: *\nAllow: /\n" + "#" * (500 * 1024) + "\n"
+
+        class Done:
+            returncode, stdout, stderr = 0, body + "\n200", ""
+
+        original = robots_check.subprocess.run
+        robots_check.subprocess.run = lambda argv, **kw: Done()
+        try:
+            with resolve_to("93.184.215.14"):
+                rc, msg = robots_check.gate("https://x.example/jobs")
+        finally:
+            robots_check.subprocess.run = original
+        self.assertEqual(rc, 1, msg)
+        self.assertTrue(msg.startswith("UNCONFIRMED"), msg)
+
+    def test_overlong_path_is_unconfirmed(self):
+        body = "User-agent: *\nAllow: /\n"
+        rc, msg = self._gate_with_body("https://x.example/" + "a" * 5000, body)
+        self.assertEqual(rc, 1, msg)
+        self.assertTrue(msg.startswith("UNCONFIRMED"), msg)
+
+    def test_largest_body_and_longest_path_decide_well_under_a_second(self):
+        import time
+
+        import robots_check
+
+        # The slowest shape measured: a piece that str.find re-scans almost
+        # in full at every offset of an all-"a" path.
+        rules = ["Disallow: *" + "a" * 49 + "b" + "a" * 49]
+        lines, size = ["User-agent: *"], 0
+        while size < 500 * 1024 - 4000:
+            for rule in rules:
+                lines.append(rule)
+                size += len(rule) + 1
+        body = "\n".join(lines) + "\n"
+        self.assertLessEqual(len(body.encode()), 500 * 1024)
+        path = "/" + "a" * (robots_check.MAX_PATH - 1)
+        start = time.perf_counter()
+        rc, msg = self._gate_with_body("https://x.example" + path, body)
+        elapsed = time.perf_counter() - start
+        self.assertEqual(rc, 0, msg)
+        self.assertLess(elapsed, 1.0, f"gate took {elapsed:.2f}s")
+
+    def test_wildcard_heavy_body_near_the_limit_is_fast(self):
+        import time
+
+        body = "User-agent: *\n" + ("Disallow: /" + "*a" * 20 + "*b$\n") * 9000
+        self.assertLessEqual(len(body.encode()), 500 * 1024)
+        path = "/" + "a" * 56
+        start = time.perf_counter()
+        rc, msg = self._gate_with_body("https://x.example" + path, body)
+        elapsed = time.perf_counter() - start
+        self.assertEqual(rc, 0, msg)
+        self.assertLess(elapsed, 1.0, f"gate took {elapsed:.2f}s")

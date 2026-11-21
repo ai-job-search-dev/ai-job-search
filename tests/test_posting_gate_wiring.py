@@ -81,7 +81,7 @@ class TrustBoundaryWiring(unittest.TestCase):
         text = RESEARCH.read_text(encoding="utf-8")
         boundary = re.search(r"## Trust boundary(.*?)(?=\n## )", text, re.DOTALL).group(1)
         self.assertIn("posting_guard", boundary)
-        self.assertIn("framework_version: 1.1.7", text)
+        self.assertIn("framework_version: 1.1.8", text)
 
 
 if __name__ == "__main__":

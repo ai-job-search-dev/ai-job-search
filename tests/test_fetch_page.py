@@ -10,6 +10,7 @@ repo. These tests pin each of those properties against a real local server.
 import contextlib
 import http.server
 import io
+import ipaddress
 import os
 import shutil
 import sys
@@ -17,6 +18,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
@@ -143,6 +145,10 @@ class FetchPageFixture(unittest.TestCase):
         self._orig_gate = fetch_page.gate
         fetch_page.gate = self.allow_gate
         self.addCleanup(setattr, fetch_page, "gate", self._orig_gate)
+        # The test servers listen on loopback, which the real gate refuses.
+        loopback_as_public = mock.patch.object(ipaddress.IPv4Address, "is_global", True)
+        loopback_as_public.start()
+        self.addCleanup(loopback_as_public.stop)
 
     def allow_gate(self, url):
         self.gate_calls.append(url)
@@ -288,6 +294,20 @@ class RobotsGate(FetchPageFixture):
         self.assertIn("/robots.txt", destination.paths)
         self.assertNotIn("/blocked", destination.paths)
         self.assertFalse(self.out.exists())
+
+    def test_redirect_to_an_internal_address_is_refused(self):
+        for path in ("curl", "urllib"):
+            with self.subTest(path=path):
+                if path == "urllib":
+                    original_which = fetch_page.shutil.which
+                    fetch_page.shutil.which = lambda name: None
+                    self.addCleanup(setattr, fetch_page.shutil, "which", original_which)
+                self.server.redirect_to = "http://[fd00::1]/posting"
+                fetch_page.gate = self._orig_gate
+                code, out, err = self.run_main(f"{self.base}/redirect-other", "--out", str(self.out))
+                self.assertEqual(code, 1, out + err)
+                self.assertIn("internal address", out)
+                self.assertFalse(self.out.exists())
 
 
 class Fetching(FetchPageFixture):
@@ -437,6 +457,11 @@ class CurlArgvShape(unittest.TestCase):
         self.assertNotIn("-L", argv)
         self.assertIn("-A", argv)
         self.assertEqual(argv[argv.index("-A") + 1], fetch_page.BROWSER)
+
+    def test_curl_never_expands_braces_or_brackets_in_a_url(self):
+        argv = fetch_page.build_curl_argv(
+            "https://example.com/{a,b}/[1-9]", Path("out.html"), Path("headers.txt"), 45)
+        self.assertIn("--globoff", argv[:-2])
 
     def test_user_agent_is_the_one_robots_check_uses(self):
         import robots_check
