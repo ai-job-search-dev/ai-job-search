@@ -137,8 +137,8 @@ def deterministic_checks(
     if answers is not None:
         allowed = set(answers.values())
         for fill in fills:
-            if fill.get("kind") in ("file", "consent") or fill.get("key") == "answer":
-                continue  # files are the tailored documents; bank answers passed their own provenance check
+            if fill.get("kind") in ("file", "consent", "tick") or fill.get("key") in ("answer", "tick"):
+                continue  # files are the tailored documents; bank answers and ticks passed their own provenance check
             if fill.get("value") not in allowed and fill.get("key") not in ("degree", "location"):
                 problems.append(f"Form field {fill.get('key')} would receive a value that is not in the profile: {fill.get('value')!r}.")
     return problems

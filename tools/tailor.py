@@ -143,7 +143,7 @@ TITLE_HINTS = {
     "Quantum Computing": ("quantum", "qubit", "qiskit"),
     "Frontend & UI": ("frontend", "front-end", "front end", "full stack", "full-stack", "fullstack", "ui", "web", "angular", "typescript", "react"),
     "Backend & APIs": ("backend", "back-end", "back end", "api", "platform", "server"),
-    "AI & Machine Learning": ("machine learning", "ml", "ai", "deep learning", "data scientist"),
+    "AI & Machine Learning": ("machine learning", "ml", "deep learning", "data scientist", "computer vision", "nlp"),
     "Cloud & DevOps": ("devops", "cloud", "infrastructure", "sre", "platform"),
 }
 
@@ -167,9 +167,8 @@ def build_cv(
         names = sorted(names, key=lambda n: n.casefold() not in matched_keys)
         ordered_groups.append((category, names))
     ordered_groups.sort(key=lambda g: (-title_boost(g[0], job_title), -sum(1 for n in g[1] if n.casefold() in matched_keys)))
-    focus = ordered_groups[0][0] if ordered_groups and (
-        title_boost(ordered_groups[0][0], job_title) or any(n.casefold() in matched_keys for n in ordered_groups[0][1])
-    ) else "default"
+    # The headline and summary change only when the job title names the field; matched skills alone just reorder.
+    focus = ordered_groups[0][0] if ordered_groups and title_boost(ordered_groups[0][0], job_title) else "default"
 
     experience = []
     for exp in profile.experience:
@@ -289,9 +288,10 @@ def build_cover_letter(
     missing: Sequence[str],
     cv: TailoredCV,
     remote: bool = True,
+    posting: str = "",
 ) -> List[str]:
-    """Letter paragraphs built from approved profile lines; see tools/cover_letter.py."""
-    return compose_letter(profile, company, job_title, matched, remote=remote)
+    """Letter paragraphs built from approved profile lines and answer-bank entries; see tools/cover_letter.py."""
+    return compose_letter(profile, company, job_title, matched, remote=remote, posting=posting)
 
 
 def render_letter(profile: MasterProfile, paragraphs: Sequence[str]) -> str:
@@ -418,7 +418,8 @@ def tailor_job(
     for lib in ("cv_lib.typ",):
         shutil.copy(TEMPLATES_DIR / lib, folder / lib)
     cv_typ, letter_typ = folder / "cv.typ", folder / "cover_letter.typ"
-    paragraphs = build_cover_letter(profile, company, job["title"], cv.matched, missing, cv, remote=bool(job["is_remote"]))
+    posting = (job["cleaned_description"] or job["raw_description"] or "") if "cleaned_description" in job.keys() else ""
+    paragraphs = build_cover_letter(profile, company, job["title"], cv.matched, missing, cv, remote=bool(job["is_remote"]), posting=posting)
     letter_typ.write_text(render_letter(profile, paragraphs), encoding="utf-8")
     cv_pdf, letter_pdf = folder / "cv.pdf", folder / "cover_letter.pdf"
     cv = compile_cv_to_fit(profile, matched_in, cv_typ, cv_pdf, job_title=job["title"])

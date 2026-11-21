@@ -133,6 +133,22 @@ class TailorContentTests(unittest.TestCase):
         self.assertEqual(short("Senior Full Stack Engineer | Observability | Germany | Remote"), "Senior Full Stack Engineer")
         self.assertEqual(short("Full Stack Engineer (Remote Ireland)"), "Full Stack Engineer")
 
+    def test_ai_tooling_roles_keep_the_default_headline_and_borrow_the_ai_usage_entry(self):
+        from tools.profile_schema import AnswerBank, BankEntry, SkillItem
+        profile = make_profile()
+        profile.skills += [SkillItem(name="TensorFlow", category="AI & Machine Learning")]
+        profile.headlines = {"default": "Software Engineer", "AI & Machine Learning": "ML Engineer"}
+        profile.answer_bank = AnswerBank(entries=[BankEntry(id="ai", topics=["ai_usage"], approved=True,
+                                                            text="I use AI coding assistants daily. I test what they produce. A third sentence.")])
+        self.assertEqual(tailor.build_cv(profile, ["TensorFlow"], job_title="Software Engineer - AI Tooling").title, "Software Engineer")
+        self.assertEqual(tailor.build_cv(profile, ["TensorFlow"], job_title="Machine Learning Engineer").title, "ML Engineer")
+        cv = tailor.build_cv(profile, ["Python"])
+        letter = " ".join(tailor.build_cover_letter(profile, "Acme", "Software Engineer - AI Tooling", cv.matched, [], cv, posting=""))
+        self.assertIn("I use AI coding assistants daily. I test what they produce.", letter)
+        self.assertNotIn("A third sentence", letter)
+        plain = " ".join(tailor.build_cover_letter(profile, "Acme", "Backend Engineer", cv.matched, [], cv, posting="Payments in Go."))
+        self.assertNotIn("AI coding assistants", plain)
+
     def test_cover_letter_does_not_advertise_gaps_or_repeat_the_summary(self):
         profile = make_profile()
         cv = tailor.build_cv(profile, ["Python"])
@@ -459,7 +475,7 @@ class FieldClassificationTests(unittest.TestCase):
             self.assertNotIn(forbidden, code)
         functions = inspect.getmembers(browser_apply, inspect.isfunction)
         clickers = {name for name, fn in functions if ".click(" in inspect.getsource(fn)}
-        self.assertEqual(clickers, {"_open_combo", "_click_option", "_click_submit"})
+        self.assertEqual(clickers, {"_open_combo", "_click_option", "_click_choice", "_click_submit"})
         tickers = {name for name, fn in functions if ".check(" in inspect.getsource(fn)}
         self.assertEqual(tickers, {"_tick"})
         self.assertIn("role=\"option\"", inspect.getsource(browser_apply._click_option) + browser_apply.OPTION_SELECTOR)
@@ -505,14 +521,74 @@ class FieldClassificationTests(unittest.TestCase):
         self.assertEqual(fills, [])
         self.assertEqual(len(left), 1)
 
+    def test_yes_no_buttons_decline_options_demonyms_and_consent_options_are_matched(self):
+        pick = browser_apply.pick_option
+        buttons = [{"index": 100001, "tag": "button", "type": "choice", "descriptor": "Are you over the age of 18?*", "value": "",
+                    "role": "buttons", "options": ["Yes", "No"]}]
+        from tools.profile_schema import FormAnswer
+        fills, left = browser_apply.plan_fills(buttons, {}, None, None, [FormAnswer(pattern="age of 18", answer="Yes", approved=True)])
+        self.assertEqual((fills[0]["kind"], fills[0]["value"], left), ("choice", "Yes", []))
+        self.assertEqual(pick(["Female", "Male", "Not listed above", "Prefer not to say"], "answer", "Decline to self-identify"), 3)
+        self.assertEqual(pick(["Afghan", "Argentine", "Italian"], "citizenship", "Italy"), 2)
+        self.assertEqual(pick(["Acknowledge/Confirm"], "answer", "Yes"), 0)
+        self.assertEqual(pick(["Yes", "No"], "answer", "Yes"), 0)
+
+    def test_dropdown_queries_open_the_list_first_then_try_distinctive_words(self):
+        self.assertEqual(browser_apply.combo_queries("discipline", "Computer Software Engineering"),
+                         ["Computer Software Engineering", "Software Engineering", "Engineering", "Computer"])
+        queries = browser_apply.combo_queries("school", "Universidad Nacional del Centro de la Provincia de Buenos Aires (UNCPBA)")
+        self.assertIn("UNCPBA", queries)
+
+    def test_values_the_page_does_not_keep_are_reported_and_a_slow_form_is_stuck(self):
+        class Page:
+            def __init__(self, state, body=""):
+                self.state, self.body, self.filled = state, body, []
+            def set_default_timeout(self, ms): self.timeout = ms
+            def fill(self, selector, value): self.filled.append(value)
+            def set_input_files(self, selector, path): pass
+            def evaluate(self, script):
+                return self.body if "innerText" in script and "data-aja-idx" not in script else self.state
+        fills = [{"index": 0, "kind": "text", "key": "location", "label": "Current location", "value": "Tandil"},
+                 {"index": 1, "kind": "text", "key": "email", "label": "Email", "value": "a@b.c"},
+                 {"index": 2, "kind": "file", "key": "resume_file", "label": "Resume", "value": "/x/cv.pdf"}]
+        page = Page([{"idx": 0, "value": "", "checked": False, "display": "", "files": 0},
+                     {"idx": 1, "value": "a@b.c", "checked": False, "display": "", "files": 0},
+                     {"idx": 2, "value": "", "checked": False, "display": "", "files": 0}], body="Resume cv.pdf Replace")
+        self.assertEqual(browser_apply.apply_fills(page, fills), 3)
+        self.assertEqual(page.timeout, browser_apply.ACTION_TIMEOUT_MS)
+        self.assertEqual(browser_apply.verify_commits(page, fills), ["Current location"])
+        self.assertEqual([f["done"] for f in fills], [False, True, True])
+        late = [{"index": 0, "kind": "text", "key": "email", "label": "Email", "value": "a@b.c"}]
+        self.assertEqual(browser_apply.apply_fills(Page([]), late, budget_seconds=-1), 0)
+        self.assertTrue(late[0]["error"].startswith("stuck"))
+
+    def test_earlier_tabs_of_the_same_form_are_closed_before_a_new_attempt(self):
+        class Tab:
+            def __init__(self, url): self.url, self.closed = url, False
+            def close(self): self.closed = True
+        old = Tab("https://job-boards.greenhouse.io/embed/job_app?for=acme&token=1")
+        other = Tab("https://jobs.ashbyhq.com/other/2/application")
+        browser_apply._close_previous_attempts(SimpleNamespace(pages=[old, other]), "https://boards.greenhouse.io/embed/job_app?for=acme&token=1")
+        self.assertEqual((old.closed, other.closed), (True, False))
+
     def test_option_matching_never_guesses(self):
         pick = browser_apply.pick_option
         self.assertEqual(pick(["Tandilt, Morocco", "Tandil, Buenos Aires, Argentina"], "location", "Tandil, Buenos Aires, Argentina"), 1)
         self.assertIsNone(pick(["Tandilt, Morocco", "Tandil, Jharkhand, India"], "location", "Tandil, Buenos Aires, Argentina"))
+        self.assertEqual(pick(["Tandil, Gola, Ramgarh, Jharkhand, IND", "Tandil, Buenos Aires, ARG"], "location", "Tandil, Buenos Aires, Argentina"), 1)
         self.assertEqual(pick(["Bachelor's Degree", "Master's Degree"], "degree", "master"), 1)
         self.assertIsNone(pick(["Aberystwyth University", "Oxford University"], "school", "Universidad Internacional de La Rioja"))
         self.assertEqual(pick(["Universidad Internacional de La Rioja (UNIR)"], "school", "Universidad Internacional de La Rioja"), 0)
         self.assertEqual(pick(["January", "February"], "end_month", "February"), 1)
+    def test_range_options_pick_the_one_bracket_holding_the_amount(self):
+        pick = browser_apply.pick_option
+        rates = ["$7-$14", "$15–$29", "$30–$39", "$150+"]
+        self.assertEqual(pick(rates, "answer", "USD 20 per hour or more"), 1)
+        self.assertEqual(pick(rates, "answer", "USD 200 per hour"), 3)
+        self.assertIsNone(pick(rates, "answer", "USD 5 per hour"))
+        self.assertEqual(pick(["Under $10", "$10 - $25", "More than $25"], "answer", "20"), 1)
+        self.assertIsNone(pick(["$10-$30", "$20-$40"], "answer", "USD 25"))
+        self.assertIsNone(pick(["Junior", "Senior"], "answer", "USD 20"))
 
     def test_education_uses_the_highest_completed_degree_never_one_in_progress(self):
         from datetime import date
@@ -532,6 +608,7 @@ class FieldClassificationTests(unittest.TestCase):
                 self.options, self.clicked, self.typed = options, [], []
             def click(self, selector): self.clicked.append(selector)
             def fill(self, selector, text): self.typed.append(text)
+            def press_sequentially(self, text, delay=0): self.typed.append(text)
             def wait_for_timeout(self, ms): pass
             def get_attribute(self, selector, name): return "listbox-1"
             def eval_on_selector_all(self, selector, script): return self.options
@@ -540,6 +617,7 @@ class FieldClassificationTests(unittest.TestCase):
                 def __init__(self, page, selector): self.page, self.selector = page, selector
                 def nth(self, i): self.page.picked = (self.selector, i); return self
                 def click(self): self.page.clicked.append("option")
+                def press_sequentially(self, text, delay=0): self.page.typed.append(text)
             def locator(self, selector): return Page._L(self, selector)
         page = Page(["Italy", "Argentina"])
         self.assertTrue(browser_apply.fill_combo(page, "#country", "country", "Argentina"))

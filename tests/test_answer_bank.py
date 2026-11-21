@@ -99,6 +99,29 @@ class AnswerBankTests(unittest.TestCase):
         box = self.run_form([field(3, "I confirm I am over the age of 18", kind="checkbox")], p=p)
         self.assertEqual(box["ticks"], [3])
 
+    def test_a_question_naming_a_country_overrides_the_job_region(self):
+        p = profile()
+        p.answer_bank.stances.insert(0, Stance(id="auth_visa", pattern="authori[sz]ed to work", answer="No", regions=["US"]))
+        p.answer_bank.stances.insert(1, Stance(id="auth", pattern="authori[sz]ed to work", answer="Yes"))
+        q = [field(0, "Are you legally authorized to work in the United States?", role="combobox")]
+        self.assertEqual(self.run_form(q, p=p, job={**JOB, "location": "Boulder, CO"})["answers"][0].answer, "No")
+        self.assertEqual(self.run_form(q, p=p)["answers"][0].answer, "No")
+        other = [field(0, "Are you legally authorized to work in the country you are applying for?", role="combobox")]
+        self.assertEqual(self.run_form(other, p=p)["answers"][0].answer, "Yes")
+
+    def test_consent_dropdowns_are_answered_yes_and_the_earliest_topic_leads(self):
+        out = self.run_form([field(0, "Please confirm that you have read and agree to our Privacy Notice", role="combobox")])
+        self.assertEqual((out["answers"][0].answer, out["answers"][0].note), ("Yes", "consent"))
+        self.assertEqual(ab.topics_of("Describe your involvement in a production project you are proud of, and any open source contributions")[0],
+                         "proudest_project")
+
+    def test_specific_topics_lead_and_the_own_words_declaration_is_never_answered(self):
+        q = "Tell us about your experience working in an async and/or remote environment. What challenges have you faced?"
+        self.assertEqual(ab.topics_of(q)[0], "remote_async")
+        out = self.run_form([field(0, "During this application process I agree to use only my own words", role="combobox"),
+                             field(1, "During this application process I agree to use only my own words. Explain", tag="textarea", kind="textarea")])
+        self.assertEqual(out["answers"], [])
+
     def test_audit_flags_names_the_profile_does_not_support(self):
         p = profile()
         p.answer_bank.entries.append(BankEntry(id="bad", topics=["challenge"], text="I migrated Kafka clusters for Netflix.", source="linkedin_hr", approved=True))

@@ -27,6 +27,8 @@ PRICING_PATH = ROOT_DIR / "config" / "llm_pricing.yaml"
 DEFAULT_MODEL = "gpt-4o-mini"
 ESTIMATED_PROMPT_TOKENS = 1800
 ESTIMATED_COMPLETION_TOKENS = 350
+# A small local model can loop forever on a structured answer; this cap ends it (and bounds cost on paid models).
+MAX_COMPLETION_TOKENS = int(os.environ.get("AI_JOB_SEARCH_MAX_TOKENS", "900"))
 
 
 class BudgetExceeded(RuntimeError):
@@ -117,7 +119,8 @@ def make_client(api_key: Optional[str] = None) -> Any:
     import instructor
     from openai import OpenAI
 
-    return instructor.from_openai(OpenAI(api_key=api_key or os.environ.get("OPENAI_API_KEY")))
+    timeout = float(os.environ.get("AI_JOB_SEARCH_LLM_TIMEOUT", "120"))  # a hung local model must not freeze a form
+    return instructor.from_openai(OpenAI(api_key=api_key or os.environ.get("OPENAI_API_KEY"), timeout=timeout, max_retries=1))
 
 
 def llm_configured() -> bool:
@@ -180,6 +183,7 @@ class LLMGateway:
 
         parsed, completion = self.client.chat.completions.create_with_completion(
             model=self.model, response_model=response_model, messages=messages, temperature=0.0, seed=7, max_retries=2,
+            max_tokens=MAX_COMPLETION_TOKENS,
         )
         usage = getattr(completion, "usage", None)
         prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)

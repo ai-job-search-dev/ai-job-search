@@ -137,8 +137,25 @@ def short_title(title: str) -> str:
     return text.strip(" -") or title
 
 
+LETTER_TOPICS = ("ai_usage", "remote_async", "open_source")  # answer-bank topics a letter may borrow one entry from
+
+
+def fit_paragraph(profile: MasterProfile, title: str, posting: str) -> Optional[str]:
+    """The first two sentences of the approved bank entry that matches what the role is about, title first, then posting."""
+    from tools.answer_bank import TOPICS
+    patterns = dict(TOPICS)
+    for text in (title, posting[:1500]):
+        for topic in LETTER_TOPICS:
+            if re.search(patterns[topic], text, re.I):
+                entry = next((e for e in profile.answer_bank.entries if e.approved and e.topics and e.topics[0] == topic), None)
+                if entry:
+                    sentences = re.split(r"(?<=[.!?])\s+", entry.text.strip())
+                    return " ".join(sentences[:2])
+    return None
+
+
 def compose_letter(
-    profile: MasterProfile, company: str, title: str, matched: Sequence[str], remote: bool = True,
+    profile: MasterProfile, company: str, title: str, matched: Sequence[str], remote: bool = True, posting: str = "",
 ) -> List[str]:
     chosen = choose_evidence(profile, matched, title)
     verified = {s.name.casefold(): s.name for s in profile.skills}
@@ -152,6 +169,9 @@ def compose_letter(
     paragraphs.append(f"{opening} {chosen[0].sentence}" if chosen else opening)
     if len(chosen) > 1:
         paragraphs.append(chosen[1].sentence)
+    fit = fit_paragraph(profile, title, posting)
+    if fit and fit not in paragraphs:
+        paragraphs.append(fit)
     if len(shared) >= 2:
         paragraphs.append(pick(BRIDGES, company, title, "bridge").format(skills=_join(shared)))
     prefs = profile.preferences

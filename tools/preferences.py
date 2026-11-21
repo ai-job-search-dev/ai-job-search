@@ -40,7 +40,15 @@ COUNTRY_NAMES: Dict[str, str] = {
     "LV": r"latvia", "LT": r"lithuania", "LU": r"luxembourg", "MT": r"malta", "NL": r"netherlands|holland",
     "PL": r"poland", "PT": r"portugal", "RO": r"romania", "SK": r"slovakia", "SI": r"slovenia", "ES": r"spain",
     "SE": r"sweden",
+    "PE": r"peru|per[uú]", "EC": r"ecuador", "PY": r"paraguay", "BO": r"bolivia", "VE": r"venezuela", "CR": r"costa rica",
+    "GT": r"guatemala", "DO": r"dominican republic", "PA": r"panama|panam[aá]", "SV": r"el salvador", "HN": r"honduras",
+    "NI": r"nicaragua", "TR": r"turkey|t[uü]rkiye", "EG": r"egypt", "ID": r"indonesia", "TH": r"thailand", "VN": r"vietnam|viet nam",
+    "PH": r"philippines", "MY": r"malaysia", "PK": r"pakistan", "NG": r"nigeria", "KE": r"kenya", "ZA": r"south africa",
+    "MA": r"morocco", "AE": r"united arab emirates|\buae\b|dubai", "SA": r"saudi arabia", "KR": r"south korea|korea",
+    "CN": r"china", "TW": r"taiwan", "HK": r"hong kong", "UA": r"ukraine", "RS": r"serbia", "GE": r"georgia(?!,? (?:usa|us|united))",
 }
+US_STATE = re.compile(r",\s*(?:AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b")
+CA_PROVINCE = re.compile(r",\s*(?:ON|QC|BC|AB|MB|SK|NS|NB|NL|PE)\b|ontario|qu[eé]bec|british columbia|alberta", re.IGNORECASE)
 COUNTRY_REGEX = {c: re.compile(r"(?<![A-Za-z])(?:" + p + r")(?![A-Za-z])", re.IGNORECASE) for c, p in COUNTRY_NAMES.items()}
 ABBREVIATIONS = {"US": re.compile(r"\b(?:US|USA|U\.S\.A?\.?)\b"), "UK": re.compile(r"\b(?:UK|U\.K\.)\b")}
 EU_PHRASE = re.compile(r"\bEU\b|\bE\.U\.|european union|\bEEA\b|european economic area|\bEurope\b|\bEMEA\b", re.IGNORECASE)
@@ -102,6 +110,10 @@ def regions_in(text: str) -> Set[str]:
     """Country codes mentioned in `text`; 'Europe' or 'EU' expand to the EU group."""
     found = {code for code, rx in COUNTRY_REGEX.items() if rx.search(text)}
     found |= {code for code, rx in ABBREVIATIONS.items() if rx.search(text)}
+    if US_STATE.search(text):
+        found.add("US")
+    if CA_PROVINCE.search(text):
+        found.add("CA")
     if EU_PHRASE.search(text):
         found |= EEA
     return found

@@ -105,6 +105,11 @@ COLLECT_FIELDS_JS = """
     if (wrap) parts.push(wrap.innerText);
     const by = el.getAttribute('aria-labelledby');
     if (by) by.split(/\\s+/).forEach(id => { const n = document.getElementById(id); if (n) parts.push(n.innerText); });
+    if (!parts.length) {
+      const q = el.closest('li.application-question, .application-question');
+      const t = q && q.querySelector('.application-label, .text');
+      if (t && t.innerText.trim()) parts.push(t.innerText.split('\\n')[0]);
+    }
     ['aria-label', 'placeholder', 'name', 'id', 'autocomplete'].forEach(a => { const v = el.getAttribute(a); if (v) parts.push(v); });
     return parts.join(' ').replace(/\\s+/g, ' ').trim();
   };
@@ -119,13 +124,28 @@ COLLECT_FIELDS_JS = """
       type: (el.type || '').toLowerCase(),
       descriptor: labelFor(el),
       value: el.value || '',
-      role: el.getAttribute('role') || '',
+      role: el.getAttribute('role') || (el.parentElement && el.parentElement.querySelector('.dropdown-results') ? 'combobox' : ''),
       required: !!(el.required || el.getAttribute('aria-required') === 'true'),
       name: el.name || '',
       group: (() => { const g = el.closest('fieldset, [role=radiogroup], [role=group]'); const t = g && g.querySelector('legend, [class*=label], label');
                       return t ? t.innerText.replace(/\\s+/g, ' ').trim() : ''; })(),
       options: el.tagName.toLowerCase() === 'select' ? Array.from(el.options).map(o => o.text.trim()) : [],
     });
+  });
+  const seen = new Set();
+  document.querySelectorAll('button').forEach(b => {
+    const text = (b.innerText || '').trim();
+    if (!/^(yes|no|s[ií]|sim|n[aã]o)$/i.test(text) || b.closest('form') === null && !b.closest('[class*=application]')) return;
+    const box = b.parentElement && b.parentElement.parentElement;
+    if (!box || seen.has(box)) return;
+    const choices = Array.from(box.querySelectorAll('button')).filter(x => /^(yes|no|s[ií]|sim|n[aã]o)$/i.test((x.innerText || '').trim()));
+    if (choices.length < 2) return;
+    seen.add(box);
+    const k = 100000 + seen.size;
+    const question = (box.innerText || '').replace(/\\s+/g, ' ').replace(/(?:\\s(?:yes|no|s[ií]|sim|n[aã]o))+$/i, '').trim();
+    choices.forEach(x => x.setAttribute('data-aja-choice', String(k)));
+    out.push({index: k, tag: 'button', type: 'choice', descriptor: question, value: '', role: 'buttons',
+              required: /\\*/.test(question), name: '', group: question, options: choices.map(x => x.innerText.trim())});
   });
   return out;
 }
@@ -160,6 +180,8 @@ def split_name(full_name: str) -> Tuple[str, str]:
     return parts[0], " ".join(parts[1:])
 
 
+COUNTRY_CODES = {"argentina": ("ar", "arg"), "italy": ("it", "ita"), "spain": ("es", "esp"), "united states": ("us", "usa"),
+                 "germany": ("de", "deu"), "france": ("fr", "fra"), "brazil": ("br", "bra"), "portugal": ("pt", "prt")}
 COUNTRY_BY_CODE = {"IT": "Italy", "AR": "Argentina", "ES": "Spain", "US": "United States", "DE": "Germany", "FR": "France", "PT": "Portugal", "BR": "Brazil"}
 MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 DEGREE_LEVELS = (
@@ -261,13 +283,22 @@ def classify_field(descriptor: str, tag: str = "input", input_type: str = "text"
 OPTION_SELECTOR = '[role="option"]'
 
 
-YES_OPTIONS = ["Yes", "Sí", "Si", "Sim", "Oui", "Ja", "Sì"]
+YES_OPTIONS = ["Yes", "Sí", "Si", "Sim", "Oui", "Ja", "Sì", "I agree", "Agree", "Acknowledge", "Confirm", "Accept", "Acepto"]
 NO_OPTIONS = ["No", "Não", "Nao", "Non", "Nein"]
+DECLINE_OPTIONS = ["Decline to self-identify", "Decline to answer", "I don't wish to answer", "I do not wish to answer",
+                   "Prefer not to say", "Prefer not to answer", "I prefer not to say", "I prefer not to answer", "Decline",
+                   "I do not want to answer", "I don't want to answer", "Prefiero no decir", "Prefiero no responder"]
+DEMONYMS = {"Italy": ["Italian"], "Argentina": ["Argentine", "Argentinian", "Argentinean"], "Spain": ["Spanish"],
+            "United States": ["American"], "Germany": ["German"], "France": ["French"], "Brazil": ["Brazilian"]}
 
 
 def option_candidates(key: str, value: str) -> List[str]:
     if key == "degree":
         return DEGREE_SYNONYMS.get(value, [value])
+    if key == "citizenship":
+        return [value, *DEMONYMS.get(value, [])]
+    if value.casefold().startswith("decline"):
+        return DECLINE_OPTIONS
     if value in YES_OPTIONS:
         return YES_OPTIONS
     if value in NO_OPTIONS:
@@ -287,7 +318,9 @@ def pick_option(options: Sequence[str], key: str, value: str) -> Optional[int]:
         if len(parts) < 2:
             return None
         city, country = parts[0], parts[-1]
-        hits = [i for i, opt in enumerate(folded) if opt.split(" ")[: len(city.split())] == city.split() and opt.endswith(country)]
+        endings = {country, *COUNTRY_CODES.get(country, ())}
+        hits = [i for i, opt in enumerate(folded) if opt.split(" ")[: len(city.split())] == city.split()
+                and any(opt.endswith(" " + e) or opt == e for e in endings)]
         return hits[0] if hits else None
     wanted = [_fold(c) for c in option_candidates(key, value) if c]
     for cand in wanted:
@@ -309,16 +342,58 @@ def pick_option(options: Sequence[str], key: str, value: str) -> Optional[int]:
                     scored.append((len(opt), i))
             if scored:
                 return min(scored)[1]
+    if key == "answer":
+        return pick_range(options, value)
     return None
+
+
+_AMOUNT = re.compile(r"\d[\d,.]*\s*[kK]?")
+
+
+def _amounts(text: str) -> List[float]:
+    out = []
+    for m in _AMOUNT.findall(text):
+        raw = m.strip()
+        mult = 1000.0 if raw[-1:] in ("k", "K") else 1.0
+        try:
+            out.append(float(raw.rstrip("kK ").rstrip(".,").replace(",", "")) * mult)
+        except ValueError:
+            pass
+    return out
+
+
+def pick_range(options: Sequence[str], value: str) -> Optional[int]:
+    """Index of the one numeric range option ("$15–$29", "$150+", "Under $10") that contains the first amount in `value`."""
+    wanted = _amounts(value)
+    if not wanted:
+        return None
+    amount = wanted[0]
+    hits = []
+    for i, opt in enumerate(options):
+        nums = _amounts(opt)
+        if not nums:
+            continue
+        if len(nums) >= 2:
+            lo, hi = nums[0], nums[1]
+        elif "+" in opt or re.search(r"or more|and above|above|over|more than|m[aá]s de", opt, re.I):
+            lo, hi = nums[0], float("inf")
+        elif re.search(r"under|less than|below|up to|menos de|hasta", opt, re.I):
+            lo, hi = 0.0, nums[0]
+        else:
+            continue
+        if lo <= amount <= hi:
+            hits.append(i)
+    return hits[0] if len(hits) == 1 else None
 
 
 def combo_queries(key: str, value: str) -> List[str]:
     queries = [value.split(",")[0].strip()] if key == "location" else [value]
-    if key == "school":
-        distinct = [t for t in value.split() if _fold(t) not in FILLER_WORDS and len(t) > 3]
-        if distinct:
-            queries.append(max(distinct, key=len))
-    return queries
+    if key in ("school", "discipline"):
+        queries += re.findall(r"\(([^)]{2,12})\)", value)
+        plain = re.sub(r"\([^)]*\)", " ", value)
+        words = [w for w in plain.split() if _fold(w) not in FILLER_WORDS and len(w) > 3]
+        queries += [" ".join(words[-2:]), *sorted(words, key=len, reverse=True)[:2]]
+    return list(dict.fromkeys(q for q in queries if q))
 
 
 def short_label(descriptor: str, limit: int = 80) -> str:
@@ -353,11 +428,12 @@ def plan_fills(
         label = short_label(f.get("descriptor") or "") or f.get("type") or f.get("tag") or "field"
         approved = next((a for a in approved_answers if getattr(a, "approved", False) and re.search(a.pattern, f.get("descriptor") or "", re.I)), None)
         if approved is not None and f.get("type") not in ("file", "checkbox", "radio") and not f.get("value") and ("answer", approved.pattern) not in used:
-            if f.get("tag") == "select":
+            if f.get("tag") in ("select", "button"):
                 choice = pick_option(f.get("options") or [], "answer", approved.answer)
                 if choice is not None:
                     used.add(("answer", approved.pattern))
-                    fills.append({"index": f["index"], "kind": "select", "key": "answer", "label": label, "value": f["options"][choice]})
+                    kind = "select" if f.get("tag") == "select" else "choice"
+                    fills.append({"index": f["index"], "kind": kind, "key": "answer", "label": label, "value": f["options"][choice]})
                     continue
             else:
                 used.add(("answer", approved.pattern))
@@ -414,13 +490,25 @@ def _open_combo(page: Any, selector: str) -> None:
     page.click(selector)
 
 
+def _click_choice(page: Any, group: int, text: str) -> None:
+    """Click the Yes/No button of a question drawn as buttons."""
+    page.locator(f'[data-aja-choice="{group}"]', has_text=text).first.click()
+
+
 def _option_selector(page: Any, selector: str) -> str:
     """Options of this combobox only; pages can hold other role=option lists, such as phone country codes."""
     try:
         controls = page.get_attribute(selector, "aria-controls")
     except Exception:
         controls = None
-    return f'[id="{controls}"] {OPTION_SELECTOR}' if controls else f".select__menu {OPTION_SELECTOR}"
+    if controls:
+        return f'[id="{controls}"] {OPTION_SELECTOR}'
+    try:
+        if page.evaluate("(s) => !!document.querySelector(s).parentElement.querySelector('.dropdown-results')", selector):
+            return f"{selector} ~ .dropdown-container .dropdown-results > *"
+    except Exception:
+        pass
+    return f".select__menu {OPTION_SELECTOR}"
 
 
 def _click_option(page: Any, options_selector: str, index: int) -> None:
@@ -428,21 +516,29 @@ def _click_option(page: Any, options_selector: str, index: int) -> None:
 
 
 def fill_combo(page: Any, selector: str, key: str, value: str) -> bool:
-    """Type into a dropdown and pick the matching option; leaves it empty when no option is clearly right."""
-    for query in combo_queries(key, value):
+    """Pick the matching option of a dropdown; leaves it empty when no option is clearly right.
+
+    The open list is tried first, untyped, because typing a long answer filters out short options such as "Prefer
+    not to say"; then the queries from `combo_queries` are typed one by one for long or searched lists.
+    """
+    for query in ["", *combo_queries(key, value)]:
+        page.evaluate("document.activeElement && document.activeElement.blur()")
         _open_combo(page, selector)
-        page.fill(selector, query)
+        if query:
+            page.fill(selector, "")
+            page.locator(selector).press_sequentially(query, delay=40)
         options: List[str] = []
         options_selector = _option_selector(page, selector)
-        for _ in range(6):
+        index = None
+        for _ in range(2 if not query else 10):
             page.wait_for_timeout(500)
             try:
                 options = page.eval_on_selector_all(options_selector, "els => els.map(e => e.innerText.trim())")
             except Exception:
                 options = []
-            if options:
+            index = pick_option(options, key, value) if options else None
+            if index is not None:
                 break
-        index = pick_option(options, key, value)
         if index is not None:
             _click_option(page, options_selector, index)
             return True
@@ -451,12 +547,25 @@ def fill_combo(page: Any, selector: str, key: str, value: str) -> bool:
     return False
 
 
-def apply_fills(page: Any, fills: List[Dict[str, Any]]) -> int:
-    """Fill what the plan lists. Each fill gets `done` set, so the caller can report what is left for the human."""
+ACTION_TIMEOUT_MS = 8000     # one click, fill or upload; a stuck element fails fast instead of the default 30 s
+FILL_BUDGET_SECONDS = 240    # the whole fill phase; past it the form is reported as stuck
+
+
+def apply_fills(page: Any, fills: List[Dict[str, Any]], budget_seconds: float = FILL_BUDGET_SECONDS) -> int:
+    """Fill what the plan lists. Each fill gets `done` (and `error` when it failed), so the caller can report what is left."""
+    import time
+    deadline = time.monotonic() + budget_seconds
+    try:
+        page.set_default_timeout(ACTION_TIMEOUT_MS)
+    except Exception:
+        pass
     done = 0
     for fill in fills:
         selector = f'[data-aja-idx="{fill["index"]}"]'
         fill["done"] = False
+        if time.monotonic() > deadline:
+            fill["error"] = "stuck: the fill phase ran out of time"
+            continue
         try:
             if fill["kind"] == "file":
                 page.set_input_files(selector, fill["value"])
@@ -464,6 +573,8 @@ def apply_fills(page: Any, fills: List[Dict[str, Any]]) -> int:
                 page.select_option(selector, label=fill["value"])
             elif fill["kind"] == "tick":
                 _tick(page, selector)
+            elif fill["kind"] == "choice":
+                _click_choice(page, fill["index"], fill["value"])
             elif fill["kind"] == "combo":
                 if not fill_combo(page, selector, fill["key"], fill["value"]):
                     logger.info(f"No clear option for {fill['key']}={fill['value']!r}; left for you.")
@@ -473,8 +584,62 @@ def apply_fills(page: Any, fills: List[Dict[str, Any]]) -> int:
             fill["done"] = True
             done += 1
         except Exception as exc:
-            logger.warning(f"Could not fill {fill['key']}: {exc}")
+            fill["error"] = str(exc).splitlines()[0][:120]
+            logger.warning(f"Could not fill {fill['key']}: {fill['error']}")
     return done
+
+
+READBACK_JS = """
+() => Array.from(document.querySelectorAll('[data-aja-idx]')).map(el => {
+  const shell = el.closest('.select__control, .select-shell, .select, [class*=select__container]');
+  const single = shell && shell.querySelector('[class*=singleValue], [class*=single-value], [class*=multiValue], [class*=multi-value]');
+  return {idx: Number(el.getAttribute('data-aja-idx')), value: el.value || '', checked: !!el.checked,
+          display: single ? single.innerText.trim() : '', files: el.files ? el.files.length : 0};
+})
+"""
+
+
+def verify_commits(page: Any, fills: List[Dict[str, Any]]) -> List[str]:
+    """Read the page back. Fills that report done but are not on the page get done=False; returns their labels.
+
+    Some widgets clear a value on blur, or upload a file and reset the input; a fill is only trusted once the page
+    shows it. Files count as committed when the input holds them or their name appears on the page.
+    """
+    try:
+        state = {r["idx"]: r for r in page.evaluate(READBACK_JS)}
+        body = page.evaluate("() => document.body.innerText")
+    except Exception:
+        return []
+    lost: List[str] = []
+    for fill in fills:
+        if not fill.get("done"):
+            continue
+        if fill["kind"] == "choice":
+            try:
+                ok = page.evaluate("""([k, t]) => Array.from(document.querySelectorAll('[data-aja-choice="' + k + '"]')).some(b =>
+                    b.innerText.trim() === t && (b.getAttribute('aria-pressed') === 'true' || /active|selected|checked/i.test(b.className)))""",
+                                   [str(fill["index"]), fill["value"]])
+            except Exception:
+                ok = True
+            if not ok:
+                fill["done"], fill["error"] = False, "not kept by the page"
+                lost.append(fill.get("label") or fill["key"])
+            continue
+        st = state.get(fill["index"])
+        if st is None:
+            continue
+        if fill["kind"] == "file":
+            ok = st["files"] > 0 or Path(str(fill["value"])).name in body
+        elif fill["kind"] == "tick":
+            ok = st["checked"]
+        elif fill["kind"] in ("combo", "select"):
+            ok = bool(st["display"] or st["value"])
+        else:
+            ok = _fold(st["value"]) == _fold(str(fill["value"]))
+        if not ok:
+            fill["done"], fill["error"] = False, "not kept by the page"
+            lost.append(fill.get("label") or fill["key"])
+    return lost
 SUBMIT_NAME = re.compile(r"^\s*submit(?:\s+application)?\s*$", re.I)
 CONFIRMED = re.compile(r"thank you for (?:applying|your application|submitting)|application (?:has been )?(?:submitted|received)|we(?:'|\u2019)?ve received your application", re.I)
 REJECTED = re.compile(r"this field is required|please (?:fix|correct|complete)|is required|invalid", re.I)
@@ -604,6 +769,23 @@ def _connect_cdp(pw: Any, cdp_url: str) -> Any:
     raise RuntimeError(f"Chrome at {cdp_url} refuses automation sessions. Click its window or open a new tab there, then run again.") from last
 
 
+def _form_key(url: str) -> str:
+    """Path and query without the host: boards.greenhouse.io and job-boards.greenhouse.io serve the same form."""
+    parsed = urlparse(url or "")
+    return parsed.path.rstrip("/") + ("?" + parsed.query if parsed.query else "")
+
+
+def _close_previous_attempts(context: Any, url: str) -> None:
+    """Earlier tabs of the same form: left open after a check, they pile up and slow Chrome down."""
+    key = _form_key(url)
+    open_pages = [p for p in context.pages if _form_key(p.url) == key]
+    for page in open_pages:
+        try:
+            page.close()
+        except Exception:
+            pass
+
+
 @contextmanager
 def open_browser_page(url: str, cdp_url: Optional[str] = None) -> Iterator[Any]:
     """Yield a Playwright page in a headed, dedicated Chrome profile (never the daily profile)."""
@@ -613,6 +795,7 @@ def open_browser_page(url: str, cdp_url: Optional[str] = None) -> Iterator[Any]:
         if cdp_url:
             browser = _connect_cdp(pw, cdp_url)
             context = browser.contexts[0] if browser.contexts else browser.new_context()
+            _close_previous_attempts(context, url)
             page = context.new_page()
             page.goto(url, wait_until="domcontentloaded")
             try:
@@ -696,6 +879,9 @@ def run_apply(
                 fills.append({"index": index, "kind": "tick", "key": "tick", "label": short_label(next((f.get("descriptor") or "") for f in fields if f["index"] == index)), "value": "checked"})
             left = [l for l in left if not any(short_label(next((f.get("descriptor") or "") for f in fields if f["index"] == i)) == l for i in bank["ticks"])]
             filled = apply_fills(page, fills)
+            lost = verify_commits(page, fills)
+            stuck = [f.get("label") or f["key"] for f in fills if (f.get("error") or "").startswith("stuck")]
+            filled -= len(lost)
             left += [f.get("label") or f["key"] for f in fills if not f.get("done")]
             fills = [f for f in fills if f.get("done")]
             _save_form_values(Path(app["cv_path"]).parent, fills, left)
@@ -707,6 +893,10 @@ def run_apply(
                 f"  For you:  {len(left)} field(s) left untouched"
                 + (f": {'; '.join(left[:8])}" if left else ""),
             ]
+            if lost:
+                summary.append("  NOT KEPT: the page dropped " + "; ".join(l[:40] for l in lost[:6]) + " (left for you)")
+            if stuck:
+                summary.append(f"  STUCK:    the form stopped responding; {len(stuck)} field(s) were not attempted")
             if not form_recognised(fields):
                 summary.append("  WARNING:  No application form was recognised on this page (login wall, iframe or a different site).")
                 summary.append("            Open the real application page yourself; nothing useful was filled.")
@@ -716,6 +906,8 @@ def run_apply(
             summary.append(render_preflight_text(result))
             recognised = form_recognised(fields)
             blockers = submission_gates(app["company_name"], confirm_company if submit else "(auto-submit off)", fields, fills, result, recognised, allow_model_fix)
+            if stuck:
+                blockers.append("the form got stuck while filling")
             if check_only:
                 summary.append("  AUTO-SUBMIT: " + ("allowed once you add --submit --confirm-company" if not [b for b in blockers if not b.startswith("--confirm-company")] else "blocked: " + "; ".join(b for b in blockers if not b.startswith("--confirm-company"))))
                 print("\n".join(summary))
@@ -723,8 +915,12 @@ def run_apply(
             if submit and not blockers:
                 logger.info(f"All gates passed for job {job_id}; submitting.")
                 _click_submit(page)
-                page.wait_for_timeout(5000)
-                outcome = submission_outcome(page)
+                outcome = "unknown"
+                for _ in range(20):
+                    page.wait_for_timeout(1500)
+                    outcome = submission_outcome(page)
+                    if outcome != "unknown":
+                        break
                 try:
                     page.screenshot(path=str(Path(app["cv_path"]).parent / "submitted.png"))
                 except Exception:
@@ -734,7 +930,8 @@ def run_apply(
                     METRICS.increment("applied_total")
                     logger.info(f"Submitted and recorded APPLIED for job {job_id}; cooldown started for {app['company_name']}.")
                     return "applied"
-                logger.warning(f"Submit was clicked but the page shows no confirmation ({outcome}). Check the window; if it went through, run --record-applied.")
+                what = "validation errors" if outcome == "rejected" else "no confirmation after 30 s (stuck or still sending)"
+                logger.warning(f"Submit was clicked but the page shows {what}. Check the window; if it went through, run --record-applied.")
                 return "pending"
             if submit:
                 summary.append("  AUTO-SUBMIT BLOCKED: " + "; ".join(blockers) + ". Review and submit yourself, or fix these and run again.")

@@ -46,6 +46,7 @@ TOPICS: List[Tuple[str, str]] = [
     ("about_me", r"about yourself|introduce yourself|anything else|additional information|cover letter|sobre (?:vos|ti|usted)|pres[eé]ntate|informaci[oó]n adicional"),
     ("tech_experience", r"experience (?:with|in|using|working)|describe your experience|years of experience|experiencia (?:con|en)"),
 ]
+GENERIC_TOPICS = {"tech_experience", "about_me"}  # they match almost any question; a specific topic leads when present
 OWN_WORDS = re.compile(r"own words|propias palabras|my own writing|without (?:the use of|using) ai", re.I)
 YES_WORDS = ["Yes", "Sí", "Si", "Sim", "Oui", "Ja", "Sì"]
 NO_WORDS = ["No", "Não", "Nao", "Non", "Nein"]
@@ -58,6 +59,7 @@ STOPWORDS = {
 }
 LANG_NAMES = {"en": "English", "es": "Spanish", "pt": "Portuguese", "fr": "French", "de": "German", "it": "Italian"}
 MAX_WORDS = 150
+MODEL_BUDGET_SECONDS = 150  # per form; past it, answers fall back to the bank text instead of waiting on a slow model
 STOCK = re.compile(r"\b(?:passionate|eager|thrilled|excited to|would love to|currently exploring|always looking|synergy|leverag\w*|delve)\b", re.I)
 
 
@@ -89,12 +91,20 @@ def form_language(labels: Sequence[str]) -> str:
 
 
 def topics_of(question: str) -> List[str]:
-    return [name for name, pattern in TOPICS if re.search(pattern, question, re.I)]
+    """Topics the question touches, the one named earliest first: that is usually what is being asked."""
+    hits = [(name in GENERIC_TOPICS, m.start(), n, name) for n, (name, pattern) in enumerate(TOPICS) for m in [re.search(pattern, question, re.I)] if m]
+    return [name for *_, name in sorted(hits)]
 
 
 def job_regions(location: str, description: str = "") -> set:
     from tools.preferences import regions_in
     return regions_in(location or "")
+
+
+def question_regions(question: str, job: set) -> set:
+    """A question that names a country ("authorized to work in the United States?") is about that country."""
+    from tools.preferences import regions_in
+    return regions_in(question) or job
 
 
 def region_matches(wanted: Sequence[str], regions: set) -> bool:
@@ -213,6 +223,8 @@ def answer_form(
     report: List[str] = []
     ticks: List[int] = []
     all_verbatim = True
+    import time
+    model_deadline = time.monotonic() + MODEL_BUDGET_SECONDS
     skip = set(skip_indexes)
     radio_groups: Dict[str, List[Tuple[Dict[str, Any], str]]] = {}
     for field, label in zip(fields, labels):
@@ -220,7 +232,7 @@ def answer_form(
             radio_groups.setdefault(field["name"], []).append((field, label))
     for group in radio_groups.values():
         question = short_label(group[0][0].get("group") or "", limit=300)
-        stance = stance_for(profile, question, regions) if question else None
+        stance = stance_for(profile, question, question_regions(question, regions)) if question else None
         if stance is None:
             continue
         from tools.browser_apply import pick_option
@@ -235,14 +247,21 @@ def answer_form(
             continue
         pattern = re.escape((field.get("descriptor") or "")[:80])
         if field.get("type") == "checkbox":
-            stance = stance_for(profile, label, regions)
+            stance = stance_for(profile, label, question_regions(label, regions))
             if OWN_WORDS.search(label):
                 continue
             if any(re.search(c, label, re.I) for c in profile.answer_bank.consents) or (stance is not None and stance.answer == "Yes"):
                 ticks.append(field["index"])
                 report.append(f"{stance.id if stance else 'consent'}: ticked {label[:55]}")
             continue
-        stance = stance_for(profile, label, regions)
+        if OWN_WORDS.search(label):
+            continue  # the declaration is yours to make
+        consent = any(re.search(c, label, re.I) for c in profile.answer_bank.consents)
+        if consent and (field.get("role") == "combobox" or field.get("tag") in ("select", "button")):
+            answers.append(FormAnswer(pattern=pattern, answer="Yes", approved=True, note="consent"))
+            report.append(f"consent: {label[:60]}")
+            continue
+        stance = stance_for(profile, label, question_regions(label, regions))
         if stance is not None:
             answers.append(FormAnswer(pattern=pattern, answer=localized(stance, lang), approved=True, note=f"stance:{stance.id}"))
             report.append(f"{stance.id}: {label[:50]} -> {localized(stance, lang)}")
@@ -257,6 +276,9 @@ def answer_form(
             all_verbatim = False
             continue
         text, how = None, "verbatim"
+        if gateway is not None and time.monotonic() > model_deadline:
+            report.append("model budget used up; the remaining answers use your bank text as written")
+            gateway = None
         if not own_words and gateway is not None:
             draft = compose(gateway, profile, job, label, entries, lang)
             if draft and not unsupported(draft, allowed) and not unsupported_claims(draft, candidate_only) and not STOCK.search(draft) \

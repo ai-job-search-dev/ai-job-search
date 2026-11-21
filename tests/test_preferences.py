@@ -326,6 +326,14 @@ class OnsiteAbroadTests(unittest.TestCase):
         for location in ("Remote, Global", "Remote", "Remote LATAM", "Remote, Argentina", "Worldwide"):
             self.assertEqual(prefmod.onsite_abroad_effect(p, location, True), (False, 0.0), location)
 
+    def test_us_states_canadian_provinces_and_more_countries_are_recognised(self):
+        self.assertEqual(prefmod.regions_in("Boulder, CO"), {"US"})
+        self.assertEqual(prefmod.regions_in("Toronto, ON"), {"CA"})
+        self.assertEqual(prefmod.regions_in("Indonesia"), {"ID"})
+        p = self.prefs()
+        self.assertEqual(prefmod.onsite_abroad_effect(p, "Peru - Fully Remote", True), (False, 3.0))
+        self.assertEqual(prefmod.onsite_abroad_effect(p, "Argentina - Fully Remote", True), (False, 0.0))
+
     def test_remote_home_country_unknown_and_relocation_cases_are_untouched(self):
         p = self.prefs()
         for location, remote in (("Buenos Aires, Argentina", False), ("", False), ("Delft, NL", None)):
