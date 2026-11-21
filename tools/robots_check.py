@@ -16,6 +16,9 @@ Rules implemented (RFC 9309), deliberately on the cautious side:
   * one leading UTF-8 byte-order mark is skipped (left in, it hides a first
     "User-agent" line and drops that whole group, which fails open)
   * 404 means no published policy, which is permission
+  * a 200 whose body is not a robots.txt (an HTML or JSON error page) is
+    unreadable, not permission; an empty body, or one of nothing but
+    comments (Rails' default robots.txt), is a valid allow-all
   * any other failure to read robots.txt leaves permission unconfirmed,
     and the retry does not happen - including a User-agent, Allow or
     Disallow line holding U+FFFD, i.e. a byte that is not valid UTF-8
@@ -67,14 +70,20 @@ def is_robots_body(text):
     of nothing but comments (Rails' default robots.txt, served by
     job-boards.greenhouse.io): comments carry no rules, so it is the same file.
     Any other non-empty body with no recognised directive is treated as unreadable.
+
+    Accepted on purpose: a plain-text error page made only of '#' lines
+    ("# 404 Not Found") reads as allow-all too. RFC 9309 parses it that way,
+    no body shape can tell it from a one-comment robots.txt, and a host that
+    answers like that has published no policy - the same as a 404, which is
+    permission. The soft 200 that can hide a real policy (a firewall or login
+    page) is HTML, and stays unreadable.
     """
     text = text.removeprefix('\ufeff')          # byte-order mark, see _groups
-    if not text.strip():
-        return True
-    if all(not raw.strip() or raw.lstrip().startswith('#') for raw in text.splitlines()):
-        return True
-    for raw in text.splitlines():
-        line = raw.split('#', 1)[0].strip().lower()
+    lines = [raw.split('#', 1)[0].strip() for raw in text.splitlines()]
+    if not any(lines):
+        return True                             # empty, or nothing but comments
+    for line in lines:
+        line = line.lower()
         if ':' in line and line.split(':', 1)[0].strip() in (
             'user-agent', 'allow', 'disallow', 'sitemap', 'crawl-delay', 'host',
         ):
