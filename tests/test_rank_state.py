@@ -455,6 +455,30 @@ class Apply(RankStateCase):
         self.assertEqual(self.read_state()["a"]["status"], "expired")
         self.assertEqual([r["key"] for r in out["expired"]], ["a"])
 
+    def test_a_single_scoring_object_is_refused_not_applied_as_nothing(self):
+        # A one-job batch written as the bare scoring object (no surrounding
+        # array) was taken for an envelope without a "results" key, defaulted
+        # to [], and applied as an empty batch: all arrays empty, errors empty,
+        # exit 0, state rewritten, job still `new`. Step 4 promises a non-empty
+        # errors list for any job dropped; a non-array is a usage error, as it
+        # is in scrape_state.
+        self.write_state({"a": entry()})
+        before = self.state.read_bytes()
+        proc = subprocess.run(
+            [sys.executable, str(TOOL), "apply", "--results", self.results(self._scored()),
+             "--state", str(self.state), "--today", TODAY],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        self.assertIn("must be a JSON array", proc.stderr)
+        self.assertNotIn("Traceback", proc.stderr)
+        self.assertEqual(self.state.read_bytes(), before, "a refused results file never rewrites the state")
+
+    def test_an_envelope_with_a_results_array_still_applies(self):
+        self.write_state({"a": entry()})
+        out = self.run_tool("apply", "--results", self.results({"results": [self._scored()]}))
+        self.assertEqual([r["key"] for r in out["ranked"]], ["a"])
+
     def test_null_deadline_does_not_erase_a_stored_one(self):
         """Absence is not a correction: a fetch that degraded to a listing page
         returns no deadline, and blanking the stored date would also put the
