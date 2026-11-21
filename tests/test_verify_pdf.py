@@ -1,3 +1,4 @@
+import io
 import subprocess
 import tempfile
 import unittest
@@ -11,6 +12,7 @@ from tools.verify_pdf import (
     check_dump_target,
     extract_text_layer,
     find_non_ascii_date_ranges,
+    find_pictographs,
     normalize_text,
     parse_page_count,
     main,
@@ -185,6 +187,56 @@ class FindNonAsciiDateRangesTests(unittest.TestCase):
         )
 
 
+class FindPictographsTests(unittest.TestCase):
+    """`--no-pictographs` reads the raw layer for icon-font glyphs.
+
+    moderncv's banking style puts FontAwesome glyphs whose ToUnicode maps to
+    emoji into the stock CV's text layer: U+1F7E4 (LARGE BROWN CIRCLE) once per
+    itemize bullet and U+1F582 (BACK OF ENVELOPE) on the contact line. An ATS
+    parser reads that layer, and none of the other checks look at it.
+    """
+
+    def test_emoji_block_code_points_are_reported(self):
+        self.assertEqual(
+            find_pictographs("\U0001f7e4 Led a team\n"),
+            [("\U0001f7e4", 1, "\U0001f7e4 Led a team")],
+        )
+        self.assertEqual(find_pictographs("\U0001f582 me@example.com")[0][0], "\U0001f582")
+
+    def test_private_use_code_points_are_reported(self):
+        # An icon font without a ToUnicode map lands in the BMP private use area.
+        self.assertEqual([hit[0] for hit in find_pictographs("\uf0e0 me@example.com")], ["\uf0e0"])
+        self.assertEqual([hit[0] for hit in find_pictographs("\U000f0001 x")], ["\U000f0001"])
+        self.assertEqual([hit[0] for hit in find_pictographs("\U00100000 x")], ["\U00100000"])
+
+    def test_range_edges(self):
+        for char in ("\U0001f000", "\U0001faff", "\ue000", "\uf8ff"):
+            self.assertEqual([hit[0] for hit in find_pictographs(f"a {char} b")], [char], hex(ord(char)))
+        for char in ("\U0001fb00", "\u2713", "\uf900"):
+            self.assertEqual(find_pictographs(f"a {char} b"), [], hex(ord(char)))
+
+    def test_hits_group_per_code_point_in_order_of_first_appearance(self):
+        text = "\U0001f582 me@example.com\n\U0001f7e4  Led   a team\n\U0001f7e4 Shipped\n\U0001f582 again\n\U0001f7e4 x\n"
+        self.assertEqual(
+            find_pictographs(text),
+            [
+                ("\U0001f582", 2, "\U0001f582 me@example.com"),
+                ("\U0001f7e4", 3, "\U0001f7e4 Led a team"),
+            ],
+        )
+
+    def test_legitimate_cv_text_is_clean(self):
+        # BMP symbols (U+2600-U+27BF) and ordinary punctuation are deliberately not flagged.
+        text = (
+            "\u2022 bullet \u2013 en dash \u201cquoted\u201d it\u2019s \u00b0 \u00a9 \u00ae \u2122 "
+            "\u20ac \u2713 \u2605 \u2709 \u260e Gen\u00e8ve \u041c\u043e\u0441\u043a\u0432\u0430 \u6771\u4eac"
+        )
+        self.assertEqual(find_pictographs(text), [])
+
+    def test_empty_text_is_clean(self):
+        self.assertEqual(find_pictographs(""), [])
+
+
 class VerifyPdfTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -305,6 +357,59 @@ class VerifyPdfTests(unittest.TestCase):
     def test_ascii_dates_flag_is_off_by_default_and_parses(self):
         self.assertFalse(build_parser().parse_args(["x.pdf"]).ascii_dates)
         self.assertTrue(build_parser().parse_args(["x.pdf", "--ascii-dates"]).ascii_dates)
+
+    @patch("tools.verify_pdf._extract_pypdf", return_value=None)
+    @patch("tools.verify_pdf.run_tool")
+    def test_no_pictographs_rejects_icon_glyphs_that_the_default_accepts(self, mock_run_tool, _pypdf):
+        layer = "\U0001f7e4 Led a team\n\U0001f7e4 Shipped it\n"
+        mock_run_tool.side_effect = [layer, "Pages:          1\n", layer, "Pages:          1\n"]
+
+        verify_pdf(self.pdf)
+
+        with self.assertRaisesRegex(
+            VerificationError, r"U\+1F7E4 LARGE BROWN CIRCLE x2 in '\U0001f7e4 Led a team'.*\(extractor: pdftotext\)"
+        ):
+            verify_pdf(self.pdf, no_pictographs=True)
+
+    @patch("tools.verify_pdf._extract_pypdf", return_value=None)
+    @patch("tools.verify_pdf.run_tool")
+    def test_no_pictographs_omits_the_name_when_unicode_has_none(self, mock_run_tool, _pypdf):
+        mock_run_tool.side_effect = ["\uf0e0 me@example.com\n", "Pages:          1\n"]
+
+        with self.assertRaisesRegex(VerificationError, r"U\+F0E0 x1 in "):
+            verify_pdf(self.pdf, no_pictographs=True)
+
+    @patch("tools.verify_pdf._extract_pypdf", return_value=None)
+    @patch("tools.verify_pdf.run_tool")
+    def test_no_pictographs_accepts_a_clean_layer(self, mock_run_tool, _pypdf):
+        mock_run_tool.side_effect = ["\u2022 Led a team \u00b0 \u2713\n", "Pages:          1\n"]
+
+        verify_pdf(self.pdf, no_pictographs=True)
+
+    @patch("tools.verify_pdf._extract_pypdf", return_value=None)
+    @patch("tools.verify_pdf.run_tool")
+    def test_no_pictographs_still_writes_the_dump_before_failing(self, mock_run_tool, _pypdf):
+        mock_run_tool.side_effect = ["\U0001f7e4 x\n", "Pages:          1\n"]
+        dump = Path(self.temp_dir.name) / "dump.txt"
+
+        with self.assertRaises(VerificationError):
+            verify_pdf(self.pdf, dump_text=dump, no_pictographs=True)
+
+        self.assertEqual(dump.read_text(encoding="utf-8"), "\U0001f7e4 x\n")
+
+    def test_no_pictographs_flag_is_off_by_default_and_parses(self):
+        self.assertFalse(build_parser().parse_args(["x.pdf"]).no_pictographs)
+        self.assertTrue(build_parser().parse_args(["x.pdf", "--no-pictographs"]).no_pictographs)
+
+    @patch("tools.verify_pdf.extract_text_layer", return_value=("\U0001f7e4 Led a team\n", 1, "pypdf"))
+    def test_cli_no_pictographs_exits_1_and_names_the_code_point(self, _extract):
+        stderr = io.StringIO()
+        with patch("sys.stderr", stderr):
+            code = main([str(self.pdf), "--no-pictographs"])
+        self.assertEqual(code, 1)
+        self.assertIn("U+1F7E4", stderr.getvalue())
+        with patch("sys.stdout", io.StringIO()):
+            self.assertEqual(main([str(self.pdf)]), 0)
 
     def test_rejects_missing_pdf(self):
         with self.assertRaisesRegex(VerificationError, "PDF does not exist"):

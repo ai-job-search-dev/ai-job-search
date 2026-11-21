@@ -14,6 +14,11 @@ the raw text layer an ATS parser actually sees.
 layer for a year joined to a Unicode dash - the en-dash LaTeX makes from `--`, which
 a Workday import dropped along with the date (`05-cv-templates.md`, "Date fields
 must be ASCII ranges") - and fails naming each hit with its code point.
+
+`--no-pictographs` also reads the raw layer: it fails on emoji/pictograph and
+private-use code points, which icon fonts (moderncv's FontAwesome glyphs) leave
+in the text an ATS parser reads. Each distinct code point is reported once with
+its count and first line.
 """
 
 import argparse
@@ -221,6 +226,44 @@ def find_non_ascii_date_ranges(text):
     return hits
 
 
+# Code-point ranges an icon-font glyph lands in when its ToUnicode map points at
+# emoji (moderncv's FontAwesome) or is missing (Private Use). Classified by
+# range, not unicodedata.category, so the verdict does not depend on the Unicode
+# version of the running Python. BMP symbols (U+2600-U+27BF: check marks, stars,
+# envelope, telephone) are deliberately NOT flagged: along with the degree,
+# copyright, registered and trademark signs and bullets they are legitimate CV text.
+_PICTOGRAPH_RANGES = (
+    (0x1F000, 0x1FAFF),  # emoji and pictograph blocks
+    (0xE000, 0xF8FF),  # Private Use Area (BMP)
+    (0xF0000, 0xFFFFD),  # Supplementary Private Use Area-A
+    (0x100000, 0x10FFFD),  # Supplementary Private Use Area-B
+)
+
+
+def _is_pictograph(char):
+    code = ord(char)
+    return any(low <= code <= high for low, high in _PICTOGRAPH_RANGES)
+
+
+def find_pictographs(text):
+    """Return (char, count, first_line) per pictograph code point in raw text.
+
+    Hits are grouped per code point in order of first appearance; the sample is
+    the first line carrying it, whitespace-collapsed. Works on the raw layer,
+    never on `normalize_text()` output.
+    """
+    found = {}
+    for line in text.splitlines():
+        for char in line:
+            if not _is_pictograph(char):
+                continue
+            if char in found:
+                found[char][0] += 1
+            else:
+                found[char] = [1, " ".join(line.split())]
+    return [(char, count, sample) for char, (count, sample) in found.items()]
+
+
 def _extract_pypdf(pdf_path):
     """Return (text, pages) or None if pypdf is unavailable, raises, or yields no text."""
     try:
@@ -264,6 +307,7 @@ def verify_pdf(
     required_text=(),
     dump_text=None,
     ascii_dates=False,
+    no_pictographs=False,
 ):
     pdf_path = Path(pdf_path)
     if not pdf_path.is_file():
@@ -313,6 +357,29 @@ def verify_pdf(
                 f"ASCII hyphen (05-cv-templates.md, 'Date fields must be ASCII ranges'): "
                 f"{listed} (extractor: {extractor})"
             )
+
+    if no_pictographs:
+        hits = find_pictographs(extracted_text)
+        if hits:
+            listed = "; ".join(
+                " ".join(
+                    part
+                    for part in (
+                        f"U+{ord(char):04X}",
+                        unicodedata.name(char, ""),
+                        f"x{count}",
+                        f"in {sample[:80]!r}",
+                    )
+                    if part
+                )
+                for char, count, sample in hits
+            )
+            raise VerificationError(
+                f"{len(hits)} pictograph code point(s) in the text layer - icon-font glyphs "
+                f"from the template reach an ATS parser as emoji or private-use characters; "
+                f"redefine the symbol in the template with a text character: {listed} "
+                f"(extractor: {extractor})"
+            )
     return extractor, extracted_text, actual_pages
 
 
@@ -352,6 +419,15 @@ def build_parser():
             "never folds, unlike --contains"
         ),
     )
+    parser.add_argument(
+        "--no-pictographs",
+        action="store_true",
+        help=(
+            "fail if the raw text layer has emoji/pictograph or private-use code "
+            "points (icon-font glyphs such as moderncv's FontAwesome); BMP symbols "
+            "like the degree sign, bullet or check mark are allowed"
+        ),
+    )
     return parser
 
 
@@ -384,6 +460,7 @@ def main(argv=None):
             args.contains,
             dump_text=args.dump_text,
             ascii_dates=args.ascii_dates,
+            no_pictographs=args.no_pictographs,
         )
     except VerificationError as exc:
         print(f"Error: {args.pdf}: {exc}", file=sys.stderr)
