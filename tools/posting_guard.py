@@ -184,7 +184,13 @@ INSTRUCTION_PATTERNS = [re.compile(p, re.I) for p in (
     r"\[INST\]",
     r"###\s*(system|instruction)",
     r"\b(curl|wget|ssh|scp)\b",
-    r"\.env\b",
+    # Every .env except `window.ENV`, the Remix config object each
+    # job-boards.greenhouse.io page sets in a script block (script blocks are
+    # scanned, so it read as a .env file on every one of those pages). Only
+    # that idiom is exempt: `prod.env`, `secrets.env` and `process.env.KEY` in
+    # an injection still flag, and none of them appeared in the 24 real posting
+    # pages this was measured on, so exempting them would buy nothing.
+    r"(?<!\bwindow)\.env\b",
     r"settings\.json",
     r"allowed-tools",
     r"\btool_use\b|\bfunction_call\b",
