@@ -72,7 +72,7 @@ Interview the user for the metadata that `/apply` needs to use the template corr
 
 Collect:
 
-1. **Name** - short kebab-case identifier (e.g. `awesome-cv`, `classic-serif`). Must not collide with an existing folder in `templates/`.
+1. **Name** - short kebab-case identifier (e.g. `awesome-cv`, `classic-serif`). If a folder with this name already exists under `templates/<type>/`, this is a re-registration: say so and offer to **update that template in place** (re-running Steps 2-4 against the existing folder, replacing its files and manifest) or to pick another name. Never create a second copy beside it - registration is idempotent (see Design Principles).
 2. **Source extension** - the main file's extension (`.tex`, `.typ`, ...), inferred from the provided source file.
 3. **Compile command** - the full command `/apply` and Step 4's test compile will run, using `<file>` (no extension) as the placeholder for the output basename:
    - **`.tex` source**: infer the engine the same way as before - if the source uses `fontspec` or loads font files by path, it requires `xelatex` or `lualatex`; tell the user this rather than letting them pick `pdflatex`. Render as `rm -f <file>.pdf && mkdir -p build && lualatex -interaction=nonstopmode -output-directory=build <file>.tex && mv build/<file>.pdf ./` (or the appropriate engine).
