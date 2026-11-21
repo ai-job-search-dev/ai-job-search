@@ -906,6 +906,18 @@ class TestSizeLimits(unittest.TestCase):
         self.assertIn("--max-filesize", seen[0])
         self.assertEqual(seen[0][seen[0].index("--max-filesize") + 1], str(500 * 1024))
 
+    def test_curl_size_abort_is_judged_by_the_status(self):
+        import robots_check
+
+        for raw, rc, verdict in ((b"\n404 ", 0, "ALLOWED"), (b"x" * 1000 + b"\n404 ", 0, "ALLOWED"),
+                                 (b"x" * 1000 + b"\n200 ", 1, "larger than")):
+            with self.subTest(raw=raw[-6:]), resolve_to("93.184.215.14"), \
+                 mock.patch.object(robots_check.subprocess, "run",
+                                   lambda argv, **kw: subprocess.CompletedProcess(argv, 63, raw, b"")):
+                code, msg = robots_check.gate("https://x.example/posting")
+            self.assertEqual(code, rc, msg)
+            self.assertIn(verdict, msg)
+
     def test_body_over_500_kib_is_unconfirmed(self):
         import robots_check
 

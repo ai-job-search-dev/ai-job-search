@@ -159,16 +159,18 @@ def _fetch(url, ua):
              '--max-filesize', str(MAX_ROBOTS_BYTES), *opts, '-A', ua,
              '-H', 'Accept: text/plain,*/*', '-w', '\n%{http_code} %{redirect_url}', '--', url],
             capture_output=True, env=env, timeout=20)
-        if r.returncode != 0:
+        if r.returncode not in (0, 63):
             raise RuntimeError('curl exit %d' % r.returncode)
         body, _, status = r.stdout.rpartition(b'\n')
-        if len(body) > MAX_ROBOTS_BYTES:
-            raise RuntimeError('robots.txt is larger than %d bytes' % MAX_ROBOTS_BYTES)
+        code, _, location = status.decode('utf-8', 'replace').partition(' ')
+        if r.returncode == 63 or len(body) > MAX_ROBOTS_BYTES:
+            if code == '200':
+                raise RuntimeError('robots.txt is larger than %d bytes' % MAX_ROBOTS_BYTES)
+            body = b''
         # robots.txt is UTF-8 (RFC 9309). Decoded as the locale's code page, Turkish
         # Windows hit bytes cp1254 leaves undefined (0x81) and tr.indeed.com read as
         # UNCONFIRMED.
         body = body.decode('utf-8', 'replace')
-        code, _, location = status.decode('utf-8', 'replace').partition(' ')
         if not location.strip():
             return body, int(code or 0)
         url = location.strip()
