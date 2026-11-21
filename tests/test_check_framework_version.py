@@ -126,6 +126,19 @@ class FrameworkVersionGateTests(CheckerRepoFixture):
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("missing 'framework_version'", result.stdout)
 
+class NonUtf8FrameworkFileTests(CheckerRepoFixture):
+    def test_non_utf8_file_is_a_finding_not_a_traceback(self):
+        # A framework file re-saved in cp1252 (an é in the body) ended the
+        # check with a UnicodeDecodeError traceback and no report at all.
+        self.framework_file.write_bytes((FRONTMATTER + "Café\n").encode("cp1252"))
+
+        result = self.run_checker()
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("01-test-profile.md: not valid UTF-8", result.stdout)
+        self.assertNotIn("Traceback", result.stderr)
+
+
 class WindowsGitPathTests(unittest.TestCase):
     def test_diff_and_show_use_posix_paths_for_windows_checkout(self):
         import importlib.util

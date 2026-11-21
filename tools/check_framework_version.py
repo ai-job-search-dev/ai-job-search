@@ -126,9 +126,17 @@ def main() -> int:
     errors = []
     
     # 1. Lint: Check that all framework files have framework_version in frontmatter
+    unreadable = set()
     for path in FRAMEWORK_FILES:
         rel_path = path.relative_to(ROOT).as_posix()
-        fm = parse_frontmatter(path)
+        try:
+            fm = parse_frontmatter(path)
+        except UnicodeDecodeError as exc:
+            # A framework file saved as cp1252 is a finding, not a crash: the
+            # frontmatter cannot be read, so neither check below can run on it.
+            errors.append(f"{rel_path}: not valid UTF-8 (byte {exc.start}): {exc.reason}; save the file as UTF-8")
+            unreadable.add(path)
+            continue
         if "framework_version" not in fm:
             errors.append(f"{rel_path}: missing 'framework_version' in frontmatter")
             
@@ -138,7 +146,7 @@ def main() -> int:
         print(f"Comparing HEAD against base commit: {base_commit}")
         for path in FRAMEWORK_FILES:
             rel_path = path.relative_to(ROOT).as_posix()
-            if "framework_version" not in parse_frontmatter(path):
+            if path in unreadable or "framework_version" not in parse_frontmatter(path):
                 # Skip checking changes if it doesn't even have frontmatter (already reported above)
                 continue
             if has_non_trivial_changes(path, base_commit):

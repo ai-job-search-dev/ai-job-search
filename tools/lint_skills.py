@@ -32,8 +32,22 @@ def rel(path: Path) -> str:
     return str(path.relative_to(ROOT))
 
 
+def read_utf8(path: Path) -> str | None:
+    """Return the file's text, or record a finding and return None when it is
+    not UTF-8. A SKILL.md saved as cp1252 on Windows (an é in a description)
+    used to end the whole run with a UnicodeDecodeError traceback instead of
+    one more line in the report."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        errors.append(f"{rel(path)}: not valid UTF-8 (byte {exc.start}): {exc.reason}; save the file as UTF-8")
+        return None
+
+
 def check_skill(path: Path) -> None:
-    text = path.read_text(encoding="utf-8")
+    text = read_utf8(path)
+    if text is None:
+        return
     if not text.startswith("---\n"):
         errors.append(f"{rel(path)}: missing YAML frontmatter (file must start with ---)")
         return
@@ -71,7 +85,10 @@ def check_skill(path: Path) -> None:
 
 
 def check_command(path: Path) -> None:
-    lines = path.read_text(encoding="utf-8").lstrip().splitlines()
+    text = read_utf8(path)
+    if text is None:
+        return
+    lines = text.lstrip().splitlines()
     first = lines[0] if lines else ""
     if not first.startswith("# /"):
         errors.append(f"{rel(path)}: command file must start with a '# /<name>' title (found: {first[:50]!r})")
