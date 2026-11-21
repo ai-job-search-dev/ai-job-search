@@ -184,7 +184,11 @@ INSTRUCTION_PATTERNS = [re.compile(p, re.I) for p in (
     r"\[INST\]",
     r"###\s*(system|instruction)",
     r"\b(curl|wget|ssh|scp)\b",
-    r"\.env\b",
+    # A .env file, not a property access: `window.ENV = {...}` (the Remix
+    # config every job-boards.greenhouse.io page carries in a script block),
+    # `process.env`, `import.meta.env`. Script blocks are scanned, and without
+    # the lookbehind each of those read as a .env file reference.
+    r"(?<![\w$])\.env\b",
     r"settings\.json",
     r"allowed-tools",
     r"\btool_use\b|\bfunction_call\b",
