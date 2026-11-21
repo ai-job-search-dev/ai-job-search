@@ -184,8 +184,8 @@ Apply only the confirmed items. Use the Edit tool to add to the relevant section
 
 ### Additions to `01-candidate-profile.md`
 - Independent projects → append to the `## Independent Projects` section formatted as `- **[Project Name]**: [Description with stack and outcome] *(GitHub — repo-name)*`
-- Technical skills (primary and secondary) → append to the Technical Skills section
-- Domain knowledge → append to the Domain Knowledge or Technical Skills section (match the existing structure)
+- Technical skills (primary and secondary) → append to the `## Technical Skills` section, under its `### Programming & ML` or `### Software & Tools` subsection as fits
+- Domain knowledge → append to the `### Domain Expertise` subsection of `## Technical Skills` (the shipped file's heading - match existing structure)
 - Methods and practices → append appropriately
 
 For each addition, add a brief source annotation in a comment or parenthetical: *(Coursera — Deep Learning Specialisation)*, *(GitHub — project-name)*, etc. This makes future `/expand` runs idempotent.

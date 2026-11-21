@@ -7,6 +7,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXPAND_COMMAND_FILE = REPO_ROOT / ".claude" / "commands" / "expand.md"
 BEHAVIORAL_PROFILE = REPO_ROOT / ".claude" / "skills" / "job-application-assistant" / "02-behavioral-profile.md"
+CANDIDATE_PROFILE = REPO_ROOT / ".claude" / "skills" / "job-application-assistant" / "01-candidate-profile.md"
 
 
 class ExpandCommandTests(unittest.TestCase):
@@ -60,6 +61,30 @@ class ExpandCommandTests(unittest.TestCase):
         for name in quoted:
             with self.subTest(section=name):
                 self.assertIn(name, headings, f"02-behavioral-profile.md has no '## {name}' heading")
+
+    def test_profile_additions_name_sections_the_shipped_file_has(self):
+        # Same class as the 02 fix above (#520): Step 5 sent domain knowledge
+        # to a "Domain Knowledge or Technical Skills section", but the shipped
+        # 01-candidate-profile.md has `### Domain Expertise` under
+        # `## Technical Skills` and no Domain Knowledge heading at all, so the
+        # addition landed in a new near-duplicate section or on the wrong
+        # subsection. Every "append to the X section" target in the 01 step
+        # must be a heading the shipped file carries, backticked with its level.
+        text = EXPAND_COMMAND_FILE.read_text(encoding="utf-8")
+        start = text.index("### Additions to `01-candidate-profile.md`")
+        section = text[start: text.index("### Additions to `02-behavioral-profile.md`", start)]
+        targets = re.findall(r"append to the (.+?) (?:sub)?section", section)
+        self.assertTrue(targets, "the 01-candidate-profile step must name its target sections")
+        headings = {
+            line.strip() for line in CANDIDATE_PROFILE.read_text(encoding="utf-8").splitlines()
+            if line.startswith(("## ", "### "))
+        }
+        for target in targets:
+            with self.subTest(target=target):
+                quoted = re.findall(r"`(#+ [^`]+)`", target)
+                self.assertTrue(quoted, f"name the heading as the file spells it, e.g. `## Section`: {target!r}")
+                for heading in quoted:
+                    self.assertIn(heading, headings, f"01-candidate-profile.md has no '{heading}' heading")
 
     def test_expand_enforces_additive_and_confirmation_principles(self):
         text = EXPAND_COMMAND_FILE.read_text(encoding="utf-8")
