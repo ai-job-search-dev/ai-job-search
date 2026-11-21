@@ -60,6 +60,17 @@ class TestFooterBand(unittest.TestCase):
         """SILENT FAILURE: \\enlargethispage pushing body text over the footer."""
         self.assertTrue(Page(A4_HEIGHT, [line(50), line(780), line(800)]).footer_crowded)
 
+    def test_footerless_template_declares_a_narrower_band(self):
+        """A full page whose text area runs to a 36pt bottom margin is not a collision."""
+        lines = [line(50), line(770), line(784), line(798)]
+        self.assertTrue(Page(A4_HEIGHT, lines).footer_crowded)  # default 90pt band misreads it
+        narrow = Page(A4_HEIGHT, lines, footer_band=36.0)
+        self.assertFalse(narrow.footer_crowded)
+        self.assertEqual(round(narrow.bottom_space), 34)  # measured to y808, not y760
+
+    def test_narrow_band_still_catches_a_real_spill(self):
+        self.assertTrue(Page(A4_HEIGHT, [line(50), line(810), line(822)], footer_band=36.0).footer_crowded)
+
 
 class TestHeadingAndIndentDetection(unittest.TestCase):
     def setUp(self):
