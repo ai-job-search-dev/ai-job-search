@@ -1,5 +1,5 @@
 ---
-framework_version: 1.4.8
+framework_version: 1.4.9
 ---
 
 # CV Templates and Tailoring Guide
@@ -21,6 +21,13 @@ cd cv && lualatex -interaction=nonstopmode main_<company>_<role>.tex
 ```
 
 Expected output: `Output written on main_<company>_<role>.pdf (2 pages, ...)`. Any page count other than 2 is a failure that must be fixed before presenting to the user.
+
+### Missing LaTeX packages
+
+A compile that stops on ``! LaTeX Error: File `<file>' not found`` (a `.sty` or `.cls`) usually means the TeX install lacks a package, which is normal on minimal installs such as TinyTeX. Install it rather than rewriting the source to avoid it: `tlmgr search --global --file /<file>` (the exact file name from the error) names the package that ships it, then `tlmgr install <package>` and re-compile. MiKTeX has no `tlmgr`: with `[MPM]AutoInstall=1` (see SETUP.md) it installs the package during the compile; otherwise `mpm --install=<package>`. Exceptions:
+
+- **The search succeeds but finds nothing:** the name is misspelled, or the file is local (a class or style that belongs next to the source, such as `cover.cls`). Fix the source or the working directory.
+- **The install cannot run:** `tlmgr` is disabled (distribution-packaged TeX Live), cannot reach its repository, or needs root (BasicTeX/MacTeX, system-wide TeX Live), or `mpm` needs admin rights. Never run `sudo`. Tell the user the exact install command, or the distribution package that ships the file, and wait.
 
 ## Document Structure
 
@@ -243,7 +250,7 @@ Related trap: a bullet whose text begins with a literal `[` must be braced - `\i
 
 After writing the CV and before presenting to the user, always compile and visually inspect the PDF. Iterate until the layout is clean. Workflow:
 
-1. Run `lualatex -interaction=nonstopmode main_<company>_<role>.tex`
+1. Run `lualatex -interaction=nonstopmode main_<company>_<role>.tex` (a missing `.sty`/`.cls`: see **Missing LaTeX packages** above)
 2. Check the output page count: must be exactly 2
 3. Read the PDF via the Read tool and visually inspect both pages
 4. Check for **orphaned entries**: a `\cventry` title line must never sit alone at the bottom of page 1 with its bullets on page 2
