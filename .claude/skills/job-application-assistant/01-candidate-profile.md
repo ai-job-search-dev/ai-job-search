@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.1
+framework_version: 1.2.0
 ---
 
 # Candidate Profile
@@ -8,6 +8,10 @@ framework_version: 1.1.1
 <!-- After running /setup, all sections will be filled with your actual information -->
 
 ## Identity
+<!-- Work authorization: "Citizen or permanent resident; no sponsorship needed" if that holds in every
+country you apply in (the Eligibility Gate is then skipped). Otherwise your permit and your answer to
+"Will you now or in the future require visa sponsorship?", one entry per country. Read by the
+Eligibility Gate in 04-job-evaluation.md. -->
 - **Name:** [YOUR_NAME]
 - **Location:** [YOUR_ADDRESS]
 - **Phone:** [YOUR_PHONE]
@@ -15,6 +19,7 @@ framework_version: 1.1.1
 - **LinkedIn:** [YOUR_LINKEDIN_URL]
 - **GitHub:** [YOUR_GITHUB_URL]
 - **Status:** [YOUR_EMPLOYMENT_STATUS]
+- **Work authorization:** [YOUR_WORK_AUTHORIZATION]
 - **Constraints:** [YOUR_COMMUTE_OR_LOCATION_CONSTRAINTS]
 
 ### Languages
