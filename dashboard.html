@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job Pipeline Board</title>
+<!--
+  Live kanban over the workspace state files. Serve from the repo root:
+    python3 -m http.server 8000
+  then open http://localhost:8000/dashboard.html
+
+  Read-only by design: state changes belong to /rank, /apply, /outcome and /gmail-sync.
+  Every value read here (postings, agent notes, research) is rendered as escaped text,
+  never as HTML, because postings are untrusted third-party content.
+-->
+<style>
+:root {
+  --bg: #f5f6f8; --panel: #ffffff; --col: #eceef2; --ink: #1c2230; --muted: #667085;
+  --line: #d9dde5; --accent: #2f6fde; --chip: #eef2f8;
+  --good: #1f8a4c; --okay: #5d8f1f; --mid: #b7791f; --weak: #c2571a; --poor: #b42318;
+  --warn-bg: #fff4e0; --warn-ink: #8a5300; --bad-bg: #fde8e7; --bad-ink: #a12016;
+  --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1218; --panel: #181c25; --col: #131720; --ink: #e6e9ef; --muted: #98a2b3;
+    --line: #2a303c; --accent: #6b9cff; --chip: #222837;
+    --good: #4cc27f; --okay: #9ccc4a; --mid: #e3a640; --weak: #f08a4b; --poor: #f16b5f;
+    --warn-bg: #3a2c12; --warn-ink: #f3c46b; --bad-bg: #3d1a18; --bad-ink: #ff9c92;
+    --shadow: 0 1px 2px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1218; --panel: #181c25; --col: #131720; --ink: #e6e9ef; --muted: #98a2b3;
+  --line: #2a303c; --accent: #6b9cff; --chip: #222837;
+  --good: #4cc27f; --okay: #9ccc4a; --mid: #e3a640; --weak: #f08a4b; --poor: #f16b5f;
+  --warn-bg: #3a2c12; --warn-ink: #f3c46b; --bad-bg: #3d1a18; --bad-ink: #ff9c92;
+  --shadow: 0 1px 2px rgba(0,0,0,.4);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; }
+a { color: var(--accent); }
+header { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+h1 { font-size: 18px; margin: 0; }
+.meta { color: var(--muted); font-size: 12px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto; }
+input[type=search] { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; min-width: 220px; font: inherit; }
+label.tog { display: inline-flex; gap: 5px; align-items: center; font-size: 12px; color: var(--muted); cursor: pointer; user-select: none; }
+button { background: var(--chip); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+.stats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.stat { background: var(--chip); border-radius: 999px; padding: 2px 10px; font-size: 12px; }
+.stat b { font-variant-numeric: tabular-nums; }
+#error { display: none; margin: 12px 16px 0; padding: 10px 12px; border-radius: 8px; background: var(--bad-bg); color: var(--bad-ink); }
+#error code { background: transparent; }
+
+main { flex: 1; overflow-x: auto; overflow-y: hidden; padding: 14px 16px 16px; }
+.board { display: flex; gap: 12px; height: 100%; min-height: 420px; }
+.column { flex: 0 0 300px; background: var(--col); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; max-height: 100%; }
+.column.wide { flex-basis: 340px; }
+.colhead { padding: 10px 12px 8px; border-bottom: 1px solid var(--line); border-top: 3px solid var(--c, var(--accent)); border-radius: 12px 12px 0 0; }
+.colhead .t { display: flex; justify-content: space-between; align-items: baseline; font-weight: 600; }
+.colhead .n { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 500; }
+.colhead .d { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+.cards { overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.empty { color: var(--muted); font-size: 12px; text-align: center; padding: 18px 6px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; box-shadow: var(--shadow); cursor: pointer; text-align: left; width: 100%; font: inherit; color: inherit; }
+.card:hover, .card:focus-visible { border-color: var(--accent); outline: none; }
+.card .row1 { display: flex; gap: 8px; justify-content: space-between; align-items: flex-start; }
+.card .title { font-weight: 600; font-size: 13.5px; }
+.card .co { color: var(--muted); font-size: 12.5px; margin-top: 1px; }
+.score { flex: none; min-width: 34px; text-align: center; border-radius: 7px; padding: 1px 6px; font-weight: 700; font-size: 12.5px; color: #fff; font-variant-numeric: tabular-nums; }
+.score.none { background: var(--chip); color: var(--muted); font-weight: 500; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+.tag { font-size: 11px; background: var(--chip); color: var(--muted); border-radius: 5px; padding: 1px 6px; }
+.tag.warn { background: var(--warn-bg); color: var(--warn-ink); }
+.tag.bad { background: var(--bad-bg); color: var(--bad-ink); }
+.tag.hot { background: var(--bad-bg); color: var(--bad-ink); font-weight: 600; }
+.jobid { display: inline-block; max-width: 100%; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); background: var(--bg); border: 1px dashed var(--line); border-radius: 5px; padding: 2px 8px; cursor: copy; overflow-wrap: anywhere; }
+.cmds button { max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.jobid:hover, .jobid:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+.cmds { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.cmds button { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+#toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 6px 12px; border-radius: 8px; font-size: 12.5px; opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 20; }
+#toast.show { opacity: 1; }
+
+/* Drawer */
+#scrim { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; z-index: 10; }
+#drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(760px, 100vw); background: var(--panel); border-left: 1px solid var(--line); z-index: 11; transform: translateX(100%); transition: transform .18s ease; display: flex; flex-direction: column; }
+#drawer.open { transform: none; }
+body.drawer-open #scrim { display: block; }
+.dhead { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); display: flex; gap: 12px; align-items: flex-start; }
+.dhead h2 { margin: 0; font-size: 18px; }
+.dhead .co { color: var(--muted); }
+.dhead button { margin-left: auto; }
+.dbody { overflow-y: auto; padding: 4px 16px 32px; }
+section.blk { border-bottom: 1px solid var(--line); padding: 12px 0; }
+section.blk:last-child { border-bottom: 0; }
+section.blk h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; }
+dl.kv dt { color: var(--muted); font-size: 12.5px; }
+dl.kv dd { margin: 0; word-break: break-word; }
+ul.pts { margin: 0; padding-left: 18px; }
+ul.pts li { margin: 3px 0; }
+.scorebig { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.scorebig .score { font-size: 18px; padding: 4px 10px; }
+.pane { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; max-height: 420px; overflow: auto; }
+.pane pre, pre.raw { white-space: pre-wrap; word-break: break-word; margin: 0; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.md h1, .md h2, .md h3, .md h4 { font-size: 14px; margin: 10px 0 4px; }
+.md p { margin: 6px 0; }
+.md ul { margin: 4px 0; padding-left: 18px; }
+details { margin: 6px 0; }
+summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+.files { display: flex; flex-wrap: wrap; gap: 6px; }
+.files a { font-size: 12px; background: var(--chip); border-radius: 6px; padding: 2px 8px; text-decoration: none; }
+.muted { color: var(--muted); }
+.research-src { margin: 8px 0; }
+.research-src b { text-transform: capitalize; }
+
+@media (max-width: 640px) {
+  .controls { margin-left: 0; width: 100%; }
+  input[type=search] { min-width: 0; flex: 1; }
+  .column { flex-basis: 84vw; }
+  dl.kv { grid-template-columns: 1fr; }
+  dl.kv dt { margin-top: 6px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <h1>Job Pipeline Board</h1>
+    <span class="meta" id="updated">Loading…</span>
+    <div class="controls">
+      <input type="search" id="q" placeholder="Filter by company, role, location…" aria-label="Filter cards">
+      <label class="tog"><input type="checkbox" id="showArchive"> Skipped / expired</label>
+      <label class="tog"><input type="checkbox" id="live" checked> Live</label>
+      <button id="refresh" type="button">Refresh</button>
+      <button id="theme" type="button" aria-label="Toggle theme">Theme</button>
+    </div>
+  </div>
+  <div class="stats" id="stats"></div>
+</header>
+<div id="error"></div>
+<main><div class="board" id="board"></div></main>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="scrim"></div>
+<aside id="drawer" aria-hidden="true" role="dialog" aria-label="Job details">
+  <div class="dhead">
+    <div><h2 id="dTitle"></h2><div class="co" id="dCo"></div></div>
+    <button type="button" id="dClose">Close ✕</button>
+  </div>
+  <div class="dbody" id="dBody"></div>
+</aside>
+
+<script>
+"use strict";
+const POLL_MS = 20000;
+const SOURCES = { seen: "job_scraper/seen_jobs.json", tracker: "job_search_tracker.csv", progress: "job_scraper/apply_progress.json" };
+
+// /apply stages written by tools/apply_progress.py, in pipeline order.
+const STAGES = [
+  ["fetching", "Fetching posting"], ["evaluating", "Evaluating fit"], ["awaiting_decision", "Waiting for your go-ahead"],
+  ["drafting", "Drafting CV + letter"], ["reviewing", "Reviewer critiquing"], ["revising", "Applying review edits"],
+  ["compiling", "Compiling + checking PDFs"], ["recording", "Recording in tracker"], ["drafted", "Drafted"], ["stopped", "Stopped"],
+];
+const STAGE_LABEL = Object.fromEntries(STAGES);
+const ACTIVE_STAGES = new Set(STAGES.slice(0, 8).map(s => s[0]));
+
+// Columns left to right. `match` receives a normalized job and returns true when it belongs.
+const COLUMNS = [
+  { id: "backlog",   title: "Backlog",   c: "#7a8699", wide: true,
+    desc: "Found by /scrape, prioritized by /rank score", match: j => j.stage === "backlog" },
+  { id: "applying",  title: "Applying",  c: "#c2185b", desc: "/apply in progress: fetch, evaluate, your go-ahead, draft, review, compile", match: j => j.stage === "applying" },
+  { id: "drafted",   title: "Drafted",   c: "#8e6bd8", desc: "CV + cover letter built by /apply", match: j => j.stage === "drafted" },
+  { id: "applied",   title: "Applied",   c: "#2f6fde", desc: "Submitted, waiting to hear back",     match: j => j.stage === "applied" },
+  { id: "interview", title: "Interview", c: "#d08a12", desc: "In interviews",                       match: j => j.stage === "interview" },
+  { id: "offer",     title: "Offer",     c: "#1f9a8a", desc: "Offer received",                      match: j => j.stage === "offer" },
+  { id: "hired",     title: "Hired",     c: "#1f8a4c", desc: "Accepted",                            match: j => j.stage === "hired" },
+  { id: "closed",    title: "Closed",    c: "#b42318", desc: "Rejected, no response, declined or withdrawn", match: j => j.stage === "closed" },
+  { id: "archive",   title: "Skipped / Expired", c: "#98a2b3", archive: true,
+    desc: "Filtered out by /scrape or retired by /rank", match: j => j.stage === "archive" },
+];
+const CLOSED = new Set(["rejected", "no_response", "no response", "offer_declined", "offer declined", "withdrawn"]);
+
+let state = { seen: {}, tracker: [], jobs: [], fingerprint: "", openId: null, loadedAt: null };
+
+// ---------- helpers ----------
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const norm = s => String(s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+// Join key for matching a tracker row to its scraped entry: punctuation-insensitive, so
+// "Lead Specialist - API" (tracker) and "Lead Specialist, API" (scrape) are the same job.
+const joinKey = s => String(s ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+// LinkedIn job ID, so sa./www. and slug variants of one posting match.
+const linkedinId = u => { const m = /linkedin\.com\/.*?(\d{6,})\/?(?:[?#].*)?$/.exec(String(u || "").trim()); return m ? m[1] : null; };
+function ago(iso) {
+  const t = Date.parse(iso || ""); if (isNaN(t)) return "";
+  const m = Math.round((Date.now() - t) / 60000);
+  return m < 1 ? "just now" : m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`;
+}
+const isHttp = u => /^https?:\/\//i.test(String(u || ""));
+const link = (u, label) => isHttp(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(label || u)}</a>` : esc(label || u || "");
+// Escape, then turn bare http(s) URLs into links. Used for every free-text value.
+const linkify = s => esc(s).replace(/https?:\/\/[^\s<>"')\]]+/g, u => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`);
+const today = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+const parseDate = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s || "")) ? new Date(s + "T00:00:00") : null;
+const daysUntil = s => { const d = parseDate(s); return d ? Math.round((d - today()) / 864e5) : null; };
+
+// documents/README.md "Subfolder naming": lowercase, spaces -> _, drop non letter/digit/_, collapse, trim.
+function archiveSlug(company, role) {
+  return `${company}_${role}`.toLowerCase().replace(/\s+/g, "_").replace(/[^\p{L}\p{N}_]/gu, "")
+    .replace(/_+/g, "_").replace(/^_|_$/g, "");
+}
+// 04-job-evaluation.md cache naming: lowercase, trim, spaces -> hyphens.
+const researchName = company => String(company || "").trim().toLowerCase().replace(/\s+/g, "-");
+
+function bandColor(score) {
+  if (score == null || score === "") return null;
+  const s = Number(score);
+  return s >= 75 ? "var(--good)" : s >= 60 ? "var(--okay)" : s >= 45 ? "var(--mid)" : s >= 30 ? "var(--weak)" : "var(--poor)";
+}
+function bandName(score) {
+  const s = Number(score);
+  return s >= 75 ? "Strong Fit" : s >= 60 ? "Good Fit" : s >= 45 ? "Moderate Fit" : s >= 30 ? "Weak Fit" : "Poor Fit";
+}
+
+// RFC 4180 CSV parser (quoted fields, embedded commas and newlines).
+function parseCSV(text) {
+  const rows = []; let row = [], f = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; }
+      else f += c;
+    } else if (c === '"') q = true;
+    else if (c === ",") { row.push(f); f = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(f); f = ""; if (row.some(x => x !== "")) rows.push(row); row = [];
+    } else f += c;
+  }
+  if (f !== "" || row.length) { row.push(f); if (row.some(x => x !== "")) rows.push(row); }
+  if (!rows.length) return [];
+  const head = rows.shift().map(h => h.trim());
+  return rows.map(r => Object.fromEntries(head.map((h, i) => [h, (r[i] ?? "").trim()])));
+}
+
+// Minimal Markdown to HTML. Input is escaped first, so no raw HTML ever reaches the page.
+function md(text) {
+  const out = []; let list = false;
+  const inline = s => esc(s)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>');
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.trimEnd();
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    const li = line.match(/^\s*(?:[-*+]|\d+\.)\s+(.*)$/);
+    if (li) {
+      if (!list) { out.push("<ul>"); list = true; }
+      out.push(`<li>${inline(li[1].replace(/^\[ \]\s*/, "☐ ").replace(/^\[[xX]\]\s*/, "☑ "))}</li>`);
+      continue;
+    }
+    if (list) { out.push("</ul>"); list = false; }
+    if (h) out.push(`<h${Math.min(h[1].length + 1, 4)}>${inline(h[2])}</h${Math.min(h[1].length + 1, 4)}>`);
+    else if (line.trim()) out.push(`<p>${inline(line)}</p>`);
+  }
+  if (list) out.push("</ul>");
+  return `<div class="md">${out.join("")}</div>`;
+}
+
+async function getText(path, opts = {}) {
+  const r = await fetch(path, { cache: "no-store", ...opts });
+  if (!r.ok) { const e = new Error(`${r.status} ${path}`); e.status = r.status; throw e; }
+  return r.text();
+}
+async function exists(path) {
+  try { const r = await fetch(path, { method: "HEAD", cache: "no-store" }); return r.ok; } catch { return false; }
+}
+
+// ---------- model ----------
+function stageFromTracker(status) {
+  const s = norm(status);
+  if (CLOSED.has(s)) return "closed";
+  if (["drafted", "applied", "interview", "offer", "hired"].includes(s)) return s;
+  return "applied";
+}
+
+function buildJobs(seen, tracker, runs = {}) {
+  const jobs = [];
+  const seenByKey = new Map();
+  for (const [key, v] of Object.entries(seen)) seenByKey.set(`${joinKey(v.company)}|${joinKey(v.title)}`, key);
+  const claimed = new Set();
+  const runsUsed = new Set();
+  const runList = Object.entries(runs).map(([id, r]) => ({ id, ...r }));
+  // Find the /apply run for a job: stored seen key, then LinkedIn ID, then company + role.
+  const findRun = (seenKey, url, company, role) => {
+    const lid = linkedinId(url);
+    const r = runList.find(r => seenKey && r.seen_key === seenKey)
+      || (lid && runList.find(r => linkedinId(r.url) === lid))
+      || runList.find(r => company && role && joinKey(r.company) === joinKey(company) && joinKey(r.role) === joinKey(role));
+    if (r) runsUsed.add(r.id);
+    return r || null;
+  };
+  const runStage = r => r && ACTIVE_STAGES.has(r.stage) ? "applying" : null;
+
+  tracker.forEach((row, i) => {
+    const seenKey = seenByKey.get(`${joinKey(row.company)}|${joinKey(row.role)}`);
+    if (seenKey) claimed.add(seenKey);
+    const s = seenKey ? seen[seenKey] : null;
+    const score = row.fit_rating !== "" && !isNaN(Number(row.fit_rating)) ? Number(row.fit_rating)
+                : s && s.rank_score != null ? Number(s.rank_score) : null;
+    jobs.push({
+      id: "t-" + (archiveSlug(row.company, row.role) || i) + "-" + i,
+      stage: stageFromTracker(row.status),
+      status: row.status || "applied",
+      company: row.company, title: row.role,
+      location: s?.location || "", url: row.source || s?.url || "",
+      deadline: row.deadline || s?.deadline || "",
+      score, tracker: row, seen: s, seenKey,
+      date: row.date, slug: archiveSlug(row.company, row.role),
+      run: findRun(seenKey, row.source, row.company, row.role),
+    });
+  });
+
+  for (const [key, v] of Object.entries(seen)) {
+    if (claimed.has(key)) continue;
+    const st = v.status || "new";
+    const run = findRun(key, v.url, v.company, v.title);
+    const stopped = run && run.stage === "stopped";
+    jobs.push({
+      id: "s-" + key,
+      stage: runStage(run) || ((stopped || st === "skipped" || st === "expired") ? "archive" : "backlog"),
+      status: stopped ? "apply stopped" : st, company: v.company, title: v.title, location: v.location || "",
+      url: v.url, deadline: v.deadline || "",
+      score: run && run.fit != null ? Number(run.fit) : v.rank_score != null ? Number(v.rank_score) : null,
+      tracker: null, seen: v, seenKey: key, date: run ? run.updated : v.first_seen,
+      slug: archiveSlug(v.company, v.title), run,
+    });
+  }
+
+  // /apply runs on postings /scrape never saw (pasted URLs, careers pages).
+  for (const r of runList) {
+    if (runsUsed.has(r.id) || r.stage === "drafted") continue;
+    jobs.push({
+      id: "r-" + r.id,
+      stage: runStage(r) || "archive",
+      status: r.stage === "stopped" ? "apply stopped" : r.stage,
+      company: r.company || "(company pending)", title: r.role || "(role pending)", location: "",
+      url: r.url || "", deadline: "", score: r.fit != null ? Number(r.fit) : null,
+      tracker: null, seen: null, seenKey: null, date: r.updated,
+      slug: archiveSlug(r.company || "", r.role || ""), run: r,
+    });
+  }
+  // The ID shown on each card: what `tools/apply_progress.py resolve` (and so `/apply <id>`) accepts.
+  for (const j of jobs) j.jobId = j.seenKey || (j.run && j.run.id) || j.slug;
+  return jobs;
+}
+
+function excluded(j) {
+  const s = j.seen || {};
+  return s.location_verdict === "FAIL" || s.language_gate === "FAIL";
+}
+
+// Backlog priority: ranked and eligible by score (deadline breaks ties), then unranked
+// by scrape fit, then unreachable, then vetoed. Other columns: newest first.
+function sortCards(colId, list) {
+  if (colId === "backlog") {
+    const fitRank = { high: 0, medium: 1, low: 2 };
+    const tier = j => excluded(j) ? 4 : j.status === "ranked" ? 0 : j.status === "unreachable" ? 3 : 1 + (fitRank[j.seen?.fit] ?? 2) / 3;
+    return list.sort((a, b) => tier(a) - tier(b)
+      || (b.score ?? -1) - (a.score ?? -1)
+      || (daysUntil(a.deadline) ?? 9999) - (daysUntil(b.deadline) ?? 9999)
+      || String(b.date).localeCompare(String(a.date)));
+  }
+  return list.sort((a, b) => String(b.date).localeCompare(String(a.date)) || (b.score ?? -1) - (a.score ?? -1));
+}
+
+// ---------- render: board ----------
+function cardHTML(j) {
+  const color = bandColor(j.score);
+  const s = j.seen || {};
+  const t = j.tracker || {};
+  const tags = [];
+  const du = daysUntil(j.deadline);
+  if (du != null && du >= 0 && du <= 7 && ["backlog", "drafted"].includes(j.stage)) tags.push(`<span class="tag hot">🔥 ${du === 0 ? "closes today" : `closes in ${du}d`}</span>`);
+  else if (j.deadline && du != null && du >= 0) tags.push(`<span class="tag">due ${esc(j.deadline)}</span>`);
+  if (j.stage === "applying" && j.run) {
+    const waiting = j.run.stage === "awaiting_decision";
+    tags.push(`<span class="tag ${waiting ? "hot" : "warn"}">${waiting ? "⏸" : "⏳"} ${esc(STAGE_LABEL[j.run.stage] || j.run.stage)}</span>`);
+    tags.push(`<span class="tag">${esc(ago(j.run.updated))}</span>`);
+    if (j.run.note) tags.push(`<span class="tag" title="${esc(j.run.note)}">${esc(j.run.note.length > 48 ? j.run.note.slice(0, 47) + "…" : j.run.note)}</span>`);
+  }
+  if (j.stage === "backlog") tags.push(`<span class="tag">${esc(j.status === "new" ? `new · ${s.fit || "?"} fit` : j.status)}</span>`);
+  if (j.stage === "closed" || j.stage === "archive") tags.push(`<span class="tag">${esc(j.status.replace(/_/g, " "))}</span>`);
+  if (excluded(j)) tags.push(`<span class="tag bad">excluded (${s.location_verdict === "FAIL" ? "location" : "language"})</span>`);
+  if (s.location_verdict === "FLAG") tags.push(`<span class="tag warn">⚠ location</span>`);
+  if (s.language_gate === "FLAG") tags.push(`<span class="tag warn">⚠ language</span>`);
+  if (s.guard && s.guard !== "clean" && !/clean$/.test(s.guard)) tags.push(`<span class="tag warn">⚠ guard</span>`);
+  if (j.location) tags.push(`<span class="tag">${esc(j.location.split(",")[0])}</span>`);
+  if (t.channel) tags.push(`<span class="tag">${esc(t.channel.replace(/_/g, " "))}</span>`);
+  else if (s.portal) tags.push(`<span class="tag">${esc(s.portal.replace(/-search$/, ""))}</span>`);
+  return `<button class="card" type="button" data-id="${esc(j.id)}">
+    <div class="row1"><div><div class="title">${esc(j.title)}</div><div class="co">${esc(j.company)}</div></div>
+    ${color ? `<span class="score" style="background:${color}" title="${esc(bandName(j.score))}">${esc(j.score)}</span>` : `<span class="score none">–</span>`}</div>
+    <div class="tags">${tags.join("")}</div></button>`;
+}
+
+function render() {
+  const q = norm($("#q").value);
+  const showArchive = $("#showArchive").checked;
+  const visible = state.jobs.filter(j => !q || norm(`${j.company} ${j.title} ${j.location} ${j.status} ${j.tracker?.notes || ""}`).includes(q));
+  const board = $("#board");
+  const scroll = {};
+  board.querySelectorAll(".column").forEach(c => scroll[c.dataset.col] = c.querySelector(".cards").scrollTop);
+  board.innerHTML = COLUMNS.filter(c => showArchive || !c.archive).map(col => {
+    const list = sortCards(col.id, visible.filter(col.match));
+    return `<div class="column${col.wide ? " wide" : ""}" data-col="${col.id}" style="--c:${col.c}">
+      <div class="colhead"><div class="t"><span>${esc(col.title)}</span><span class="n">${list.length}</span></div><div class="d">${esc(col.desc)}</div></div>
+      <div class="cards">${list.length ? list.map(cardHTML).join("") : `<div class="empty">Nothing here</div>`}</div></div>`;
+  }).join("");
+  board.querySelectorAll(".column").forEach(c => { c.querySelector(".cards").scrollTop = scroll[c.dataset.col] || 0; });
+
+  const count = id => state.jobs.filter(j => j.stage === id).length;
+  const ranked = state.jobs.filter(j => j.stage === "backlog" && j.status === "ranked" && !excluded(j));
+  const active = ["drafted", "applied", "interview", "offer"].reduce((n, id) => n + count(id), 0);
+  $("#stats").innerHTML = [
+    ["Backlog", count("backlog")], ["Ranked", ranked.length], ["Applying", count("applying")],
+    ["Strong/Good fit to apply", ranked.filter(j => j.score >= 60).length],
+    ["Active applications", active], ["Interviews", count("interview")],
+    ["Offers", count("offer") + count("hired")], ["Closed", count("closed")],
+    ["Tracked jobs total", Object.keys(state.seen).length],
+  ].map(([k, v]) => `<span class="stat">${esc(k)} <b>${v}</b></span>`).join("");
+}
+
+// ---------- render: drawer ----------
+function kv(pairs) {
+  const rows = pairs.filter(([, v]) => v !== undefined && v !== null && v !== "");
+  return rows.length ? `<dl class="kv">${rows.map(([k, v, raw]) => `<dt>${esc(k)}</dt><dd>${raw ? v : linkify(v)}</dd>`).join("")}</dl>` : `<p class="muted">Nothing recorded.</p>`;
+}
+const list = arr => Array.isArray(arr) && arr.length ? `<ul class="pts">${arr.map(x => `<li>${linkify(x)}</li>`).join("")}</ul>` : `<p class="muted">None recorded.</p>`;
+const blk = (title, html, id) => `<section class="blk"${id ? ` id="${id}"` : ""}><h3>${esc(title)}</h3>${html}</section>`;
+
+function renderResearch(obj) {
+  if (!obj || typeof obj !== "object") return `<pre class="raw">${linkify(JSON.stringify(obj, null, 2))}</pre>`;
+  const parts = [kv([["Company", obj.company], ["Researched", obj.fetched_date]])];
+  if (obj.sources && typeof obj.sources === "object") {
+    for (const [name, src] of Object.entries(obj.sources)) {
+      if (!src || (!src.url && !src.notes)) continue;
+      parts.push(`<div class="research-src"><b>${esc(name.replace(/_/g, " "))}</b>${src.url ? ` · ${link(src.url, "source")}` : ""}<div>${linkify(src.notes || "")}</div></div>`);
+    }
+  }
+  const rest = Object.fromEntries(Object.entries(obj).filter(([k]) => !["company", "fetched_date", "sources"].includes(k)));
+  if (Object.keys(rest).length) parts.push(`<details><summary>Other fields</summary><pre class="raw">${linkify(JSON.stringify(rest, null, 2))}</pre></details>`);
+  return parts.join("");
+}
+
+function openDrawer(id, push = true) {
+  // A scraped job keeps its seen_jobs key after /apply moves it into the tracker,
+  // so an old "s-<key>" link still finds its card.
+  const j = state.jobs.find(x => x.id === id)
+    || (id.startsWith("s-") && state.jobs.find(x => x.seenKey === id.slice(2)));
+  if (!j) return;
+  id = j.id;
+  state.openId = id;
+  if (push) history.replaceState(null, "", "#" + encodeURIComponent(id));
+  const s = j.seen || {}, t = j.tracker || {};
+  $("#dTitle").textContent = j.title;
+  $("#dCo").textContent = [j.company, j.location].filter(Boolean).join(" · ");
+  const color = bandColor(j.score);
+  const col = COLUMNS.find(c => c.match(j));
+
+  const html = [];
+  const cmds = [[`/apply ${j.jobId}`, "Fetch, evaluate and draft for this job"]];
+  if (j.tracker) cmds.push([`/outcome ${j.company}`, "Record what happened"], [`/interview ${j.company}`, "Build an interview prep pack"]);
+  html.push(blk("Job ID & commands", `
+    <span class="jobid" role="button" tabindex="0" data-copy="${esc(j.jobId)}" title="Click to copy">⧉ ${esc(j.jobId)}</span>
+    <div class="cmds">${cmds.map(([c, t]) => `<button type="button" data-copy="${esc(c)}" title="${esc(t)} - click to copy">${esc(c)}</button>`).join("")}</div>
+    <p class="muted" style="margin:6px 0 0;font-size:12px">Click to copy, then paste into Claude Code.</p>`));
+  html.push(blk("Overview", kv([
+    ["Board column", col ? col.title : j.stage],
+    ["Status", j.status],
+    ["Company", j.company], ["Role", j.title], ["Location", j.location],
+    ["Posting", j.url ? link(j.url) : "", true],
+    ["Deadline", j.deadline ? `${j.deadline}${daysUntil(j.deadline) != null ? ` (${daysUntil(j.deadline) >= 0 ? `in ${daysUntil(j.deadline)} days` : "passed"})` : ""}` : ""],
+    ["Posted", s.posted_date], ["First seen by /scrape", s.first_seen],
+    ["Found via", [s.portal, s.source].filter(Boolean).join(" · ")],
+    ["Scrape quick fit", s.fit],
+  ])));
+
+  if (j.run) {
+    const r = j.run;
+    const reached = new Set((r.history || []).map(h => h.stage));
+    const pipeline = STAGES.slice(0, 9).map(([k, label]) => {
+      const cls = k === r.stage ? (r.stage === "drafted" ? "" : "warn") : reached.has(k) ? "" : "";
+      const mark = k === r.stage ? "●" : reached.has(k) ? "✓" : "○";
+      return `<span class="tag ${cls}" style="${reached.has(k) || k === r.stage ? "" : "opacity:.45"}">${mark} ${esc(label)}</span>`;
+    }).join("");
+    const hist = (r.history || []).slice().reverse().map(h =>
+      `<li><b>${esc(STAGE_LABEL[h.stage] || h.stage)}</b> <span class="muted">${esc(new Date(h.at).toLocaleString())}</span>${h.note ? ` · ${linkify(h.note)}` : ""}</li>`).join("");
+    html.push(blk("/apply progress", `
+      ${r.stage === "stopped" ? `<p class="tag bad">Stopped${r.note ? ": " + esc(r.note) : ""}</p>` : `<div class="tags" style="margin-bottom:10px">${pipeline}</div>`}
+      ${kv([["Current stage", STAGE_LABEL[r.stage] || r.stage], ["Last update", r.updated ? `${new Date(r.updated).toLocaleString()} (${ago(r.updated)})` : ""],
+            ["Fit (Step 1)", r.fit != null ? `${r.fit}${r.verdict ? " · " + r.verdict : ""}` : ""], ["Started", r.started ? new Date(r.started).toLocaleString() : ""]])}
+      ${hist ? `<details ${ACTIVE_STAGES.has(r.stage) ? "open" : ""}><summary>Timeline</summary><ul class="pts">${hist}</ul></details>` : ""}`));
+  }
+
+  if (j.score != null || s.rank_score != null || s.strengths || s.gaps) {
+    const vetoes = [
+      ["Ranked on", s.rank_date],
+      ["Location gate", s.location_verdict],
+      ["Language gate", s.language_gate],
+      ["Language note", s.language_note],
+      ["Posting guard", s.guard],
+      ["Note", s.note],
+    ];
+    const fitSource = s.rank_score != null ? "/rank · posting-scorer" : "/apply evaluation";
+    html.push(blk(`Fit assessment (${fitSource})`, `
+      <div class="scorebig">${color ? `<span class="score" style="background:${color}">${esc(j.score)}</span>` : ""}
+        <div><b>${esc(s.rank_verdict || (j.score != null ? bandName(j.score) : ""))}</b>
+        ${t.fit_rating && s.rank_score != null && String(s.rank_score) !== t.fit_rating ? `<div class="muted">Triage ${esc(s.rank_score)} · /apply evaluation ${esc(t.fit_rating)}</div>` : ""}</div></div>
+      ${kv(vetoes)}
+      <h3 style="margin-top:12px">Strengths</h3>${list(s.strengths)}
+      <h3 style="margin-top:12px">Gaps</h3>${list(s.gaps)}`));
+  }
+
+  if (j.tracker) {
+    html.push(blk("Application (tracker · /apply, /outcome, /gmail-sync)", kv([
+      ["Date", t.date], ["Status", t.status], ["Channel", t.channel], ["Sector", t.sector],
+      ["Role type", t.role_type], ["Contact", t.contact_person], ["Fit rating", t.fit_rating],
+      ["Deadline", t.deadline],
+      ["Notes", t.notes ? `<ul class="pts">${t.notes.split(/\s+-\s+/).map(n => `<li>${linkify(n)}</li>`).join("")}</ul>` : "", true],
+    ])));
+  }
+
+  if (j.tracker) html.push(blk("Documents", `<div id="docs" class="files"><span class="muted">Checking…</span></div>`));
+  html.push(blk("Application archive (documents/applications)", `<div id="archive"><span class="muted">Loading…</span></div>`));
+  html.push(blk("Company research (application-reviewer)", `<div id="research"><span class="muted">Loading…</span></div>`));
+
+  const raw = { seen_key: j.seenKey, seen_jobs_entry: j.seen, tracker_row: j.tracker };
+  html.push(blk("Raw records", `<details><summary>Show every stored field</summary><pre class="raw">${linkify(JSON.stringify(raw, null, 2))}</pre></details>`));
+
+  $("#dBody").innerHTML = html.join("");
+  $("#dBody").scrollTop = 0;
+  $("#drawer").classList.add("open");
+  $("#drawer").setAttribute("aria-hidden", "false");
+  document.body.classList.add("drawer-open");
+  loadExtras(j);
+}
+
+function closeDrawer() {
+  state.openId = null;
+  $("#drawer").classList.remove("open");
+  $("#drawer").setAttribute("aria-hidden", "true");
+  document.body.classList.remove("drawer-open");
+  history.replaceState(null, "", location.pathname + location.search);
+}
+
+async function loadExtras(j) {
+  const stillOpen = () => state.openId === j.id;
+
+  // Documents: tracker paths plus their compiled PDFs.
+  if (j.tracker) {
+    const paths = [j.tracker.cv_file, j.tracker.cover_letter_file].filter(Boolean)
+      .flatMap(p => [p, p.replace(/\.(tex|md|typ)$/i, ".pdf")]).filter((p, i, a) => a.indexOf(p) === i);
+    const found = [];
+    for (const p of paths) if (await exists(p)) found.push(p);
+    if (!stillOpen()) return;
+    const el = $("#docs");
+    if (el) el.innerHTML = found.length ? found.map(p => `<a href="${esc(p)}" target="_blank" rel="noopener">${esc(p)}</a>`).join("") : `<span class="muted">No CV or cover letter files recorded or found.</span>`;
+  }
+
+  // Archive: list the folder through http.server's directory index, render Markdown files inline.
+  const archEl = () => $("#archive");
+  try {
+    const base = `documents/applications/${encodeURIComponent(j.slug)}/`;
+    const index = await getText(base);
+    const names = [...new DOMParser().parseFromString(index, "text/html").querySelectorAll("a")]
+      .map(a => decodeURIComponent(a.getAttribute("href") || "")).filter(n => n && !n.endsWith("/") && !n.startsWith("."));
+    const order = ["outcome.md", "job_posting.md"];
+    names.sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99) || a.localeCompare(b));
+    const parts = [`<div class="files">${names.map(n => `<a href="${esc(base + encodeURIComponent(n))}" target="_blank" rel="noopener">${esc(n)}</a>`).join("")}</div>`];
+    for (const n of names.filter(n => /\.md$/i.test(n))) {
+      const txt = await getText(base + encodeURIComponent(n)).catch(() => null);
+      if (txt == null) continue;
+      const label = n === "job_posting.md" ? "Job posting (archived, cleaned by posting_guard)" : n === "outcome.md" ? "Outcome log" : n;
+      parts.push(`<details${n === "outcome.md" ? " open" : ""}><summary>${esc(label)}</summary><div class="pane">${md(txt)}</div></details>`);
+    }
+    if (!stillOpen()) return;
+    if (archEl()) archEl().innerHTML = parts.join("");
+  } catch (e) {
+    if (!stillOpen()) return;
+    if (archEl()) archEl().innerHTML = `<span class="muted">No archive folder (<code>documents/applications/${esc(j.slug)}/</code>). It is created by /apply Step 6b or /outcome.</span>`;
+  }
+
+  // Company research cache.
+  const resEl = () => $("#research");
+  const name = researchName(j.company);
+  const candidates = [name, name.replace(/[^\p{L}\p{N}-]/gu, "")].filter((n, i, a) => n && a.indexOf(n) === i);
+  for (const n of candidates) {
+    try {
+      const obj = JSON.parse(await getText(`company_research/${encodeURIComponent(n)}.json`));
+      if (!stillOpen()) return;
+      const age = daysUntil(obj.fetched_date);
+      const stale = age != null && -age > 30 ? `<p class="tag warn">Older than the 30-day cache TTL</p>` : "";
+      if (resEl()) resEl().innerHTML = stale + renderResearch(obj);
+      return;
+    } catch { /* try next name */ }
+  }
+  if (stillOpen() && resEl()) resEl().innerHTML = `<span class="muted">No cached research for this company. /apply's reviewer writes <code>company_research/${esc(name)}.json</code>.</span>`;
+}
+
+// ---------- load loop ----------
+async function load() {
+  const errors = [];
+  let seenText = "", trackerText = "", progressText = "";
+  try { seenText = await getText(SOURCES.seen); } catch (e) { errors.push(e); }
+  try { trackerText = await getText(SOURCES.tracker); } catch (e) { errors.push(e); }
+  // Optional: absent until the first /apply run writes it.
+  try { progressText = await getText(SOURCES.progress); } catch { progressText = ""; }
+
+  const err = $("#error");
+  if (errors.length === 2) {
+    err.style.display = "block";
+    err.innerHTML = location.protocol === "file:"
+      ? `This page reads the workspace files over HTTP. From the repo root run <code>python3 -m http.server 8000</code>, then open <a href="http://localhost:8000/dashboard.html">http://localhost:8000/dashboard.html</a>.`
+      : `Could not read <code>${esc(SOURCES.seen)}</code> or <code>${esc(SOURCES.tracker)}</code>. Serve from the repo root and run /scrape or /apply first.`;
+    $("#updated").textContent = "No data";
+    return;
+  }
+  err.style.display = errors.length ? "block" : "none";
+  if (errors.length) err.textContent = `Partial data: ${errors.map(e => e.message).join(", ")}`;
+
+  const fp = seenText.length + ":" + trackerText.length + ":" + hash(seenText + trackerText + progressText);
+  state.loadedAt = new Date();
+  $("#updated").textContent = `Updated ${state.loadedAt.toLocaleTimeString()}`;
+  if (fp === state.fingerprint) return;
+  state.fingerprint = fp;
+
+  try { state.seen = seenText ? (JSON.parse(seenText).seen || {}) : {}; }
+  catch (e) { state.seen = {}; err.style.display = "block"; err.textContent = `Could not parse ${SOURCES.seen}: ${e.message}`; }
+  state.tracker = trackerText ? parseCSV(trackerText) : [];
+  let runs = {};
+  try { runs = progressText ? (JSON.parse(progressText).runs || {}) : {}; } catch { runs = {}; }
+  state.jobs = buildJobs(state.seen, state.tracker, runs);
+  render();
+  if (state.openId) state.jobs.some(j => j.id === state.openId) ? openDrawer(state.openId, false) : closeDrawer();
+}
+function hash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; }
+
+// ---------- wiring ----------
+// ---------- copy to clipboard ----------
+let toastTimer = null;
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 1600);
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    // Fallback for browsers that block the async clipboard API.
+    const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } finally { ta.remove(); }
+  }
+  toast(`Copied: ${text}`);
+}
+document.addEventListener("click", e => {
+  const c = e.target.closest("[data-copy]");
+  if (!c) return;
+  e.preventDefault(); e.stopPropagation();   // don't open the card when copying its ID
+  copyText(c.dataset.copy);
+}, true);
+document.addEventListener("keydown", e => {
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches?.(".jobid[data-copy]")) { e.preventDefault(); e.stopPropagation(); copyText(e.target.dataset.copy); }
+}, true);
+
+$("#board").addEventListener("click", e => { const c = e.target.closest(".card"); if (c) openDrawer(c.dataset.id); });
+$("#dClose").addEventListener("click", closeDrawer);
+$("#scrim").addEventListener("click", closeDrawer);
+window.addEventListener("hashchange", () => {
+  const id = decodeURIComponent(location.hash.slice(1));
+  if (id && id !== state.openId) openDrawer(id, false);
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape" && state.openId) closeDrawer(); });
+$("#q").addEventListener("input", render);
+$("#refresh").addEventListener("click", () => { state.fingerprint = ""; load(); });
+
+function pref(key, fallback) { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } }
+function setPref(key, v) { try { localStorage.setItem(key, v); } catch { /* storage unavailable */ } }
+$("#showArchive").checked = pref("jb.archive", "0") === "1";
+$("#showArchive").addEventListener("change", e => { setPref("jb.archive", e.target.checked ? "1" : "0"); render(); });
+const savedTheme = pref("jb.theme", "");
+if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+$("#theme").addEventListener("click", () => {
+  const dark = document.documentElement.dataset.theme
+    ? document.documentElement.dataset.theme === "dark"
+    : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.dataset.theme = dark ? "light" : "dark";
+  setPref("jb.theme", document.documentElement.dataset.theme);
+});
+
+let timer = null;
+function schedule() { clearInterval(timer); if ($("#live").checked) timer = setInterval(() => { if (!document.hidden) load(); }, POLL_MS); }
+$("#live").addEventListener("change", schedule);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && $("#live").checked) load(); });
+
+load().then(() => {
+  const id = decodeURIComponent(location.hash.slice(1));
+  if (id) openDrawer(id, false);
+});
+schedule();
+</script>
+</body>
+</html>
