@@ -39,6 +39,8 @@ def identity(job: dict) -> tuple[str, tuple[str, str]]:
     # (company, title) pair with an empty company half, and job_key's own
     # fallback ("unknown-company") keys it on store.
     company = job.get("company")
+    if "company" not in job:
+        raise ValueError("job needs a company field (null if unknown)")
     if company is not None and not isinstance(company, str):
         raise ValueError("job has a non-string company")
     url = job["url"].strip()
