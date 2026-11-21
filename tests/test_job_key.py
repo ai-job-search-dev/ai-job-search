@@ -442,6 +442,42 @@ class MigrateCLI(unittest.TestCase):
         self.assertEqual(json.loads(proc.stdout)["keys_not_matching_current_rule"], 1)
         self.assertEqual(self.path.read_bytes(), before)
 
+    def test_malformed_and_legacy_keys_migrate_too(self):
+        # The damage the module docstring names ("/" and "," keys), an
+        # LLM-slugified non-ASCII key (#537) and a three-part legacy key were
+        # all reported by --audit but never renamed: the drift filter only
+        # looked at keys that were already canonical. --migrate exited 1 with
+        # migrated == [] and the next run said the same.
+        seen = {
+            "deloitte_junior-cybersecurity-analyst-(ot/iot)": {
+                "company": "Deloitte", "title": "Junior Cybersecurity Analyst (OT/IoT)"},
+            "ops-consulting,-llc_malware-analyst": {
+                "company": "OPS Consulting, LLC", "title": "Malware Analyst"},
+            "ørsted_data-engineer": {"company": "Ørsted", "title": "Data Engineer"},
+            "nviso-security_soc-analyst_athens": {"company": "NVISO Security", "title": "SOC Analyst"},
+        }
+        self.write(seen)
+        report, proc = self.migrate()
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        expected = {
+            "deloitte_junior-cybersecurity-analyst-ot-iot",
+            "ops-consulting-llc_malware-analyst",
+            "orsted_data-engineer",
+            "nviso-security_soc-analyst",
+        }
+        self.assertEqual(set(self.seen()), expected)
+        self.assertEqual(report["malformed_keys"], [])
+        self.assertEqual(report["legacy_three_part_keys"], [])
+        self.assertEqual(len(report["migrated"]), 4)
+        again, _ = self.migrate()
+        self.assertEqual(again["migrated"], [], "a second run changes nothing")
+
+    def test_entry_without_title_or_url_is_not_renamed(self):
+        self.write({"securion_": {"company": "Securion"}})
+        report, _ = self.migrate()
+        self.assertEqual(list(self.seen()), ["securion_"])
+        self.assertEqual(report["migrated"], [])
+
     def test_migrate_without_audit_is_a_usage_error(self):
         proc = subprocess.run([sys.executable, str(TOOL), "--migrate"], capture_output=True, text=True, encoding="utf-8")
         self.assertEqual(proc.returncode, 2)
