@@ -737,12 +737,31 @@ class InputHandling(GuardFixture):
         self.assertIn("refusing to read", err)
         self.assertNotIn("Outside content.", out)
 
-    def test_out_hardlinked_to_a_file_outside_the_temp_directory_is_refused(self):
+    def test_out_hardlinked_to_a_file_outside_the_temp_directory_is_not_written_through(self):
         outside, link = self.hardlink_from_outside("Original.")
         code, out, err = self.run_main("--text", "--out", str(link), stdin_text="Job.\n")
-        self.assertEqual(code, 2, err)
-        self.assertIn("refusing to write", err)
+        self.assertEqual(code, 0, err)
         self.assertEqual(outside.read_text(encoding="utf-8"), "Original.")
+        self.assertEqual(link.read_text(encoding="utf-8"), "Job.\n")
+
+    def test_out_that_is_an_existing_directory_fails_cleanly(self):
+        code, out, err = self.run_main("--text", "--out", str(self.tmp), stdin_text="Job.\n")
+        self.assertEqual(code, 2, err)
+        self.assertIn("cannot write", err)
+
+    def test_in_with_dotdot_leaving_the_temp_directory_is_refused(self):
+        outside = Path(sys.executable).resolve()
+        if any(outside.is_relative_to(Path(root).resolve()) for root in (tempfile.gettempdir(), "/tmp")):
+            self.skipTest("the interpreter lives under the temp directory")
+        escape = self.tmp.joinpath(*[".."] * len(self.tmp.resolve().parts), *outside.parts[1:])
+        code, out, err = self.run_main("--in", str(escape), "--text")
+        self.assertEqual(code, 2, err)
+        self.assertIn("--in takes a file", err)
+
+    def test_in_that_is_a_directory_fails_cleanly(self):
+        code, out, err = self.run_main("--in", str(self.tmp), "--text")
+        self.assertEqual(code, 2, err)
+        self.assertIn("cannot read input", err)
 
     def test_out_replaces_an_existing_symlink_instead_of_writing_through_it(self):
         target = self.tmp / "target.txt"

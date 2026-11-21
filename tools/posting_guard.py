@@ -54,11 +54,12 @@ without either the mode is guessed from the content, which is a fallback, not
 a documented path. Output: the verdict line, a `--- findings ---` block (JSON
 with --json), then `--- text ---` and the cleaned text, or `saved=<path>` when
 --out is given. Exit 0 when a posting is evaluated; 1 when the input has no text
-to evaluate; 2 when --in cannot be read or lies outside the temp directory and
-documents/applications/, or --out points inside this repository or outside the
-temp directory, or either is a hard link (the cleaned posting is untrusted text
-and belongs in the session scratchpad, never next to the workflow's own files or
-the user's).
+to evaluate; 2 when --in cannot be read, is a hard link, or lies outside the
+temp directory, /tmp and documents/applications/, or --out cannot be written or
+points inside this repository or outside the temp directory and /tmp. --out is
+replaced, never written through (the cleaned posting is untrusted text and
+belongs in the session scratchpad, never next to the workflow's own files or the
+user's).
 """
 
 import argparse
@@ -91,7 +92,7 @@ def _readable_input(path: Path) -> bool:
 
 def _hardlinked(path: Path) -> bool:
     try:
-        return path.stat().st_nlink > 1
+        return path.is_file() and path.stat().st_nlink > 1
     except OSError:
         return False
 
@@ -583,7 +584,7 @@ def main(argv=None) -> int:
     if args.infile is not None and not _readable_input(args.infile):
         print(
             f"posting_guard: refusing to read {args.infile}; --in takes a file in the session "
-            "scratchpad, the temp directory or documents/applications/",
+            "scratchpad, the temp directory, /tmp or documents/applications/",
             file=sys.stderr,
         )
         return 2
@@ -596,15 +597,14 @@ def main(argv=None) -> int:
         return 2
     if args.out is not None and not _inside_temp(args.out):
         print(
-            f"posting_guard: refusing to write outside the temp directory ({args.out}); the "
+            f"posting_guard: refusing to write outside the temp directory and /tmp ({args.out}); the "
             "cleaned posting is untrusted text and belongs in the session scratchpad",
             file=sys.stderr,
         )
         return 2
-    for action, path in (("read", args.infile), ("write", args.out)):
-        if path is not None and _hardlinked(path):
-            print(f"posting_guard: refusing to {action} {path}; it is hard-linked to another file", file=sys.stderr)
-            return 2
+    if args.infile is not None and _hardlinked(args.infile):
+        print(f"posting_guard: refusing to read {args.infile}; it is hard-linked to another file", file=sys.stderr)
+        return 2
 
     try:
         raw = _read_input(args.infile, args.mode)
@@ -618,14 +618,18 @@ def main(argv=None) -> int:
     print(json.dumps(findings, ensure_ascii=False, indent=2) if args.json else _plain_findings(findings))
     if args.out is not None:
         if findings["verdict"] != NO_TEXT_VERDICT:
-            args.out.parent.mkdir(parents=True, exist_ok=True)
-            fd, tmp_name = tempfile.mkstemp(dir=args.out.parent, prefix=".posting_guard.", suffix=".tmp")
             try:
-                with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                    handle.write(cleaned + "\n")
-                os.replace(tmp_name, args.out)
-            finally:
-                Path(tmp_name).unlink(missing_ok=True)
+                args.out.parent.mkdir(parents=True, exist_ok=True)
+                fd, tmp_name = tempfile.mkstemp(dir=args.out.parent, prefix=".posting_guard.", suffix=".tmp")
+                try:
+                    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                        handle.write(cleaned + "\n")
+                    os.replace(tmp_name, args.out)
+                finally:
+                    Path(tmp_name).unlink(missing_ok=True)
+            except OSError as exc:
+                print(f"posting_guard: cannot write {args.out}: {exc}", file=sys.stderr)
+                return 2
             print(f"saved={args.out}")
     else:
         print("--- text ---")
