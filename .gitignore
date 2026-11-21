@@ -130,3 +130,4 @@ company_research/*.json
 # Run lock written by tools/pipeline.py next to the database
 .pipeline.lock
 profile/ranker_labels.yaml
+backups/

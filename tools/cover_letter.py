@@ -114,19 +114,19 @@ def _join(words: Sequence[str]) -> str:
 
 
 OPENINGS = (
-    "I am applying for the {title} position at {company}.",
-    "I would like to apply for the {title} role at {company}.",
-    "Please consider my application for the {title} position at {company}.",
+    "I am applying for the {title} role at {company}.",
+    "I would like to be considered for the {title} role at {company}.",
+    "I am writing about the {title} role at {company}.",
 )
 BRIDGES = (
     "The posting mentions {skills}, which I have used in the work above.",
     "You ask for {skills}; I work with these, as described above.",
-    "{skills} come up in this role, and they are part of the work I described.",
+    "This role centres on {skills}, the same stack behind the work above.",
 )
 CLOSINGS = (
     "I would be glad to talk through any of this. Thank you for your time.",
     "I would welcome the chance to discuss the role. Thank you for considering my application.",
-    "If useful, I can walk you through any of these projects. Thank you for your time.",
+    "I would welcome a short call to discuss how I could contribute to your team. Thank you for your time.",
 )
 SENIORITY_ONLY = {"intern", "senior", "junior", "staff", "principal", "lead", "associate", "sr", "jr"}
 
@@ -139,6 +139,8 @@ def pick(options: Sequence[str], company: str, title: str, salt: str) -> str:
 def short_title(title: str) -> str:
     """The role as a person would write it: no team suffix, location or remote note."""
     text = re.sub(r"\s*\((?:[^)]*\b(?:remote|hybrid|on-?site)\b[^)]*)\)", "", title, flags=re.I)
+    text = re.sub(r"\s+[-–]\s+(?:100%\s+)?(?:remote|hybrid|on-?site)\b.*$", "", text, flags=re.I)
+    text = re.sub(r"\s+for (?:a|an|our)\s+(?:[\w.-]+\s+){0,3}(?:company|client|startup|team)\b.*$", "", text, flags=re.I)
     text = text.split(" | ")[0].strip()
     parts = [p.strip() for p in text.split(", ") if p.strip()]
     if len(parts) > 1:

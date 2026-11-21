@@ -229,6 +229,11 @@ def run_jobspy_ingestion(
                     title = str(_clean(row.get("title")) or "Unknown Role").strip()
                     url = str(_clean(row.get("job_url")) or "").strip()
                     site = str(_clean(row.get("site")) or "jobspy").lower()
+                    direct = str(_clean(row.get("job_url_direct")) or "").strip()
+                    ats = re.search(r"https://(?:job-)?boards(?:-api)?\.greenhouse\.io/(?:embed/job_app\?for=)?([\w-]+)|https://jobs\.lever\.co/([\w-]+)|https://jobs\.ashbyhq\.com/([\w.-]+)", direct)
+                    if ats:  # the employer's own ATS page can be pre-filled; the board's page cannot
+                        url = direct
+                        site = next(f"{name}:{slug}" for name, slug in zip(("greenhouse", "lever", "ashby"), ats.groups()) if slug)
                     job_location = str(_clean(row.get("location")) or region["location"]).strip()
                     raw_desc = str(_clean(row.get("description")) or "").strip()
                     flagged = bool(_clean(row.get("is_remote")))
@@ -264,7 +269,7 @@ def run_jobspy_ingestion(
                     currency = str(_clean(row.get("currency")) or "USD") if (salary_min or salary_max) else None
 
                     _, is_new = upsert_job(
-                        conn=conn, title=title, company=company, url=url, portal=f"jobspy:{site}",
+                        conn=conn, title=title, company=company, url=url, portal=site if ":" in site else f"jobspy:{site}",
                         location=job_location, is_remote=remote_ok, raw_description=raw_desc,
                         cleaned_description=cleaned_desc, salary_min=salary_min, salary_max=salary_max,
                         currency=currency, guard_verdict=flagged_verdict(findings),

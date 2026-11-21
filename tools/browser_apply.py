@@ -28,12 +28,14 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from tools.db import (
+    STATUS_IGNORED,
     STATUS_READY_TO_APPLY,
     check_company_cooldown,
     confirm_application,
     get_db,
     get_ready_application,
     init_db,
+    update_job_status,
 )
 from tools.logger import METRICS, get_logger
 from tools.profile_manager import DEFAULT_PROFILE_FILE, load_profile
@@ -50,6 +52,7 @@ FIELD_PATTERNS: List[Tuple[str, "re.Pattern[str]"]] = [
     ("linkedin", re.compile(r"linkedin", re.I)),
     ("github", re.compile(r"github", re.I)),
     ("portfolio", re.compile(r"portfolio|personal[\s_-]*(?:site|website)|website", re.I)),
+    ("full_name", re.compile(r"first\s*(?:and|&|/)\s*last\s*name|name\s*(?:and|&)\s*surname|nombre\s+y\s+apellido", re.I)),
     ("first_name", re.compile(r"first[\s_-]*name|given[\s_-]*name|\bfname\b", re.I)),
     ("last_name", re.compile(r"last[\s_-]*name|family[\s_-]*name|surname|\blname\b", re.I)),
     ("full_name", re.compile(r"full[\s_-]*name|^\s*name\b|\byour[\s_-]*name", re.I)),
@@ -66,7 +69,7 @@ FIELD_PATTERNS: List[Tuple[str, "re.Pattern[str]"]] = [
     ("start_year", re.compile(r"start[\s_-]*(?:date)?[\s_-]*year", re.I)),
     ("location", re.compile(r"\bcity\b|\blocation\b|where.*(?:based|located)|current[\s_-]*location", re.I)),
 ]
-WHERE_BASED = re.compile(r"^\s*where (?:are you|do you (?:currently )?live|are you currently)\s*(?:based|located|living)?\b(?!.*\b(?:hear|find|see|learn)\b)|^\s*d[oó]nde (?:viv|est[aá]s)", re.I)
+WHERE_BASED = re.compile(r"preferred (?:main )?location|^\s*current location\b|^\s*where (?:are you|do you (?:currently )?live|are you currently)\s*(?:based|located|living)?\b(?!.*\b(?:hear|find|see|learn)\b)|^\s*d[oó]nde (?:viv|est[aá]s)", re.I)
 # Fields that depend on a short, plain label; a long question that merely mentions a country or a degree is never one.
 REUSABLE_KEYS = {"country"}  # forms ask for it twice: phone country code and country of residence
 NARROW_KEYS = {"start_month", "start_year", "citizenship", "country", "school", "degree", "discipline", "end_month", "end_year"}
@@ -132,7 +135,7 @@ COLLECT_FIELDS_JS = """
       tag: el.tagName.toLowerCase(),
       type: (el.type || '').toLowerCase(),
       descriptor: labelFor(el),
-      value: el.value || '',
+      value: (el.type === 'checkbox' || el.type === 'radio') ? (el.checked ? (el.value || 'on') : '') : (el.value || ''),
       role: el.getAttribute('role') || (el.parentElement && el.parentElement.querySelector('.dropdown-results') ? 'combobox' : ''),
       required: !!(el.required || el.getAttribute('aria-required') === 'true' ||
                    (el.closest('[class*=fieldEntry]') && el.closest('[class*=fieldEntry]').querySelector('label[class*=required], [class*=required]'))),
@@ -282,6 +285,10 @@ def classify_field(descriptor: str, tag: str = "input", input_type: str = "text"
     descriptor = re.sub(r"\s+", " ", ID_NOISE.sub(" ", descriptor)).strip()
     if WHERE_BASED.search(descriptor) and input_type != "file" and len(descriptor) <= MAX_LABEL_CHARS:
         return "location"
+    if len(descriptor) > MAX_LABEL_CHARS and "?" not in descriptor:
+        head = re.split(r"\s*[(\[]|\s[:.–—-]\s", descriptor, maxsplit=1)[0]
+        if len(head) <= 40 and head != descriptor:
+            return classify_field(head, tag, input_type)
     if "?" in descriptor or len(descriptor) > MAX_LABEL_CHARS or SENSITIVE.search(descriptor):
         return None
     if input_type == "file":
@@ -320,13 +327,28 @@ def option_candidates(key: str, value: str) -> List[str]:
         return [value, *DEMONYMS.get(value, [])]
     if value.casefold().startswith("decline"):
         return DECLINE_OPTIONS
+    if value.casefold() in ("male", "man", "masculino", "hombre"):
+        return ["Male", "Man", "Masculino", "Hombre", "Cisgender man", "Male/Man"]
+    if value.casefold() in ("female", "woman", "femenino", "mujer"):
+        return ["Female", "Woman", "Femenino", "Mujer", "Cisgender woman"]
+    if re.search(r"not a (?:protected )?veteran", value, re.I):
+        return [value, "I am not a protected veteran", "I do not identify as a protected veteran", "I am not a veteran", "Not a veteran",
+                "Not a protected veteran", "No, I am not a protected veteran", "No"]
+    if value.casefold() in ("a man", "a human", "human being"):
+        return ["A man", "A human", "Human being", "A human being", "Man", "Human"]
     if "careers page" in value.casefold():
-        return [value, "Company careers page", "Careers page", "Company website", "Company Website", "Website", "Job posting"]
+        return [value, "Company careers page", "Careers page", "Careers site", "Career site", "Careers website", "Company career site",
+                "Company website", "Website", "Job board", "Job posting", "Other"]
+    if value.casefold() == "advanced":
+        return ["Advanced", "Very familiar", "Proficient", "Highly proficient"]
     if value in YES_OPTIONS:
         return YES_OPTIONS
     if value in NO_OPTIONS:
         return NO_OPTIONS
     return [value]
+
+
+ACKNOWLEDGE_OPTION = re.compile(r"^(?:i )?(?:acknowledge|accept|agree|consent|understand|have read|confirm)", re.I)
 
 
 def _token_hit(token: str, option_tokens: List[str]) -> bool:
@@ -354,9 +376,12 @@ def pick_option(options: Sequence[str], key: str, value: str) -> Optional[int]:
                 return i
     if value in YES_OPTIONS[:7] or value in NO_OPTIONS:
         hits = [i for i, opt in enumerate(folded) for cand in wanted if opt.split(" ")[:1] == [cand]]
+        if not hits and value in YES_OPTIONS:  # consent dropdowns: "I acknowledge receipt of the notice"
+            hits = [i for i, opt in enumerate(folded) if ACKNOWLEDGE_OPTION.search(opt)]
+            return hits[0] if len(hits) == 1 else None
         return hits[0] if hits else None
     for cand in wanted:
-        hits = [i for i, opt in enumerate(folded) if opt and (opt.startswith(cand) or cand in opt)]
+        hits = [i for i, opt in enumerate(folded) if opt and re.search(rf"(?<![a-z0-9]){re.escape(cand)}(?![a-z0-9])", opt)]
         if hits:
             return min(hits, key=lambda i: len(folded[i]))
     if key in ("school", "discipline"):
@@ -488,8 +513,8 @@ def plan_fills(
                     continue
             left.append(label)
             continue
-        if f.get("value"):
-            continue
+        if f.get("value") or f.get("type") in ("checkbox", "radio"):
+            continue  # boxes and radios are ticked from the answer bank; required_missing reports the unticked ones
         if key and key in answers and (key not in used or key in REUSABLE_KEYS):
             used.add(key)
             if f.get("role") == "combobox":
@@ -608,7 +633,11 @@ def apply_fills(page: Any, fills: List[Dict[str, Any]], budget_seconds: float = 
             elif fill["kind"] == "choice":
                 _click_choice(page, fill["index"], fill["value"])
             elif fill["kind"] == "combo":
-                if not fill_combo(page, selector, fill["key"], fill["value"]):
+                picked = fill_combo(page, selector, fill["key"], fill["value"])
+                if not picked and fill["key"] == "school" and fill_combo(page, selector, "answer", "Other"):
+                    fill["value"] = "Other"  # the school is not in the form's list; "Other" is the truthful pick
+                    picked = True
+                if not picked:
                     logger.info(f"No clear option for {fill['key']}={fill['value']!r}; left for you.")
                     continue
             else:
@@ -681,17 +710,33 @@ REJECTED = re.compile(r"this field is required|please (?:fix|correct|complete)|i
 def required_missing(fields: Sequence[Dict[str, Any]], fills: Sequence[Dict[str, Any]]) -> List[str]:
     """Labels of required fields that nothing filled. Consent checkboxes count: only a person can tick them."""
     done = {f["index"] for f in fills if f.get("done")}
-    answered_groups = {f.get("name") for f in fields if f.get("index") in done and f.get("type") == "radio" and f.get("name")}
+    answered_groups = {f.get("name") for f in fields if (f.get("index") in done or f.get("value")) and f.get("type") == "radio" and f.get("name")}
     missing: List[str] = []
     for f in fields:
         if not f.get("required") or f.get("index") in done or f.get("value") or not (f.get("descriptor") or "").strip():
             continue
         if f.get("type") == "radio" and f.get("name") in answered_groups:
             continue
-        label = short_label(f["descriptor"])
+        label = short_label((f.get("type") == "radio" and f.get("group")) or f["descriptor"])
         if label not in missing:
             missing.append(label)
     return missing
+
+
+RESIDENCE_LOCK = re.compile(
+    r"state where you will reside|(?:u\.?s\.?|united states) state (?:or canadian province )?(?:do )?you (?:reside|live)"
+    r"|must (?:hold|have) (?:united states|u\.?s\.?) citizenship|must be (?:a )?(?:united states|u\.?s\.?) citizen", re.I)
+
+
+def form_ineligible(fields: Sequence[Dict[str, Any]], missing: Sequence[str], profile: Any) -> Optional[str]:
+    """The required question that no truthful answer can satisfy (US-state residence, US citizenship), if any."""
+    location = (profile.identity.location or "").casefold()
+    if any(place in location for place in ("united states", "usa", "canada")) or "US" in [c.upper() for c in profile.preferences.work_authorization.citizenships]:
+        return None
+    for f in fields:
+        if short_label(f.get("descriptor") or "") in missing and RESIDENCE_LOCK.search(f.get("descriptor") or ""):
+            return short_label(f["descriptor"], limit=160)
+    return None
 
 
 def submission_gates(
@@ -880,7 +925,7 @@ def run_apply(
             logger.error(f"Job {job_id} is not READY_TO_APPLY. Run tools/tailor.py first.")
             return "blocked"
         in_cooldown, reason = check_company_cooldown(conn, app["company_name"])
-        if in_cooldown:
+        if in_cooldown and profile.preferences.company_cooldown_days > 0:
             logger.error(f"Blocked: {reason}")
             return "blocked"
         missing = [p for p in (app["cv_path"], app["cover_letter_path"]) if p and not Path(p).is_file()]
@@ -945,6 +990,16 @@ def run_apply(
             blockers = submission_gates(app["company_name"], confirm_company if submit else "(auto-submit off)", fields, fills, result, recognised, allow_model_fix)
             if stuck:
                 blockers.append("the form got stuck while filling")
+            lock = form_ineligible(fields, required_missing(fields, fills), profile)
+            if lock and not check_only:
+                update_job_status(conn, job_id, STATUS_IGNORED, rejection_reason=f"form requires: {lock}")
+                conn.commit()
+                print("\n".join(summary + [f"  NOT ELIGIBLE: the form requires '{lock}'. Marked IGNORED; nothing was sent."]))
+                try:
+                    page.close()
+                except Exception:
+                    pass
+                return "ineligible"
             if check_only:
                 summary.append("  AUTO-SUBMIT: " + ("allowed once you add --submit --confirm-company" if not [b for b in blockers if not b.startswith("--confirm-company")] else "blocked: " + "; ".join(b for b in blockers if not b.startswith("--confirm-company"))))
                 print("\n".join(summary))
@@ -968,7 +1023,12 @@ def run_apply(
                 except Exception:
                     pass
                 if outcome == "confirmed":
-                    confirm_application(conn, job_id, notes=f"Filled {filled} field(s); submitted by the tool after explicit confirmation; confirmation page seen")
+                    confirm_application(conn, job_id, cooldown_days=profile.preferences.company_cooldown_days,
+                                        notes=f"Filled {filled} field(s); submitted by the tool after explicit confirmation; confirmation page seen")
+                    try:
+                        page.close()  # a confirmed tab is done; open tabs pile up over a batch and slow Chrome
+                    except Exception:
+                        pass
                     METRICS.increment("applied_total")
                     logger.info(f"Submitted and recorded APPLIED for job {job_id}; cooldown started for {app['company_name']}.")
                     return "applied"
@@ -980,7 +1040,7 @@ def run_apply(
             if not human_checkpoint("\n".join(summary), input_fn=input_fn):
                 logger.info("No confirmation received. Job stays READY_TO_APPLY.")
                 return "pending"
-        confirm_application(conn, job_id, notes=f"Filled {filled} field(s); submitted by candidate")
+        confirm_application(conn, job_id, cooldown_days=profile.preferences.company_cooldown_days, notes=f"Filled {filled} field(s); submitted by candidate")
         METRICS.increment("applied_total")
         logger.info(f"Recorded APPLIED for job {job_id}; cooldown started for {app['company_name']}.")
         return "applied"
@@ -1060,12 +1120,14 @@ def render_preflight_text(result: Optional[Dict[str, Any]]) -> str:
     return render_preflight(result)
 
 
-def record_applied(job_id: int, db_path: Optional[Path] = None) -> str:
+def record_applied(job_id: int, db_path: Optional[Path] = None, cooldown_days: Optional[int] = None) -> str:
     """Record an application you submitted yourself after a pre-fill left the window open. Returns 'applied' or 'blocked'."""
     init_db(db_path)
     with get_db(db_path) as conn:
         try:
-            confirm_application(conn, job_id, notes="Submitted by candidate; recorded afterwards")
+            days = cooldown_days if cooldown_days is not None else load_profile(DEFAULT_PROFILE_FILE).preferences.company_cooldown_days
+            confirm_application(conn, job_id, cooldown_days=days,
+                                notes="Submitted by candidate; recorded afterwards")
         except ValueError as exc:
             logger.error(str(exc))
             return "blocked"

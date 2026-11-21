@@ -182,7 +182,7 @@ class LLMGateway:
             raise
 
         parsed, completion = self.client.chat.completions.create_with_completion(
-            model=self.model, response_model=response_model, messages=messages, temperature=0.0, seed=7, max_retries=2,
+            model=self.model, response_model=response_model, messages=messages, temperature=0.0, seed=7, max_retries=1,
             max_tokens=MAX_COMPLETION_TOKENS,
         )
         usage = getattr(completion, "usage", None)

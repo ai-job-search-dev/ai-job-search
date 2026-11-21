@@ -339,7 +339,7 @@ def get_or_create_company(
 def check_company_cooldown(
     conn: sqlite3.Connection, company_name: str, cooldown_days: int = 30
 ) -> Tuple[bool, Optional[str]]:
-    """Check if company is under active cooldown period.
+    """Check if company is under active cooldown period (none when the profile sets company_cooldown_days to 0).
 
     Returns:
         (is_in_cooldown, reason_or_none)
@@ -712,6 +712,11 @@ def get_ready_application(conn: sqlite3.Connection, job_id: int) -> Optional[sql
         """,
         (job_id,),
     ).fetchone()
+
+
+def clear_company_cooldowns(conn: sqlite3.Connection) -> int:
+    """Lift every company cooldown, for a candidate who applies to several roles at one company."""
+    return conn.execute("UPDATE companies SET cooldown_until = NULL WHERE cooldown_until IS NOT NULL").rowcount
 
 
 def confirm_application(

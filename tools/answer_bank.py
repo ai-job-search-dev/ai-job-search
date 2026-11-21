@@ -44,6 +44,7 @@ TOPICS: List[Tuple[str, str]] = [
     ("motivation", r"^\s*why [\w .&'-]{2,40}\?|caught your attention|made you (?:want to )?apply|excited (?:to apply|about this)|why (?:you'?re|you are) (?:applying|excited)|why (?:do you want|are you interested|us|this|join)|what (?:attracts|excites|interests)|motivat|interest(?:ed)? in|por qu[eé]|te interesa|motiva"),
     ("strengths", r"strength|sets you apart|why (?:should we )?hire|what makes you|fortaleza|diferencia"),
     ("about_me", r"^\s*tell us more\b|tell us about you\b|about yourself|introduce yourself|anything else|additional information|cover letter|sobre (?:vos|ti|usted)|pres[eé]ntate|informaci[oó]n adicional"),
+    ("tech_stack", r"(?:programming )?languages(?: and frameworks)?|frameworks (?:have you|do you)|tech(?:nology)? stack|which technologies|lenguajes|tecnolog[ií]as"),
     ("tech_experience", r"experience (?:with|in|using|working)|describe your experience|years of experience|experiencia (?:con|en)"),
 ]
 GENERIC_TOPICS = {"tech_experience", "about_me"}  # they match almost any question; a specific topic leads when present
@@ -112,10 +113,54 @@ def region_matches(wanted: Sequence[str], regions: set) -> bool:
     return not wanted or bool(expand_regions(list(wanted)) & regions)
 
 
+YEARS_Q = re.compile(r"(\d+)\s*\+?\s*(?:or more |plus )?years?(?: of)?(?: (?:full[- ]time|professional|relevant|hands-on|commercial))*\s*(?:\w+\s){0,4}(?:experience|development|engineering)"
+                     r"|(?:at least|over|more than|minimum of)\s*(\d+)\s*years", re.I)
+SKILL_Q = re.compile(r"^\s*(?:do|have) you (?:have )?(?:strong |extensive |solid |hands-on |professional |deep |good )*(?:proficiency|experience|knowledge|expertise)"
+                     r" (?:in|with|using|of) (.+?)\??\s*\*?\s*$", re.I)
+
+
+def years_of_experience(profile: MasterProfile) -> float:
+    from datetime import date
+    starts = [e.start_date for e in profile.experience if e.start_date and "teach" not in e.role.casefold() and "assistant" not in e.role.casefold()]
+    years = [int(m.group(1)) + (int(m.group(2) or 1) - 1) / 12 for s in starts for m in [re.match(r"(\d{4})(?:-(\d{2}))?", s)] if m]
+    today = date.today()
+    return round(today.year + (today.month - 1) / 12 - min(years), 1) if years else 0.0
+
+
+def derived_answer(profile: MasterProfile, question: str) -> Optional[str]:
+    """Yes/No from the profile for "N+ years of experience?" and "experience with X?" questions."""
+    m = YEARS_Q.search(question)
+    if m and re.match(r"^\s*(?:do|have|are) you", question, re.I):
+        wanted = int(m.group(1) or m.group(2))
+        return "Yes" if years_of_experience(profile) >= wanted else "No"
+    if re.match(r"^\s*(?:years of|how many years)", question, re.I):
+        if re.search(r"front[- ]?end|web|ui\b", question, re.I):
+            current = next((e for e in profile.experience if e.is_current), None)
+            start = re.match(r"(\d{4})(?:-(\d{2}))?", current.start_date) if current else None
+            if start:
+                from datetime import date
+                today = date.today()
+                return str(int(today.year + (today.month - 1) / 12 - int(start.group(1)) - (int(start.group(2) or 1) - 1) / 12))
+        return str(int(years_of_experience(profile)))
+    m = SKILL_Q.search(question)
+    if m:
+        asked = [t.strip(" .").casefold() for t in re.split(r",|\band\b|\bor\b|/", re.sub(r"\([^)]*\)", "", m.group(1))) if t.strip(" .")]
+        known = {s.name.casefold() for s in profile.skills} | {t.casefold() for e in profile.experience for t in e.skills_used} \
+            | {t.casefold() for p in profile.projects for t in p.technologies}
+        core = [a for a in asked if len(a) > 1 and not re.search(r"framework|librar|tool|language|modern|web development|similar", a)]
+        if core:
+            return "Yes" if all(any(k in a or a in k for k in known) for a in core) else "No"
+    return None
+
+
 def stance_for(profile: MasterProfile, question: str, regions: set) -> Optional[Any]:
     for stance in profile.answer_bank.stances:
         if stance.approved and re.search(stance.pattern, question, re.I) and region_matches(stance.regions, regions):
             return stance
+    derived = derived_answer(profile, question)
+    if derived is not None:
+        from tools.profile_schema import Stance
+        return Stance(id="from_profile", pattern=".", answer=derived)
     return None
 
 

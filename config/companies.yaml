@@ -180,3 +180,25 @@ companies:
   - {name: "n8n", ats_provider: "ashby", slug: "n8n", domain: "n8n.io", focus: "frontend_typescript", notes: "Remote Europe; TypeScript, Node.js and Vue."}
   - {name: "Twilio", ats_provider: "greenhouse", slug: "twilio", domain: "twilio.com", focus: "frontend_typescript", notes: "Remote in several countries."}
   - {name: "LangChain", ats_provider: "ashby", slug: "langchain", domain: "langchain.com", focus: "frontend_typescript", notes: "Remote US; TypeScript frontend for AI observability."}
+
+  # Round 2 (2026-11-21): boards with remote web roles, probed the same way.
+  - {name: "Notion", ats_provider: "ashby", slug: "notion", domain: "notion.so", focus: "frontend_typescript", notes: "Remote roles in the US and Europe."}
+  - {name: "Sentry", ats_provider: "ashby", slug: "sentry", domain: "sentry.io", focus: "frontend_typescript", notes: "Remote; TypeScript and Python."}
+  - {name: "Render", ats_provider: "ashby", slug: "render", domain: "render.com", focus: "frontend_typescript", notes: "Remote US; product engineering all levels."}
+  - {name: "Plaid", ats_provider: "ashby", slug: "plaid", domain: "plaid.com", focus: "frontend_typescript", notes: "Remote roles; fintech APIs."}
+  - {name: "Tailscale", ats_provider: "greenhouse", slug: "tailscale", domain: "tailscale.com", focus: "frontend_typescript", notes: "Remote."}
+  - {name: "Honeycomb", ats_provider: "greenhouse", slug: "honeycomb", domain: "honeycomb.io", focus: "frontend_typescript", notes: "Remote US; observability."}
+  - {name: "Nubank", ats_provider: "ashby", slug: "nubank", domain: "nubank.com.br", focus: "frontend_typescript", notes: "LATAM; some remote roles."}
+  - {name: "Jobber", ats_provider: "ashby", slug: "jobber", domain: "getjobber.com", focus: "frontend_typescript", notes: "Remote Canada."}
+  - {name: "Smartsheet", ats_provider: "greenhouse", slug: "smartsheet", domain: "smartsheet.com", focus: "frontend_typescript", notes: "Remote US full-stack."}
+  - {name: "Webflow", ats_provider: "ashby", slug: "webflow", domain: "webflow.com", focus: "frontend_typescript", notes: "Remote, including Argentina."}
+  - {name: "Coder", ats_provider: "ashby", slug: "coder", domain: "coder.com", focus: "frontend_typescript", notes: "Remote Europe and Americas; TypeScript and Go."}
+  - {name: "ClickUp", ats_provider: "ashby", slug: "clickup", domain: "clickup.com", focus: "frontend_typescript", notes: "Remote Europe frontend."}
+  - {name: "CircleCI", ats_provider: "greenhouse", slug: "circleci", domain: "circleci.com", focus: "frontend_typescript", notes: "Remote US and Canada."}
+  - {name: "Airtm", ats_provider: "lever", slug: "airtm", domain: "airtm.com", focus: "frontend_typescript", notes: "LATAM remote; Node and React."}
+  - {name: "Mux", ats_provider: "ashby", slug: "mux", domain: "mux.com", focus: "frontend_typescript", notes: "Remote US full-stack."}
+  - {name: "PlanetScale", ats_provider: "greenhouse", slug: "planetscale", domain: "planetscale.com", focus: "frontend_typescript", notes: "Remote."}
+  - {name: "Bitwarden", ats_provider: "greenhouse", slug: "bitwarden", domain: "bitwarden.com", focus: "frontend_typescript", notes: "Remote; TypeScript clients."}
+  - {name: "Brave", ats_provider: "greenhouse", slug: "brave", domain: "brave.com", focus: "frontend_typescript", notes: "Remote."}
+  - {name: "Bugcrowd", ats_provider: "greenhouse", slug: "bugcrowd", domain: "bugcrowd.com", focus: "frontend_typescript", notes: "Remote US full-stack."}
+  - {name: "Calendly", ats_provider: "greenhouse", slug: "calendly", domain: "calendly.com", focus: "frontend_typescript", notes: "Remote US full-stack."}

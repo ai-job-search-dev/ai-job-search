@@ -32,6 +32,11 @@ from tools.logger import get_logger, METRICS
 logger = get_logger("ingest_ats")
 
 REQ_TIMEOUT = 15
+try:
+    from tools.preferences import load_preferences as _prefs
+    COOLDOWN_DAYS = _prefs().company_cooldown_days
+except Exception:
+    COOLDOWN_DAYS = 30
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
     "Accept": "application/json",
@@ -142,7 +147,7 @@ def run_ats_ingestion(config_file: Optional[Path] = None, db_path: Optional[Path
 
             # Check 30-day company cooldown
             in_cooldown, reason = check_company_cooldown(conn, name)
-            if in_cooldown:
+            if in_cooldown and COOLDOWN_DAYS > 0:
                 logger.info(f"Skipping {name}: {reason}")
                 stats["cooldown_skipped"] += 1
                 METRICS.increment("cooldown_skipped")

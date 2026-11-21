@@ -172,6 +172,7 @@ class CareerPreferences(BaseModel):
     salary_floor_usd: Optional[float] = None
     salary_floor_period: Literal["hour", "month", "year"] = Field("month", description="Period of salary_floor_usd")
     relocation: bool = Field(False, description="Willing to relocate for an on-site role")
+    company_cooldown_days: int = Field(30, ge=0, description="Days after an application before another role at the same company; 0 allows several at once")
     accept_country_locked_remote: bool = Field(
         False, description="Treat remote postings tied to one country (e.g. 'Remote, Peru') like any remote posting")
     deal_breakers: List[str] = Field(default_factory=list)

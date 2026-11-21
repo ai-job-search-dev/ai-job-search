@@ -822,11 +822,11 @@ class RunApplyTests(unittest.TestCase):
         self.assertEqual(key, "country")
 
     def test_record_applied_after_a_manual_submit_starts_the_cooldown_once(self):
-        self.assertEqual(browser_apply.record_applied(self.job_id, db_path=self.db), "applied")
+        self.assertEqual(browser_apply.record_applied(self.job_id, db_path=self.db, cooldown_days=30), "applied")
         self.assertEqual(self._status(), STATUS_APPLIED)
         with get_db(self.db) as conn:
             self.assertTrue(check_company_cooldown(conn, "Acme Quantum")[0])
-        self.assertEqual(browser_apply.record_applied(self.job_id, db_path=self.db), "blocked")
+        self.assertEqual(browser_apply.record_applied(self.job_id, db_path=self.db, cooldown_days=30), "blocked")
 
     def test_blocked_for_non_http_url(self):
         with get_db(self.db) as conn:

@@ -18,6 +18,7 @@ import json
 import os
 import sqlite3
 import sys
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -441,23 +442,31 @@ def apply_ready(
     if job_ids:
         order = {j: n for n, j in enumerate(job_ids)}
         rows = sorted((r for r in rows if r["id"] in order), key=lambda r: order[r["id"]])
+    from tools.preferences import load_preferences
+    one_per_company = load_preferences().company_cooldown_days > 0
     results: List[Dict[str, Any]] = []
     companies: set = set()
     for row in rows:
         if limit and sum(1 for r in results if r["outcome"] == "applied") >= limit:
             break
-        if row["company"] in companies:
+        if one_per_company and row["company"] in companies:
             results.append({**dict(row), "outcome": "skipped", "log": "another role at this company is in this batch"})
             continue
         companies.add(row["company"])
         out = io.StringIO()
-        try:
-            with contextlib.redirect_stdout(out):
-                outcome = browser_apply.run_apply(
-                    row["id"], db_path=db_path, cdp_url=cdp_url, input_fn=lambda _: "skip", submit=not check_only,
-                    confirm_company=row["company"], allow_model_fix=True, check_only=check_only)
-        except Exception as exc:
-            outcome = f"error: {str(exc).splitlines()[0][:120]}"
+        for attempt in range(2):
+            try:
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                    outcome = browser_apply.run_apply(
+                        row["id"], db_path=db_path, cdp_url=cdp_url, input_fn=lambda _: "skip", submit=not check_only,
+                        confirm_company=row["company"], allow_model_fix=True, check_only=check_only)
+                break
+            except Exception as exc:
+                outcome = f"error: {str(exc).splitlines()[0][:120]}"
+                if attempt == 0 and re.search(r"ERR_INTERNET_DISCONNECTED|ERR_NAME_NOT_RESOLVED|Timeout \d+ms exceeded|ERR_CONNECTION", str(exc)):
+                    time.sleep(60)
+                    continue
+                break
         results.append({**dict(row), "outcome": outcome, "log": out.getvalue()})
         safe_print(f"  [{outcome}] #{row['id']} {row['company']} - {row['title']}")
     folder = Path(reports_dir) if reports_dir else REPORTS_DIR
