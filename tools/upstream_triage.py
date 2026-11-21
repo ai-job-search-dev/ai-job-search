@@ -83,7 +83,11 @@ def subject(sha: str) -> str:
 
 
 def files_touched(sha: str) -> list[str]:
-    out = git("show", "--name-only", "--format=", sha).strip()
+    # core.quotePath (on by default) prints a path with a non-ASCII byte as
+    # "caf\303\251.md", quotes and octal escapes included. Fed to cat-file,
+    # that name exists nowhere, so a file this fork deleted read as a new
+    # upstream path and the report showed it, escaped, under "worth reviewing".
+    out = git("-c", "core.quotePath=false", "show", "--name-only", "--format=", sha).strip()
     return [f for f in out.splitlines() if f]
 
 
