@@ -47,6 +47,16 @@ def section(text, heading):
     return match.group(1) if match else None
 
 
+def fenced_latex_block_with(text, needle):
+    """Return the first ```latex fenced block containing `needle`, or None."""
+    for match in re.finditer(
+        r"^```latex\n(.*?)^```", text, re.MULTILINE | re.DOTALL
+    ):
+        if needle in match.group(1):
+            return match.group(1)
+    return None
+
+
 class TestBulletBracketTrap(unittest.TestCase):
     """F9: no document or template doc may teach `\\item [text]`."""
 
@@ -174,6 +184,69 @@ class TestPdflatexFontEncodingGuard(unittest.TestCase):
 
     def test_cv_guide_preamble_guards_fontenc_for_pdflatex(self):
         self.assert_has_guarded_fontenc(CV_TEMPLATES)
+
+
+class TestItemizeBulletStaysText(unittest.TestCase):
+    """The itemize marker must stay a text bullet, not an icon-font glyph.
+
+    Banking's awesome icon set (moderncviconsawesome.sty) renews `\\labelitemi`
+    as a FontAwesome glyph whose ToUnicode maps to a pictograph (U+1F7E4), so
+    every itemize line compiles cleanly yet extracts with an emoji where an
+    ATS expects a bullet. Both preamble copies must pin the moderncv.cls
+    default AFTER `\\moderncvstyle` runs - the style re-renews the marker at
+    load, so an override placed earlier is dead code and a commented-out
+    override is no override at all.
+    """
+
+    TEXT_BULLET = re.compile(
+        r"\\renewcommand\*\{\\labelitemi\}"
+        r"\{\\strut\\textcolor\{color1\}\{\\large\\rmfamily\\textbullet\}\}"
+    )
+    MODERNCV_STYLE = re.compile(r"\\moderncvstyle\{")
+    # An unescaped `%` comments out the rest of the line, whether it opens the
+    # line or follows code on it.
+    LATEX_COMMENT = re.compile(r"(?<!\\)%.*")
+
+    def assert_override_after_style(self, lines, name):
+        style_at = override_at = None
+        for lineno, line in enumerate(lines, 1):
+            line = self.LATEX_COMMENT.sub("", line)
+            if style_at is None and self.MODERNCV_STYLE.search(line):
+                style_at = lineno
+            if override_at is None and self.TEXT_BULLET.search(line):
+                override_at = lineno
+        self.assertIsNotNone(
+            style_at, f"{name} has no uncommented \\moderncvstyle line"
+        )
+        self.assertIsNotNone(
+            override_at,
+            f"{name} must renew \\labelitemi back to the moderncv.cls "
+            "default so itemize bullets extract as U+2022, not a pictograph",
+        )
+        self.assertGreater(
+            override_at,
+            style_at,
+            f"{name}:{override_at} renews \\labelitemi before "
+            f"\\moderncvstyle (line {style_at}) runs - banking re-renews it "
+            "to the FontAwesome glyph at style load, so the override never "
+            "takes effect",
+        )
+
+    def test_example_cv_keeps_the_text_bullet(self):
+        self.assert_override_after_style(
+            EXAMPLE_CV.read_text(encoding="utf-8").splitlines(), EXAMPLE_CV.name
+        )
+
+    def test_cv_guide_preamble_keeps_the_text_bullet(self):
+        block = fenced_latex_block_with(
+            CV_TEMPLATES.read_text(encoding="utf-8"), r"\documentclass"
+        )
+        self.assertIsNotNone(
+            block,
+            f"{CV_TEMPLATES.name} has no fenced latex block containing "
+            "\\documentclass",
+        )
+        self.assert_override_after_style(block.splitlines(), CV_TEMPLATES.name)
 
 
 class TestGeometryScaleAlignment(unittest.TestCase):
