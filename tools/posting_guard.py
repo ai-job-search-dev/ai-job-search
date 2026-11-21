@@ -54,9 +54,13 @@ without either the mode is guessed from the content, which is a fallback, not
 a documented path. Output: the verdict line, a `--- findings ---` block (JSON
 with --json), then `--- text ---` and the cleaned text, or `saved=<path>` when
 --out is given. Exit 0 when a posting is evaluated; 1 when the input has no text
-to evaluate; 2 when --in cannot be read or --out points inside this repository
-(the cleaned posting is untrusted text and belongs in the session scratchpad,
-never next to the workflow's own files).
+to evaluate; 2 when --in cannot be read, is a hard link, or lies outside the
+temp directory, /tmp and documents/applications/, or --out cannot be written or
+it or its directory points inside this repository or outside the temp directory
+and /tmp. --out is
+replaced, never written through (the cleaned posting is untrusted text and
+belongs in the session scratchpad, never next to the workflow's own files or the
+user's).
 """
 
 import argparse
@@ -65,6 +69,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -73,6 +78,24 @@ from page_decode import decode_page  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 
 NO_TEXT_VERDICT = "posting_guard: refused (no text to evaluate)"
+
+
+def _inside_temp(path: Path) -> bool:
+    resolved = path.resolve()
+    roots = {Path(tempfile.gettempdir()).resolve(), Path("/tmp").resolve()}
+    return any(resolved.is_relative_to(root) for root in roots)
+
+
+def _readable_input(path: Path) -> bool:
+    applications = (ROOT / "documents" / "applications").resolve()
+    return (_inside_temp(path) and not _inside_repo(path.resolve())) or path.resolve().is_relative_to(applications)
+
+
+def _hardlinked(path: Path) -> bool:
+    try:
+        return path.is_file() and path.stat().st_nlink > 1
+    except OSError:
+        return False
 
 
 def _inside_repo(path: Path) -> bool:
@@ -546,14 +569,43 @@ def _read_input(path, mode):
 def main(argv=None) -> int:
     _force_utf8_output()
     parser = argparse.ArgumentParser(prog="posting_guard.py", description="Integrity gate for a fetched posting; see module docstring.")
-    parser.add_argument("--in", dest="infile", type=Path, default=None, help="input file (default: stdin)")
+    parser.add_argument("--in", dest="infile", type=Path, default=None, help="input file in the system temp dir, /tmp or documents/applications/ (default: stdin)")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--html", action="store_const", const="html", dest="mode")
     mode.add_argument("--text", action="store_const", const="text", dest="mode")
-    parser.add_argument("--out", type=Path, default=None, help="write the cleaned text here instead of stdout")
+    parser.add_argument("--out", type=Path, default=None, help="write the cleaned text here (the file and its directory in the system temp dir or /tmp) instead of stdout")
     parser.add_argument("--json", action="store_true", help="print findings as JSON")
     parser.set_defaults(mode="auto")
     args = parser.parse_args(argv)
+    if args.infile is not None:
+        args.infile = args.infile.expanduser()
+    if args.out is not None:
+        args.out = args.out.expanduser()
+
+    if args.infile is not None and not _readable_input(args.infile):
+        print(
+            f"posting_guard: refusing to read {args.infile}; --in takes a file in the session "
+            "scratchpad, the temp directory, /tmp or documents/applications/",
+            file=sys.stderr,
+        )
+        return 2
+    if args.out is not None and (_inside_repo(args.out.resolve()) or _inside_repo(args.out.parent.resolve())):
+        print(
+            f"posting_guard: refusing to write inside the repo ({args.out}); the cleaned "
+            "posting is untrusted text and belongs in the session scratchpad",
+            file=sys.stderr,
+        )
+        return 2
+    if args.out is not None and not (_inside_temp(args.out) and _inside_temp(args.out.parent)):
+        print(
+            f"posting_guard: refusing to write outside the temp directory and /tmp ({args.out}); the "
+            "cleaned posting is untrusted text and belongs in the session scratchpad",
+            file=sys.stderr,
+        )
+        return 2
+    if args.infile is not None and _hardlinked(args.infile):
+        print(f"posting_guard: refusing to read {args.infile}; it is hard-linked to another file", file=sys.stderr)
+        return 2
 
     try:
         raw = _read_input(args.infile, args.mode)
@@ -566,21 +618,19 @@ def main(argv=None) -> int:
     print("--- findings ---")
     print(json.dumps(findings, ensure_ascii=False, indent=2) if args.json else _plain_findings(findings))
     if args.out is not None:
-        if _inside_repo(args.out):
-            # The gate runs under the fetch agents' pre-approved Bash grant on
-            # text that is untrusted by definition. fetch_page.py refuses the
-            # same thing for the same reason: an injected --out must never be
-            # able to create or overwrite a file in the repo - a command, agent
-            # or skill definition least of all.
-            print(
-                f"posting_guard: refusing to write inside the repo ({args.out}); the cleaned "
-                "posting is untrusted text and belongs in the session scratchpad",
-                file=sys.stderr,
-            )
-            return 2
         if findings["verdict"] != NO_TEXT_VERDICT:
-            args.out.parent.mkdir(parents=True, exist_ok=True)
-            args.out.write_text(cleaned + "\n", encoding="utf-8")
+            try:
+                args.out.parent.mkdir(parents=True, exist_ok=True)
+                fd, tmp_name = tempfile.mkstemp(dir=args.out.parent, prefix=".posting_guard.", suffix=".tmp")
+                try:
+                    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                        handle.write(cleaned + "\n")
+                    os.replace(tmp_name, args.out)
+                finally:
+                    Path(tmp_name).unlink(missing_ok=True)
+            except OSError as exc:
+                print(f"posting_guard: cannot write {args.out}: {exc}", file=sys.stderr)
+                return 2
             print(f"saved={args.out}")
     else:
         print("--- text ---")

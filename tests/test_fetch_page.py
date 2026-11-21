@@ -17,6 +17,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
@@ -162,6 +163,83 @@ class SchemeAndPathGuards(FetchPageFixture):
         self.assertIn("http(s)", err)
         self.assertFalse(self.out.exists())
         self.assertEqual(self.gate_calls, [])
+
+    def test_refuses_out_in_home_directory_before_any_network(self):
+        fetch_page.gate = lambda url: self.fail("gate must not run for a refused --out")
+        target = Path.home() / f".fetch_page_test_{os.getpid()}"
+        self.addCleanup(lambda: target.unlink(missing_ok=True))
+        code, out, err = self.run_main(f"{self.base}/ok.html", "--out", str(target))
+        self.assertEqual(code, 2, err)
+        self.assertIn("outside the temp directory", err)
+        self.assertFalse(target.exists())
+
+    def test_refuses_out_through_a_symlink_that_leaves_the_temp_directory(self):
+        fetch_page.gate = lambda url: self.fail("gate must not run for a refused --out")
+        link = self.tmp / "home"
+        try:
+            link.symlink_to(Path.home(), target_is_directory=True)
+        except OSError as exc:
+            self.skipTest(f"symlinks unavailable: {exc}")
+        target = Path.home() / f".fetch_page_test_{os.getpid()}"
+        self.addCleanup(lambda: target.unlink(missing_ok=True))
+        code, out, err = self.run_main(f"{self.base}/ok.html", "--out", str(link / target.name))
+        self.assertEqual(code, 2, err)
+        self.assertIn("outside the temp directory", err)
+        self.assertFalse(target.exists())
+
+    def test_refuses_out_through_a_symlink_into_the_repo(self):
+        repo = Path(fetch_page.ROOT)
+        link = self.tmp / "claude-dir"
+        try:
+            link.symlink_to(repo / ".claude", target_is_directory=True)
+        except OSError as exc:
+            self.skipTest(f"symlinks unavailable: {exc}")
+        target = repo / ".claude" / f"fetch_page_test_{os.getpid()}.md"
+        self.addCleanup(lambda: target.unlink(missing_ok=True))
+        code, out, err = self.run_main(f"{self.base}/ok.html", "--out", str(link / target.name))
+        self.assertEqual(code, 2, err)
+        self.assertEqual(self.gate_calls, [])
+        self.assertFalse(target.exists())
+
+    @unittest.skipIf(os.name == "nt", "HOME does not drive expanduser on Windows")
+    def test_out_with_tilde_is_written_where_it_was_checked(self):
+        home = self.tmp / "home"
+        home.mkdir()
+        cwd = self.tmp / "cwd"
+        cwd.mkdir()
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(cwd)
+        with mock.patch.dict(os.environ, {"HOME": str(home)}):
+            code, out, err = self.run_main(f"{self.base}/ok.html", "--out", "~/page.html")
+        self.assertEqual(code, 0, err)
+        self.assertTrue((home / "page.html").exists())
+        self.assertFalse((cwd / "~").exists())
+
+    def test_out_hardlinked_to_a_file_outside_the_temp_directory_is_not_written_through(self):
+        outside = REPO_ROOT / f".fetch_page_link_test_{os.getpid()}"
+        outside.write_text("Original.", encoding="utf-8")
+        self.addCleanup(lambda: outside.unlink(missing_ok=True))
+        try:
+            os.link(outside, self.out)
+        except OSError as exc:
+            self.skipTest(f"hardlinks unavailable: {exc}")
+        code, out, err = self.run_main(f"{self.base}/ok.html", "--out", str(self.out))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(outside.read_text(encoding="utf-8"), "Original.")
+        self.assertNotEqual(self.out.read_text(encoding="utf-8"), "Original.")
+
+    def test_refuses_out_through_a_repo_symlink_into_the_temp_directory(self):
+        link = REPO_ROOT / f".fetch_page_symlink_test_{os.getpid()}"
+        try:
+            link.symlink_to(self.out)
+        except OSError as exc:
+            self.skipTest(f"symlinks unavailable: {exc}")
+        self.addCleanup(lambda: link.unlink(missing_ok=True))
+        code, out, err = self.run_main(f"{self.base}/ok.html", "--out", str(link))
+        self.assertEqual(code, 2, err)
+        self.assertEqual(self.gate_calls, [])
+        self.assertTrue(link.is_symlink())
+        self.assertFalse(self.out.exists())
 
     def test_refuses_out_inside_repo_before_any_network(self):
         fetch_page.gate = lambda url: self.fail("gate must not run for a refused --out")
