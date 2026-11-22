@@ -233,6 +233,12 @@ class HtmlReportScriptTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0, out)
                 self.assertIn("--out must end in .html", result.stderr)
                 self.assertEqual(notes.read_text(encoding="utf-8"), "keep me")
+            hard = root / "hard.html"
+            os.link(notes, hard)  # realpath cannot see a hard link; the write must still not reach notes.txt
+            subprocess.run([sys.executable, str(self.SCRIPT), "--root", tmp, "--out", str(hard)],
+                           check=True, capture_output=True, cwd=REPO_ROOT)
+            self.assertEqual(notes.read_text(encoding="utf-8"), "keep me")
+            self.assertIn("<!doctype html>", hard.read_text(encoding="utf-8"))
 
     def test_out_expands_a_quoted_home_path(self):
         with tempfile.TemporaryDirectory() as tmp:

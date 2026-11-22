@@ -11,6 +11,7 @@ import argparse
 import datetime
 import os
 import sys
+import tempfile
 from html import escape
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -495,9 +496,18 @@ def main():
         p.error("--out must end in .html (and not be a symlink to another kind of file)")
     data = load(a.root)
     html = render(data)
-    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
-    with open(a.out, "w", encoding="utf-8") as f:
-        f.write(html)
+    out_dir = os.path.dirname(os.path.abspath(a.out))
+    os.makedirs(out_dir, exist_ok=True)
+    # Write a fresh file and rename it over --out: the rename replaces the name itself, so a
+    # hard link (or symlink) at out.html never carries the pre-approved write into another file.
+    fd, tmp = tempfile.mkstemp(suffix=".html", dir=out_dir)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(html)
+        os.replace(tmp, a.out)
+    except BaseException:
+        os.unlink(tmp)
+        raise
     c = data["counts"]
     print(f"wrote {a.out}: sent {len(data['sent'])}, drafted {c.get('Drafted', 0)}, active {c.get('Active', 0)}, "
           f"interview {c.get('Interview', 0)}, offer {c.get('Offer', 0)}, hired {c.get('Hired', 0)}, "
