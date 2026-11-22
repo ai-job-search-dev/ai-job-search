@@ -55,12 +55,11 @@ a documented path. Output: the verdict line, a `--- findings ---` block (JSON
 with --json), then `--- text ---` and the cleaned text, or `saved=<path>` when
 --out is given. Exit 0 when a posting is evaluated; 1 when the input has no text
 to evaluate; 2 when --in cannot be read, is a hard link, or lies outside the
-temp directory, /tmp and documents/applications/, or --out cannot be written or
-it or its directory points inside this repository or outside the temp directory
-and /tmp. --out is
-replaced, never written through (the cleaned posting is untrusted text and
-belongs in the session scratchpad, never next to the workflow's own files or the
-user's).
+temp directory, /tmp (not on Windows) and documents/applications/, or --out
+cannot be written or it or its directory points inside this repository or
+outside the temp directory and /tmp. --out is replaced, never written through
+(the cleaned posting is untrusted text and belongs in the session scratchpad,
+never next to the workflow's own files or the user's).
 """
 
 import argparse
@@ -82,7 +81,9 @@ NO_TEXT_VERDICT = "posting_guard: refused (no text to evaluate)"
 
 def _inside_temp(path: Path) -> bool:
     resolved = path.resolve()
-    roots = {Path(tempfile.gettempdir()).resolve(), Path("/tmp").resolve()}
+    roots = {Path(tempfile.gettempdir()).resolve()}
+    if os.name != "nt":
+        roots.add(Path("/tmp").resolve())
     return any(resolved.is_relative_to(root) for root in roots)
 
 

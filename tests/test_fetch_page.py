@@ -173,6 +173,22 @@ class SchemeAndPathGuards(FetchPageFixture):
         self.assertIn("outside the temp directory", err)
         self.assertFalse(target.exists())
 
+    @unittest.skipUnless(os.name == "nt", "/tmp is a temp directory outside Windows")
+    def test_refuses_out_in_slash_tmp_on_windows(self):
+        root = Path("/tmp").resolve()
+        if root.is_relative_to(Path(tempfile.gettempdir()).resolve()):
+            self.skipTest("/tmp resolves into the temp directory here")
+        if not root.exists():
+            root.mkdir()
+            self.addCleanup(root.rmdir)
+        target = root / f"fetch_page_test_{os.getpid()}.py"
+        self.addCleanup(lambda: target.unlink(missing_ok=True))
+        code, out, err = self.run_main(f"{self.base}/ok.html", "--out", str(target))
+        self.assertEqual(code, 2, err)
+        self.assertIn("outside the temp directory", err)
+        self.assertEqual(self.gate_calls, [])
+        self.assertFalse(target.exists())
+
     def test_refuses_out_through_a_symlink_that_leaves_the_temp_directory(self):
         fetch_page.gate = lambda url: self.fail("gate must not run for a refused --out")
         link = self.tmp / "home"

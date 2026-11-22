@@ -22,7 +22,7 @@ Properties, each pinned by tests/test_fetch_page.py:
   * Fetched content never lands in the repo or outside the temp directory.
     --out defaults to the system temp directory; a path that, or whose
     directory, resolves inside the repo root or outside the system temp
-    directory and /tmp is refused.
+    directory and /tmp (not on Windows) is refused.
   * Bounded: 45 s, 5 redirects, 10 MB - on both the curl and the urllib path,
     and the size cap is applied after Content-Encoding is undone.
 
@@ -211,7 +211,9 @@ def _default_out(url: str) -> Path:
 
 def _inside_temp(path: Path) -> bool:
     resolved = path.resolve()
-    roots = {Path(tempfile.gettempdir()).resolve(), Path("/tmp").resolve()}
+    roots = {Path(tempfile.gettempdir()).resolve()}
+    if os.name != "nt":
+        roots.add(Path("/tmp").resolve())
     return any(resolved.is_relative_to(root) for root in roots)
 
 

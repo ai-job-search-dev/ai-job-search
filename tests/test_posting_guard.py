@@ -647,6 +647,25 @@ class InputHandling(GuardFixture):
         self.assertFalse(target.exists())
         self.assertNotIn("saved=", out)
 
+    @unittest.skipUnless(os.name == "nt", "/tmp is a temp directory outside Windows")
+    def test_out_and_in_under_slash_tmp_are_refused_on_windows(self):
+        root = Path("/tmp").resolve()
+        if root.is_relative_to(Path(tempfile.gettempdir()).resolve()):
+            self.skipTest("/tmp resolves into the temp directory here")
+        if not root.exists():
+            root.mkdir()
+            self.addCleanup(root.rmdir)
+        target = root / f"posting_guard_test_{os.getpid()}.py"
+        self.addCleanup(lambda: target.unlink(missing_ok=True))
+        code, out, err = self.run_main("--text", "--out", str(target), stdin_text="Job.\n")
+        self.assertEqual(code, 2, err)
+        self.assertIn("outside the temp directory", err)
+        self.assertFalse(target.exists())
+        target.write_text("Job.\n", encoding="utf-8")
+        code, out, err = self.run_main("--in", str(target), "--text")
+        self.assertEqual(code, 2, err)
+        self.assertIn("refusing to read", err)
+
     def test_in_outside_allowed_locations_is_refused_before_reading(self):
         outside = Path(sys.executable).resolve()
         if any(outside.is_relative_to(Path(root).resolve()) for root in (tempfile.gettempdir(), "/tmp")):
