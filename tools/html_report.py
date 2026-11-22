@@ -8,6 +8,7 @@ monospace stacks, and the page makes no network requests.
 Usage: python3 tools/html_report.py [--out reports/application-dashboard.html] [--root .]
 """
 import argparse
+import contextlib
 import datetime
 import os
 import sys
@@ -506,7 +507,8 @@ def main():
             f.write(html)
         os.replace(tmp, a.out)
     except BaseException:
-        os.unlink(tmp)
+        with contextlib.suppress(FileNotFoundError):  # already renamed if interrupted after os.replace
+            os.unlink(tmp)
         raise
     c = data["counts"]
     print(f"wrote {a.out}: sent {len(data['sent'])}, drafted {c.get('Drafted', 0)}, active {c.get('Active', 0)}, "
