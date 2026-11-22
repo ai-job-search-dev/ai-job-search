@@ -34,6 +34,38 @@ def norm(x):
     return "".join(ch for ch in (x or "").lower() if ch.isalnum())
 
 
+def when(s):
+    """(start of the period, precision) for a YYYY, YYYY-MM or YYYY-MM-DD date; None if unparseable."""
+    m = re.match(r"\s*(\d{4})(?:-(\d{1,2})(?:-(\d{1,2}))?)?(?!\d)", s or "")
+    if not m:
+        return None
+    y, mo, d = m.groups()
+    try:
+        return datetime.date(int(y), int(mo or 1), int(d or 1)), "day" if d else "month" if mo else "year"
+    except ValueError:
+        return None
+
+
+def timeline(sent, today):
+    """Sent applications per week while the search spans under 12 weeks of full dates, else per
+    month, or per year when some rows record only the year. Months and years end at the last
+    application, so a finished search is not a run of empty bars."""
+    w = [x for x in (when(r["date"]) for r in sent) if x]
+    if not w:
+        return "week", []
+    days = [d for d, _ in w]
+    first, last = min(days), max(days)
+    if all(p == "day" for _, p in w) and (max(last, today) - first).days < 12 * 7:
+        start = first - datetime.timedelta(days=first.weekday())
+        weeks = [start + datetime.timedelta(days=7 * i) for i in range((max(last, today) - start).days // 7 + 1)]
+        return "week", [(wk, sum(wk <= d < wk + datetime.timedelta(days=7) for d in days)) for wk in weeks]
+    if all(p != "year" for _, p in w):
+        months = [datetime.date(m // 12, m % 12 + 1, 1)
+                  for m in range(first.year * 12 + first.month - 1, last.year * 12 + last.month)]
+        return "month", [(m, sum((d.year, d.month) == (m.year, m.month) for d in days)) for m in months]
+    return "year", [(datetime.date(y, 1, 1), sum(d.year == y for d in days)) for y in range(first.year, last.year + 1)]
+
+
 def load(root="."):
     path = os.path.join(root, "job_search_tracker.csv")
     if not os.path.isfile(path):
@@ -83,7 +115,6 @@ def load(root="."):
     cnt = collections.Counter(r["_b"] for r in rows)
     sector = collections.Counter((r["sector"] or "Unspecified").strip() for r in sent)
     channel = collections.Counter((r["channel"] or "other").strip() for r in sent)
-    month = collections.Counter((r["date"] or "")[:7] or "unknown" for r in sent)
     fun = [("Applied", len(sent)), ("Interview", sum(1 for r in sent if r["_stage"] >= INTERVIEW)),
            ("Offer", sum(1 for r in sent if r["_stage"] >= OFFER)), ("Hired", sum(1 for r in sent if r["_stage"] >= HIRED))]
     st = lambda r: r["status"].strip().lower()
@@ -93,6 +124,6 @@ def load(root="."):
     prog = f"{fun[1][1]/fun[0][1]*100:.0f}%" if fun[0][1] else "n/a"
     return {
         "today": today, "rows": rows, "sent": sent, "counts": cnt, "sector": sector, "channel": channel,
-        "month": month, "funnel": fun, "rejected": rej, "final": final, "rejection_rate": rate,
+        "timeline": timeline(sent, datetime.date.fromisoformat(today)), "funnel": fun, "rejected": rej, "final": final, "rejection_rate": rate,
         "progress_rate": prog, "unknown": unknown, "archives": arch,
     }

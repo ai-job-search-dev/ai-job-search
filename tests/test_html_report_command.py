@@ -6,6 +6,7 @@ command file or gitignore rule were wrong.
 """
 
 import csv
+import datetime
 import json
 import re
 import subprocess
@@ -249,6 +250,26 @@ class HtmlReportScriptTests(unittest.TestCase):
         self.assertIn("hired 1,", summary)
         self.assertIn("; unrecognised status values: ghosted", summary)
         self.assertRegex(html, r"Hired</span><span class='kpi-value num'>1<")
+
+    def dated(self, date, status="applied", company="Acme"):
+        row = self.row(company, "Dev", status)
+        row[self.HEADER.index("date")] = date
+        return row
+
+    def test_a_finished_search_is_charted_by_month_up_to_its_last_application(self):
+        html, _ = self.render([self.dated("2024-01-05"), self.dated("2024-03-20", "rejected", "Beta")])
+        self.assertIn("Sent, per month", html)
+        self.assertEqual(self.table(html, "Applications over time"),
+                         {"Jan 2024": "1", "Feb 2024": "0", "Mar 2024": "1"})
+
+    def test_a_recent_search_is_charted_by_week(self):
+        html, _ = self.render([self.dated(datetime.date.today().isoformat())])
+        self.assertIn("Sent, per week", html)
+
+    def test_a_year_only_date_is_charted_and_waits(self):
+        html, _ = self.render([self.dated("2025"), self.dated("2026-02-11", "rejected", "Beta")])
+        self.assertEqual(self.table(html, "Applications over time"), {"2025": "1", "2026": "1"})
+        self.assertIn("since 2025", html)
 
     @staticmethod
     def table(html, caption):

@@ -42,7 +42,7 @@ Status normalisation — tracker values map to six canonical buckets before stat
 
 **Drafted rows are excluded from every statistic below** — they were never submitted. The Drafted count is reported on its own and appears only in the status breakdown.
 
-- **Totals by status bucket, sector, channel and week**
+- **Totals by status bucket, sector, channel and time:** per week while the sent rows span under 12 weeks of full dates, otherwise per month up to the last application, or per year when some `date` values record only the year (e.g. `2025`). A partial date is never dropped.
 - **Funnel rates:** what % progressed past resume screen (reached Interview or beyond). Stage-reached comes from history, not current status: an application counts as having reached a stage when its current status implies it **or** its matched `outcome.md` stage checkboxes show the stage was reached. Current status alone structurally undercounts every earlier stage. `interview` implies Interview, `offer` and `offer_declined` imply Offer, `hired` implies Hired. The "where closed applications stopped" chart reads the same furthest stage, so the two never disagree.
 - **Rejection rate:** true rejections (`rejected`, `no_response`) ÷ applications with a final outcome. `offer_declined` (the candidate turned the offer down - a success) and `withdrawn` (candidate-initiated) are not rejections and stay out of the numerator; Interview and Offer rows are unresolved, so they stay out of the denominator along with Active.
 
@@ -56,7 +56,7 @@ Status normalisation — tracker values map to six canonical buckets before stat
 python3 tools/html_report.py [--out <path>]
 ```
 
-The page contains a KPI strip, the funnel, a status mix bar, applications per week, where closed applications stopped, sector and channel bars, a "waiting longest for a reply" table, and a sortable, filterable applications table. Every tracker value is HTML-escaped; source links render only for `http(s)` URLs.
+The page contains a KPI strip, the funnel, a status mix bar, applications over time, where closed applications stopped, sector and channel bars, a "waiting longest for a reply" table, and a sortable, filterable applications table. Every tracker value is HTML-escaped; source links render only for `http(s)` URLs.
 
 ### Table: columns to include
 

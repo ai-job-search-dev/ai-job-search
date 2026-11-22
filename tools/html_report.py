@@ -14,7 +14,7 @@ import sys
 from html import escape
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from report_data import STAGES, STATUS_ORDER, load  # noqa: E402
+from report_data import STAGES, STATUS_ORDER, load, when  # noqa: E402
 
 KEY = {"Drafted": "drafted", "Active": "active", "Interview": "interview", "Offer": "offer",
        "Hired": "hired", "Rejected/Closed": "rejected"}
@@ -22,13 +22,6 @@ KEY = {"Drafted": "drafted", "Active": "active", "Interview": "interview", "Offe
 
 def E(v):
     return escape(str(v), quote=True)
-
-
-def parse_date(s):
-    try:
-        return datetime.date.fromisoformat((s or "").strip()[:10])
-    except ValueError:
-        return None
 
 
 def unknown_list(d):
@@ -54,41 +47,34 @@ def hbars(pairs, total=None, var="--accent"):
     return f"<div class='hbars' role='img' aria-label='{E(label)}'>{''.join(rows)}</div>"
 
 
-def weekly(sent, today):
-    dates = [d for d in (parse_date(r["date"]) for r in sent) if d]
-    if not dates:
+def over_time(timeline):
+    unit, pairs = timeline
+    if not pairs:
         return "<p class='empty'>No dated applications yet.</p>", []
-    start = min(dates) - datetime.timedelta(days=min(dates).weekday())
-    last = max(max(dates), today)  # a sent row dated in the future still gets its week
-    end = last - datetime.timedelta(days=last.weekday())
-    weeks = []
-    w = start
-    while w <= end:
-        weeks.append(w)
-        w += datetime.timedelta(days=7)
-    weeks = weeks[-12:]
-    counts = [sum(1 for d in dates if wk <= d < wk + datetime.timedelta(days=7)) for wk in weeks]
-    mx = max(counts) or 1
+    fmt = {"week": "%d %b", "month": "%b %Y", "year": "%Y"}[unit]
+    name = (lambda p: f"Week of {p:%d %b %Y}") if unit == "week" else (lambda p: f"{p:{fmt}}")
+    mx = max(c for _, c in pairs) or 1
     width, h, base, left = 520, 180, 150, 28
-    col = (width - left) / len(weeks)
+    col = (width - left) / len(pairs)
     bw = min(col * 0.62, 34)
-    parts = [f"<svg class='chart' viewBox='0 0 {width} {h}' role='img' aria-label='Applications per week: "
-             + E(", ".join(f"week of {wk:%d %b} {c}" for wk, c in zip(weeks, counts))) + "'>"]
+    step = -(-len(pairs) // 7)  # at most ~7 axis labels
+    parts = [f"<svg class='chart' viewBox='0 0 {width} {h}' role='img' aria-label='Applications per {unit}: "
+             + E(", ".join(f"{name(p)} {c}" for p, c in pairs)) + "'>"]
     for g in (0, 0.5, 1):
         y = base - (base - 12) * g
         parts.append(f"<line x1='{left}' x2='{width}' y1='{y:.1f}' y2='{y:.1f}' class='grid'/>"
                      f"<text x='{left - 6}' y='{y + 4:.1f}' class='tick' text-anchor='end'>{round(mx * g)}</text>")
-    for i, (wk, c) in enumerate(zip(weeks, counts)):
+    for i, (p, c) in enumerate(pairs):
         x = left + i * col + (col - bw) / 2
         bh = (base - 12) * c / mx
         parts.append(f"<rect x='{x:.1f}' y='{base - bh:.1f}' width='{bw:.1f}' height='{bh:.1f}' rx='3' "
-                     f"style='fill:var(--st-active)'><title>Week of {wk:%d %b}: {c}</title></rect>")
+                     f"style='fill:var(--st-active)'><title>{E(name(p))}: {c}</title></rect>")
         if c:
             parts.append(f"<text x='{x + bw / 2:.1f}' y='{base - bh - 5:.1f}' class='val' text-anchor='middle'>{c}</text>")
-        if i % 2 == 0 or len(weeks) <= 6:
-            parts.append(f"<text x='{x + bw / 2:.1f}' y='{base + 18}' class='tick' text-anchor='middle'>{wk:%d %b}</text>")
+        if i % step == 0:
+            parts.append(f"<text x='{x + bw / 2:.1f}' y='{base + 18}' class='tick' text-anchor='middle'>{p:{fmt}}</text>")
     parts.append("</svg>")
-    return "".join(parts), [(f"Week of {wk:%d %b %Y}", c) for wk, c in zip(weeks, counts)]
+    return "".join(parts), [(name(p), c) for p, c in pairs]
 
 
 def status_mix(counts):
@@ -125,7 +111,7 @@ def render(d):
         for label, v, k in kpis)
 
     funnel = hbars(fun, total=fun[0][1] or None, var="--st-active")
-    week_svg, week_pairs = weekly(sent, today)
+    week_svg, week_pairs = over_time(d["timeline"])
     closed = [r for r in rows if r["_b"] == "Rejected/Closed"]
     stop_counts = [(s, sum(1 for r in closed if r["_stage"] == i)) for i, s in enumerate(STAGES[:-1])]
     stop_svg = hbars(stop_counts, total=len(closed) or None, var="--st-rejected")
@@ -133,12 +119,13 @@ def render(d):
     sector_pairs = top[:8] + ([(f"Other ({len(top) - 8} sectors)", sum(v for _, v in top[8:]))] if len(top) > 8 else [])
     channel_pairs = d["channel"].most_common()
 
-    waiting = sorted(((r, parse_date(r["date"])) for r in rows if r["_b"] == "Active"),
-                     key=lambda x: x[1] or today)
-    waiting = [(r, (today - dt).days) for r, dt in waiting if dt][:8]
+    # a partial date (year or month only) is kept, shown as "since <date>" rather than a day count
+    waiting = sorted(((r, when(r["date"])) for r in rows if r["_b"] == "Active" and when(r["date"])),
+                     key=lambda x: x[1][0])[:8]
+    waiting = [(r, (today - dt).days if p == "day" else f"since {r['date'].strip()}") for r, (dt, p) in waiting]
     wait_rows = "".join(
         f"<tr><td>{E(r['company'])}</td><td>{E(r['role'])}</td>"
-        f"<td class='num right'>{days}</td></tr>" for r, days in waiting) or \
+        f"<td class='num right'>{E(days)}</td></tr>" for r, days in waiting) or \
         "<tr><td colspan='3' class='empty'>Nothing is waiting on a reply.</td></tr>"
 
     # Applications table
@@ -188,7 +175,7 @@ def render(d):
     return TEMPLATE.format(
         today=E(today.strftime("%d %b %Y")), iso=E(d["today"]), kpis=kpi_html,
         funnel=funnel, funnel_table=hidden_table("Application funnel", fun),
-        mix=status_mix(counts), week=week_svg, week_table=hidden_table("Applications per week", week_pairs),
+        mix=status_mix(counts), week=week_svg, week_table=hidden_table("Applications over time", week_pairs), unit=d["timeline"][0],
         stopped=stop_svg, stopped_table=hidden_table("Where closed applications stopped", stop_counts),
         closed=len(closed), wait_rows=wait_rows, rows="".join(trs), total=len(rows),
         sector_opts=sector_opts, status_opts=status_opts, unknown=unknown,
@@ -377,7 +364,7 @@ footer {{ max-width: 1240px; margin: 0 auto; padding: 0 var(--sp-5) var(--sp-6);
         {mix}
       </div>
       <div class="panel">
-        <div class="panel-head"><h3 class="h3">Applications per week</h3><p>Sent, last 12 weeks</p></div>
+        <div class="panel-head"><h3 class="h3">Applications over time</h3><p>Sent, per {unit}</p></div>
         {week}{week_table}
       </div>
       <div class="panel">
