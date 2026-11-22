@@ -57,9 +57,9 @@ with --json), then `--- text ---` and the cleaned text, or `saved=<path>` when
 to evaluate; 2 when --in cannot be read, is a hard link, or lies outside the
 temp directory, /tmp (not on Windows) and documents/applications/, or --out
 cannot be written or it or its directory points inside this repository or
-outside the temp directory and /tmp. --out is replaced, never written through
-(the cleaned posting is untrusted text and belongs in the session scratchpad,
-never next to the workflow's own files or the user's).
+outside the temp directory and /tmp (not on Windows). --out is replaced, never
+written through (the cleaned posting is untrusted text and belongs in the
+session scratchpad, never next to the workflow's own files or the user's).
 """
 
 import argparse
@@ -570,11 +570,11 @@ def _read_input(path, mode):
 def main(argv=None) -> int:
     _force_utf8_output()
     parser = argparse.ArgumentParser(prog="posting_guard.py", description="Integrity gate for a fetched posting; see module docstring.")
-    parser.add_argument("--in", dest="infile", type=Path, default=None, help="input file in the system temp dir, /tmp or documents/applications/ (default: stdin)")
+    parser.add_argument("--in", dest="infile", type=Path, default=None, help="input file in the system temp dir, /tmp (not on Windows) or documents/applications/ (default: stdin)")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--html", action="store_const", const="html", dest="mode")
     mode.add_argument("--text", action="store_const", const="text", dest="mode")
-    parser.add_argument("--out", type=Path, default=None, help="write the cleaned text here (the file and its directory in the system temp dir or /tmp) instead of stdout")
+    parser.add_argument("--out", type=Path, default=None, help="write the cleaned text here (the file and its directory in the system temp dir or /tmp, not on Windows) instead of stdout")
     parser.add_argument("--json", action="store_true", help="print findings as JSON")
     parser.set_defaults(mode="auto")
     args = parser.parse_args(argv)
@@ -586,7 +586,7 @@ def main(argv=None) -> int:
     if args.infile is not None and not _readable_input(args.infile):
         print(
             f"posting_guard: refusing to read {args.infile}; --in takes a file in the session "
-            "scratchpad, the temp directory, /tmp or documents/applications/",
+            "scratchpad, the temp directory, /tmp (not on Windows) or documents/applications/",
             file=sys.stderr,
         )
         return 2
@@ -599,7 +599,7 @@ def main(argv=None) -> int:
         return 2
     if args.out is not None and not (_inside_temp(args.out) and _inside_temp(args.out.parent)):
         print(
-            f"posting_guard: refusing to write outside the temp directory and /tmp ({args.out}); the "
+            f"posting_guard: refusing to write outside the temp directory and /tmp, not on Windows ({args.out}); the "
             "cleaned posting is untrusted text and belongs in the session scratchpad",
             file=sys.stderr,
         )

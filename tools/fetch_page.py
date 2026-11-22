@@ -262,7 +262,7 @@ def main(argv=None) -> int:
     )
     parser.add_argument("url")
     parser.add_argument("--out", type=Path, default=None,
-                        help="where to save the body: the file and its directory must be in the system temp dir or /tmp, never inside the repo (default: system temp dir)")
+                        help="where to save the body: the file and its directory must be in the system temp dir or /tmp (not on Windows), never inside the repo (default: system temp dir)")
     parser.add_argument("--text", action="store_true", help="also print the tag-stripped text")
     parser.add_argument("--max-chars", type=int, default=6000, help="cap for --text (default 6000)")
     args = parser.parse_args(argv)
