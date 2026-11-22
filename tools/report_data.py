@@ -11,9 +11,12 @@ import datetime
 import glob
 import os
 import re
+import sys
 
 BUCKET = {"drafted": "Drafted", "applied": "Active", "interview": "Interview", "offer": "Offer", "hired": "Hired"}
 CLOSED = {"rejected", "no_response", "no response", "offer_declined", "offer declined", "withdrawn"}
+FIELDS = ["date", "company", "sector", "role", "role_type", "channel", "status", "contact_person",
+          "fit_rating", "notes", "cv_file", "cover_letter_file", "source", "deadline"]
 STATUS_ORDER = ["Drafted", "Active", "Interview", "Offer", "Hired", "Rejected/Closed"]
 
 
@@ -23,7 +26,18 @@ def norm(x):
 
 
 def load(root="."):
-    rows = list(csv.DictReader(open(os.path.join(root, "job_search_tracker.csv"), newline="", encoding="utf-8")))
+    path = os.path.join(root, "job_search_tracker.csv")
+    if not os.path.isfile(path):
+        sys.exit(f"{path} not found - /apply creates it with the first application")
+    try:
+        # utf-8-sig: Excel's "CSV UTF-8" save starts with a BOM that would land in the first header
+        with open(path, newline="", encoding="utf-8-sig") as fh:
+            rows = list(csv.DictReader(fh))
+    except UnicodeDecodeError:
+        sys.exit(f"{path} is not UTF-8 text - re-save it as CSV UTF-8")
+    for r in rows:  # a short row (13-field legacy, or truncated) reads its missing fields as empty
+        for h in FIELDS:
+            r[h] = r.get(h) or ""
     today = datetime.date.today().isoformat()
     unknown = set()
 

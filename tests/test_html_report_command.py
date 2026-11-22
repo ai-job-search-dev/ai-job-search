@@ -206,6 +206,44 @@ class HtmlReportScriptTests(unittest.TestCase):
         )
         self.assertIn("past CV screen 50%", summary)
 
+    def run_raw(self, tracker_bytes):
+        """Run the script on a tracker written as raw bytes (None: no tracker at all)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            if tracker_bytes is not None:
+                (root / "job_search_tracker.csv").write_bytes(tracker_bytes)
+            return subprocess.run([sys.executable, str(self.SCRIPT), "--root", str(root),
+                                   "--out", str(root / "out.html")], capture_output=True, text=True, cwd=REPO_ROOT)
+
+    def csv_text(self, rows):
+        return "\n".join([",".join(self.HEADER)] + [",".join(r) for r in rows]) + "\n"
+
+    def assert_clean_exit(self, result, code, needle):
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertEqual(result.returncode, code, result.stderr)
+        self.assertIn(needle, result.stdout + result.stderr)
+
+    def test_excel_csv_utf8_with_bom_is_read(self):
+        result = self.run_raw(self.csv_text([self.row("Acme", "Dev", "applied")]).encode("utf-8-sig"))
+        self.assert_clean_exit(result, 0, "sent 1,")
+
+    def test_row_with_fewer_fields_than_the_header_is_kept(self):
+        short = self.row("Acme", "Dev", "applied")[:13]
+        result = self.run_raw(self.csv_text([short, self.row("Beta", "Dev", "applied")[:5]]).encode())
+        self.assert_clean_exit(result, 0, "sent 2,")
+
+    def test_cp1252_tracker_asks_for_a_utf8_resave(self):
+        result = self.run_raw(self.csv_text([self.row("Café Ünïon", "Dev", "applied")]).encode("cp1252"))
+        self.assert_clean_exit(result, 1, "re-save it as CSV UTF-8")
+
+    def test_missing_tracker_exits_with_a_message(self):
+        self.assert_clean_exit(self.run_raw(None), 1, "job_search_tracker.csv not found")
+
+    def test_sent_rows_dated_in_the_future_render(self):
+        row = self.row("Acme", "Dev", "applied")
+        row[self.HEADER.index("date")] = "2999-01-04"
+        self.assert_clean_exit(self.run_raw(self.csv_text([row]).encode()), 0, "sent 1,")
+
     @staticmethod
     def folder(company, role):
         """documents/README.md Subfolder naming: lowercase, spaces to underscores, drop the rest."""

@@ -67,7 +67,8 @@ def weekly(sent, today):
     if not dates:
         return "<p class='empty'>No dated applications yet.</p>", []
     start = min(dates) - datetime.timedelta(days=min(dates).weekday())
-    end = today - datetime.timedelta(days=today.weekday())
+    last = max(max(dates), today)  # a sent row dated in the future still gets its week
+    end = last - datetime.timedelta(days=last.weekday())
     weeks = []
     w = start
     while w <= end:
