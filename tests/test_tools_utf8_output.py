@@ -66,6 +66,14 @@ class ToolsWriteUtf8(unittest.TestCase):
             "portal": "example", "status": "new", "first_seen": "2026-09-20",
         }
 
+    def test_html_report_prints_an_output_path_outside_cp1252(self):
+        (self.tmp / "job_search_tracker.csv").write_text("date,company,role,status\n2026-10-01,Acme,Dev,applied\n",
+                                                         encoding="utf-8")
+        out = self.tmp / f"{CYRILLIC}.html"
+        proc = run_legacy_stdout([TOOLS / "html_report.py", "--root", self.tmp, "--out", out])
+        self.assert_clean_utf8(proc, 0, CYRILLIC)
+        self.assertTrue(out.is_file())
+
     def test_rank_candidates_lists_non_latin_postings(self):
         state = self.write_state({"a": self.entry(CYRILLIC, "Инженер"), "b": self.entry(CJK, "工程师")})
         proc = run_legacy_stdout([TOOLS / "rank_state.py", "candidates", "--state", state, "--today", "2026-09-21"])

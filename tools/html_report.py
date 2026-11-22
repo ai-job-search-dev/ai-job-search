@@ -458,11 +458,21 @@ footer {{ max-width: 1240px; margin: 0 auto; padding: 0 var(--sp-5) var(--sp-6);
 """
 
 
+def _force_utf8_output():
+    """Print a path outside the console code page (cp1252 on Windows pipes) without failing."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure:
+            reconfigure(encoding="utf-8")
+
+
 def main():
+    _force_utf8_output()
     p = argparse.ArgumentParser(description="Render the offline application dashboard.")
     p.add_argument("--root", default=".", help="repo root holding job_search_tracker.csv")
     p.add_argument("--out", default=os.path.join("reports", "application-dashboard.html"))
     a = p.parse_args()
+    a.out = os.path.expanduser(a.out)  # a quoted ~/Desktop/report.html is not expanded by the shell
     # settings.json pre-approves this script, so --out must not reach arbitrary files
     if not a.out.lower().endswith(".html"):
         p.error("--out must end in .html")

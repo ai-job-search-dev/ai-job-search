@@ -8,6 +8,7 @@ command file or gitignore rule were wrong.
 import csv
 import datetime
 import json
+import os
 import re
 import subprocess
 import sys
@@ -210,6 +211,16 @@ class HtmlReportScriptTests(unittest.TestCase):
                                 capture_output=True, text=True, cwd=REPO_ROOT)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("--out must end in .html", result.stderr)
+
+    def test_out_expands_a_quoted_home_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            (home / "job_search_tracker.csv").write_text(",".join(self.HEADER) + "\n", encoding="utf-8")
+            env = dict(os.environ, HOME=tmp, USERPROFILE=tmp)
+            subprocess.run([sys.executable, str(self.SCRIPT), "--root", tmp, "--out", "~/report.html"],
+                           check=True, capture_output=True, cwd=tmp, env=env)
+            self.assertTrue((home / "report.html").is_file())
+            self.assertFalse((home / "~").exists())
 
     def test_settings_and_guards_allow_the_script(self):
         allow = json.loads((REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))["permissions"]["allow"]
