@@ -10,16 +10,14 @@ Usage: python3 tools/html_report.py [--out reports/application-dashboard.html] [
 import argparse
 import datetime
 import os
-import re
 import sys
 from html import escape
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from report_data import STATUS_ORDER, load  # noqa: E402
+from report_data import STAGES, STATUS_ORDER, load  # noqa: E402
 
 KEY = {"Drafted": "drafted", "Active": "active", "Interview": "interview", "Offer": "offer",
        "Hired": "hired", "Rejected/Closed": "rejected"}
-STAGES = ["Application screen", "Recruiter screen", "Technical round", "Case or presentation", "Final round"]
 
 
 def E(v):
@@ -31,16 +29,6 @@ def parse_date(s):
         return datetime.date.fromisoformat((s or "").strip()[:10])
     except ValueError:
         return None
-
-
-def stopped_at(r, archives):
-    ticked = [n for t, n in archives.get(r["_a"], []) if t == "x"] if r["_a"] else []
-    text = " ".join(ticked).lower()
-    for stage, pat in (("Final round", "final"), ("Case or presentation", "case"),
-                       ("Technical round", "technical"), ("Recruiter screen", "phone|screen")):
-        if re.search(pat, text):
-            return stage
-    return "Application screen"
 
 
 def hidden_table(caption, pairs):
@@ -135,7 +123,7 @@ def render(d):
     funnel = hbars(fun, total=fun[0][1] or None, var="--st-active")
     week_svg, week_pairs = weekly(sent, today)
     closed = [r for r in rows if r["_b"] == "Rejected/Closed"]
-    stop_counts = [(s, sum(1 for r in closed if stopped_at(r, d["archives"]) == s)) for s in STAGES]
+    stop_counts = [(s, sum(1 for r in closed if r["_stage"] == i)) for i, s in enumerate(STAGES[:-1])]
     stop_svg = hbars(stop_counts, total=len(closed) or None, var="--st-rejected")
     top = d["sector"].most_common()
     sector_pairs = top[:8] + ([(f"Other ({len(top) - 8} sectors)", sum(v for _, v in top[8:]))] if len(top) > 8 else [])

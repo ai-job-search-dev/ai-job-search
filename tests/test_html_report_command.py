@@ -245,6 +245,25 @@ class HtmlReportScriptTests(unittest.TestCase):
         self.assert_clean_exit(self.run_raw(self.csv_text([row]).encode()), 0, "sent 1,")
 
     @staticmethod
+    def table(html, caption):
+        """The screen-reader table behind a chart, as {label: value}."""
+        body = re.search(rf"<caption>{re.escape(caption)}</caption>(.*?)</table>", html).group(1)
+        return dict(re.findall(r"<th scope='row'>(.*?)</th><td>(.*?)</td>", body))
+
+    def test_offer_declined_reached_offer_in_the_funnel_and_the_stopped_chart(self):
+        html, _ = self.render([self.row("Acme", "Dev", "offer_declined")])
+        funnel = self.table(html, "Application funnel")
+        self.assertEqual((funnel["Interview"], funnel["Offer"], funnel["Hired"]), ("1", "1", "0"))
+        self.assertEqual(self.table(html, "Where closed applications stopped")["Offer"], "1")
+
+    def test_stopped_chart_agrees_with_the_funnel_on_ticked_stages(self):
+        html, _ = self.render([self.row("Acme", "Dev", "rejected")],
+                              {"acme_dev": "- [x] Phone screen\n- [x] Technical interview\n- [ ] Final round\n"})
+        self.assertEqual(self.table(html, "Application funnel")["Interview"], "1")
+        stopped = self.table(html, "Where closed applications stopped")
+        self.assertEqual((stopped["Technical round"], stopped["Application screen"]), ("1", "0"))
+
+    @staticmethod
     def folder(company, role):
         """documents/README.md Subfolder naming: lowercase, spaces to underscores, drop the rest."""
         name = re.sub(r"[^\w]", "", f"{company} {role}".lower().replace(" ", "_"))

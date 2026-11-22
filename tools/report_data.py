@@ -17,6 +17,15 @@ BUCKET = {"drafted": "Drafted", "applied": "Active", "interview": "Interview", "
 CLOSED = {"rejected", "no_response", "no response", "offer_declined", "offer declined", "withdrawn"}
 FIELDS = ["date", "company", "sector", "role", "role_type", "channel", "status", "contact_person",
           "fit_rating", "notes", "cv_file", "cover_letter_file", "source", "deadline"]
+# The one stage rule. A row's furthest stage is the later of what its current status implies
+# and the furthest outcome.md checkbox ticked; the funnel and the "where closed applications
+# stopped" chart both read it from r["_stage"], an index into STAGES.
+STAGES = ["Application screen", "Recruiter screen", "Technical round", "Case or presentation",
+          "Final round", "Offer", "Hired"]
+STATUS_STAGE = {"interview": 1, "offer": 5, "offer_declined": 5, "offer declined": 5, "hired": 6}
+TICK_STAGE = [(5, r"offer"), (4, r"final"), (3, r"case|assessment|presentation"), (2, r"technical"),
+              (1, r"phone|screen|recruiter|interview")]  # first match wins: "Technical interview" is 2
+INTERVIEW, OFFER, HIRED = 1, 5, 6
 STATUS_ORDER = ["Drafted", "Active", "Interview", "Offer", "Hired", "Rejected/Closed"]
 
 
@@ -66,24 +75,17 @@ def load(root="."):
     for r in rows:
         b = bucket(r["status"]); r["_b"] = b
         a = find_arch(r); r["_a"] = a
-        lvl = 0
-        if b != "Drafted":
-            lvl = 1
         ticked = [n for t, n in arch.get(a, []) if t == "x"] if a else []
-        if b in ("Interview", "Offer", "Hired") or any(re.search(r"phone|screen|technical|interview|final|case|assessment", n, re.I) and not re.search(r"offer", n, re.I) for n in ticked):
-            lvl = max(lvl, 2)
-        if b in ("Offer", "Hired") or any(re.search(r"offer", n, re.I) for n in ticked):
-            lvl = max(lvl, 3)
-        if b == "Hired":
-            lvl = 4
-        r["_lvl"] = lvl
+        tick = max((next((i for i, pat in TICK_STAGE if re.search(pat, n, re.I)), 0) for n in ticked), default=0)
+        r["_stage"] = max(STATUS_STAGE.get(r["status"].strip().lower(), 0), tick)
 
     sent = [r for r in rows if r["_b"] != "Drafted"]
     cnt = collections.Counter(r["_b"] for r in rows)
     sector = collections.Counter((r["sector"] or "Unspecified").strip() for r in sent)
     channel = collections.Counter((r["channel"] or "other").strip() for r in sent)
     month = collections.Counter((r["date"] or "")[:7] or "unknown" for r in sent)
-    fun = [("Applied", sum(1 for r in sent)), ("Interview", sum(1 for r in sent if r["_lvl"] >= 2)), ("Offer", sum(1 for r in sent if r["_lvl"] >= 3)), ("Hired", sum(1 for r in sent if r["_lvl"] >= 4))]
+    fun = [("Applied", len(sent)), ("Interview", sum(1 for r in sent if r["_stage"] >= INTERVIEW)),
+           ("Offer", sum(1 for r in sent if r["_stage"] >= OFFER)), ("Hired", sum(1 for r in sent if r["_stage"] >= HIRED))]
     st = lambda r: r["status"].strip().lower()
     rej = sum(1 for r in rows if st(r) in ("rejected", "no_response", "no response"))
     final = sum(1 for r in rows if st(r) in CLOSED | {"hired"})
