@@ -31,6 +31,10 @@ def parse_date(s):
         return None
 
 
+def unknown_list(d):
+    return ", ".join(sorted(s or "(empty)" for s in d["unknown"]))
+
+
 def hidden_table(caption, pairs):
     body = "".join(f"<tr><th scope='row'>{E(k)}</th><td>{E(v)}</td></tr>" for k, v in pairs)
     return f"<table class='sr-only'><caption>{E(caption)}</caption>{body}</table>"
@@ -111,7 +115,7 @@ def render(d):
     # KPI strip
     kpis = [("Sent", len(sent), ""), ("Active", counts.get("Active", 0), "active"),
             ("Interview", counts.get("Interview", 0), "interview"), ("Offer", counts.get("Offer", 0), "offer"),
-            ("Closed", counts.get("Rejected/Closed", 0), "rejected"),
+            ("Hired", counts.get("Hired", 0), "hired"), ("Closed", counts.get("Rejected/Closed", 0), "rejected"),
             ("Drafted", counts.get("Drafted", 0), "drafted"),
             ("Past CV screen", d["progress_rate"], ""), ("Rejection rate", d["rejection_rate"], "")]
     kpi_html = "".join(
@@ -178,7 +182,7 @@ def render(d):
     sectors = sorted({(r["sector"] or "").strip() for r in rows if (r["sector"] or "").strip()})
     sector_opts = "".join(f"<option>{E(s)}</option>" for s in sectors)
     status_opts = "".join(f"<option>{E(s)}</option>" for s in STATUS_ORDER)
-    unknown = (f"<p class='muted small'>Unrecognised status values: {E(', '.join(sorted(d['unknown'])))}</p>"
+    unknown = (f"<p class='muted small'>Unrecognised status values: {E(unknown_list(d))}</p>"
                if d["unknown"] else "")
 
     return TEMPLATE.format(
@@ -275,7 +279,7 @@ h2 {{ margin: 0; font-size: var(--fs-md); font-weight: 600; }}
 .panel-head p {{ margin: 0; color: var(--text-muted); font-size: var(--fs-xs); }}
 .grid-2 {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }}
 
-.kpis {{ display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); }}
+.kpis {{ display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); }}
 .kpi {{ padding: var(--sp-4) var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-2); border-left: 1px solid var(--border); }}
 .kpi:first-child {{ border-left: 0; }}
 .kpi-label {{ font-size: var(--fs-xs); color: var(--text-muted); display: flex; align-items: center; gap: var(--sp-2); }}
@@ -330,7 +334,7 @@ th[aria-sort="descending"] .sort::after {{ content: '↓'; opacity: 1; }}
 .empty {{ color: var(--text-muted); }}
 footer {{ max-width: 1240px; margin: 0 auto; padding: 0 var(--sp-5) var(--sp-6); color: var(--text-muted); font-size: var(--fs-xs); }}
 
-@media (max-width: 1100px) {{ .kpis {{ grid-template-columns: repeat(4, minmax(0, 1fr)); }} .kpi:nth-child(5) {{ border-left: 0; }} .kpi:nth-child(n+5) {{ border-top: 1px solid var(--border); }} }}
+@media (max-width: 1100px) {{ .kpis {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }} .kpi:nth-child(3n+1) {{ border-left: 0; }} .kpi:nth-child(n+4) {{ border-top: 1px solid var(--border); }} }}
 @media (max-width: 900px) {{ .grid-2 {{ grid-template-columns: 1fr; }} .bar {{ padding: var(--sp-3) var(--sp-4); }} main {{ padding: var(--sp-4); }} }}
 @media (max-width: 560px) {{
   .kpis {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
@@ -482,8 +486,10 @@ def main():
         f.write(html)
     c = data["counts"]
     print(f"wrote {a.out}: sent {len(data['sent'])}, drafted {c.get('Drafted', 0)}, active {c.get('Active', 0)}, "
-          f"interview {c.get('Interview', 0)}, closed {c.get('Rejected/Closed', 0)}, "
-          f"past CV screen {data['progress_rate']}, rejection rate {data['rejection_rate']}")
+          f"interview {c.get('Interview', 0)}, offer {c.get('Offer', 0)}, hired {c.get('Hired', 0)}, "
+          f"closed {c.get('Rejected/Closed', 0)}, past CV screen {data['progress_rate']}, "
+          f"rejection rate {data['rejection_rate']}"
+          + (f"; unrecognised status values: {unknown_list(data)}" if data["unknown"] else ""))
 
 
 if __name__ == "__main__":

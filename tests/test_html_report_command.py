@@ -244,6 +244,12 @@ class HtmlReportScriptTests(unittest.TestCase):
         row[self.HEADER.index("date")] = "2999-01-04"
         self.assert_clean_exit(self.run_raw(self.csv_text([row]).encode()), 0, "sent 1,")
 
+    def test_summary_names_hired_and_unrecognised_statuses(self):
+        html, summary = self.render([self.row("Acme", "Dev", "hired"), self.row("Beta", "Dev", "ghosted")])
+        self.assertIn("hired 1,", summary)
+        self.assertIn("; unrecognised status values: ghosted", summary)
+        self.assertRegex(html, r"Hired</span><span class='kpi-value num'>1<")
+
     @staticmethod
     def table(html, caption):
         """The screen-reader table behind a chart, as {label: value}."""
