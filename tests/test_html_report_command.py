@@ -170,6 +170,27 @@ class HtmlReportScriptTests(unittest.TestCase):
                   "sector": "AI", "channel": "online", "source": source}
         return [values.get(h, "") for h in self.HEADER]
 
+    PAYLOAD = "x' onmouseover='alert(1)' \" onfocus=\"alert(2)\" <img src=x onerror=alert(3)>"
+
+    def test_fixture_tracker_pins_every_figure(self):
+        """Every status, a drafted row, the legacy `no response` spelling, an unknown status and a
+        13-field row. Counting withdrawn/offer_declined as rejections, drafted rows as sent, or
+        dropping the legacy spelling each changes this line."""
+        statuses = ["drafted", "applied", "interview", "offer", "hired", "rejected", "no_response",
+                    "no response", "offer_declined", "withdrawn", "ghosted"]
+        rows = [self.row(f"Co{i}", "Dev", st) for i, st in enumerate(statuses)]
+        rows.append(self.row("Legacy", "Dev", "applied")[:13])
+        rows[1][self.HEADER.index("notes")] = self.PAYLOAD
+        html, summary = self.render(rows)
+        self.assertEqual(
+            summary.split(": ", 1)[1].strip(),
+            "sent 11, drafted 1, active 2, interview 1, offer 1, hired 1, closed 6, "
+            "past CV screen 36%, rejection rate 50%; unrecognised status values: ghosted")
+        self.assertNotIn("onmouseover='alert", html)
+        self.assertNotIn('onfocus="alert', html)
+        self.assertNotIn("<img src=x", html)
+        self.assertIn("x&#x27; onmouseover=&#x27;alert(1)&#x27; &quot; onfocus=", html)
+
     def test_values_are_escaped_and_page_is_offline(self):
         html, _ = self.render([
             self.row("<script>alert(1)</script>", "Engineer", "applied", "https://example.com/job"),
