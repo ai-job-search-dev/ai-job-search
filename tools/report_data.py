@@ -43,7 +43,7 @@ def when(s, today=None):
     """(start of the period, precision) for a YYYY, YYYY-MM or YYYY-MM-DD date (- or / between the
     parts); None if unparseable, before 1970 or over a year ahead, so a typo year cannot stretch
     the chart over centuries."""
-    m = re.match(r"\s*(\d{4})(?:[-/](\d{1,2})(?:[-/](\d{1,2}))?)?(?!\d)", s or "")
+    m = re.fullmatch(r"(\d{4})(?:[-/](\d{1,2})(?:[-/](\d{1,2}))?)?", (s or "").strip())
     if not m:
         return None
     y, mo, d = m.groups()
@@ -55,6 +55,13 @@ def when(s, today=None):
     if not datetime.date(1970, 1, 1) <= day <= today + datetime.timedelta(days=366):
         return None
     return day, "day" if d else "month" if mo else "year"
+
+
+def stages_section(txt):
+    """The '## Interview stages reached' checklist of an outcome.md, so a checklist under Notes
+    cannot advance a stage. A file without that heading (hand-written) is read whole."""
+    m = re.search(r"^## Interview stages reached[^\n]*\n(.*?)(?=^## |\Z)", txt, re.M | re.S)
+    return m.group(1) if m else txt
 
 
 def timeline(sent, today):
@@ -114,7 +121,7 @@ def load(root="."):
         except UnicodeDecodeError:
             sys.exit(f"{f} is not UTF-8 text - re-save it as UTF-8")
         arch[unicodedata.normalize("NFC", os.path.basename(os.path.normpath(d))).lower()] = \
-            (d, re.findall(r"- \[( |x)\] (.+)", txt))
+            (d, [(t.lower(), n) for t, n in re.findall(r"- \[( |x|X)\] (.+)", stages_section(txt))])
 
     def find_arch(r):
         key = folder_name(r["company"], r["role"])
@@ -129,8 +136,8 @@ def load(root="."):
 
     sent = [r for r in rows if r["_b"] != "Drafted"]
     cnt = collections.Counter(r["_b"] for r in rows)
-    sector = collections.Counter((r["sector"] or "Unspecified").strip() for r in sent)
-    channel = collections.Counter((r["channel"] or "other").strip() for r in sent)
+    sector = collections.Counter(r["sector"].strip() or "Unspecified" for r in sent)
+    channel = collections.Counter(r["channel"].strip() or "other" for r in sent)
     fun = [("Applied", len(sent)), ("Interview", sum(1 for r in sent if r["_stage"] >= INTERVIEW)),
            ("Offer", sum(1 for r in sent if r["_stage"] >= OFFER)), ("Hired", sum(1 for r in sent if r["_stage"] >= HIRED))]
     st = lambda r: r["status"].strip().lower()

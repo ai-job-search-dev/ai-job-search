@@ -214,11 +214,25 @@ class HtmlReportScriptTests(unittest.TestCase):
         self.assertNotIn("@font-face", html)
 
     def test_out_must_be_an_html_file(self):
-        """settings.json pre-approves the script, so --out must not overwrite arbitrary files."""
-        result = subprocess.run([sys.executable, str(self.SCRIPT), "--out", "notes.txt"],
-                                capture_output=True, text=True, cwd=REPO_ROOT)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("--out must end in .html", result.stderr)
+        """settings.json pre-approves the script, so a non-HTML --out, or an out.html symlink to a
+        non-HTML file, must be refused and left untouched."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "job_search_tracker.csv").write_text(",".join(self.HEADER) + "\n", encoding="utf-8")
+            notes = root / "notes.txt"
+            notes.write_text("keep me", encoding="utf-8")
+            link = root / "out.html"
+            try:
+                link.symlink_to(notes)
+                targets = [notes, link]
+            except OSError:  # Windows without symlink rights
+                targets = [notes]
+            for out in targets:
+                result = subprocess.run([sys.executable, str(self.SCRIPT), "--root", tmp, "--out", str(out)],
+                                        capture_output=True, text=True, cwd=REPO_ROOT)
+                self.assertNotEqual(result.returncode, 0, out)
+                self.assertIn("--out must end in .html", result.stderr)
+                self.assertEqual(notes.read_text(encoding="utf-8"), "keep me")
 
     def test_out_expands_a_quoted_home_path(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -231,11 +245,16 @@ class HtmlReportScriptTests(unittest.TestCase):
             self.assertFalse((home / "~").exists())
 
     def test_settings_and_guards_allow_the_script(self):
+        sys.path.insert(0, str(REPO_ROOT / "tools"))
+        import security_guards
         allow = json.loads((REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))["permissions"]["allow"]
-        guards = (REPO_ROOT / "tools" / "security_guards.py").read_text(encoding="utf-8")
         for entry in ("Bash(python tools/html_report.py:*)", "Bash(python3 tools/html_report.py:*)"):
             self.assertIn(entry, allow, f"{entry} missing from .claude/settings.json")
-            self.assertIn(entry, guards, f"{entry} missing from security_guards.py's reviewed allowlist")
+            self.assertIn(entry, security_guards.ALLOWED_PERMISSIONS,
+                          f"{entry} missing from security_guards.py's reviewed allowlist")
+        result = subprocess.run([sys.executable, str(REPO_ROOT / "tools" / "security_guards.py")],
+                                capture_output=True, text=True, cwd=REPO_ROOT)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_new_archive_without_outcome_is_not_matched_to_older_same_company_archive(self):
         """A second application at one company must not inherit the first one's interview."""
@@ -346,6 +365,27 @@ class HtmlReportScriptTests(unittest.TestCase):
         _, summary = self.render([self.row("Acme", "Dev", "applied"), [""] * len(self.HEADER)])
         self.assertIn("sent 1,", summary)
         self.assertNotIn("unrecognised", summary)
+
+    def test_only_the_stages_checklist_counts_and_uppercase_ticks_count(self):
+        outcome = ("# Outcome: Acme — Dev\n\n## Interview stages reached\n- [X] Phone screen\n- [ ] Final round\n\n"
+                   "## Notes\n- [x] Offer received from someone else\n")
+        html, summary = self.render([self.row("Acme", "Dev", "rejected")], {"acme_dev": outcome})
+        self.assertIn("past CV screen 100%", summary)
+        self.assertEqual(self.table(html, "Application funnel")["Offer"], "0")
+
+    def test_malformed_dates_are_not_charted_and_dates_sort_chronologically(self):
+        html, _ = self.render([self.dated("2026-foo"), self.dated("2026-02-03foo", company="B"),
+                               self.dated("2026-9-30", company="C"), self.dated("2026-10-01", company="D")])
+        self.assertIn("2 without a usable date, left out", html)
+        order = re.findall(r"<td class='num' data-v='([^']*)'>", html)
+        self.assertEqual(order[:2], ["2026-10-01", "2026-09-30"])
+
+    def test_uppercase_scheme_links_and_blank_sector_falls_back(self):
+        row = self.row("Acme", "Dev", "applied", "HTTPS://example.com/job")
+        row[self.HEADER.index("sector")] = "   "
+        html, _ = self.render([row])
+        self.assertIn("href='HTTPS://example.com/job'", html)
+        self.assertIn("Unspecified", self.table(html, "Sent by sector"))
 
     @staticmethod
     def table(html, caption):

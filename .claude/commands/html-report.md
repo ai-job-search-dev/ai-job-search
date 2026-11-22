@@ -7,7 +7,7 @@ The work is done by two scripts: `tools/report_data.py` computes every figure an
 ## Step 0: Parse Arguments
 
 - No argument → output to `reports/application-dashboard.html`
-- A path argument (e.g. `/html-report ~/Desktop/report.html`) → pass it as `--out`
+- A path argument (e.g. `/html-report ~/Desktop/report.html`) → pass it as `--out`. It must end in `.html` (the script refuses anything else, including a symlink to a non-HTML file); if the user gave another extension, say so and suggest the `.html` name instead of running it
 - `--open` flag → after writing, tell the user to open the file (cannot open a browser directly)
 
 ---

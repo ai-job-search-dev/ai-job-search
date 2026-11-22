@@ -25,6 +25,12 @@ def E(v):
     return escape(str(v), quote=True)
 
 
+def iso_date(r):
+    """Chronological sort key: 2026-9-30 sorts before 2026-10-01."""
+    w = when(r["date"])
+    return w[0].isoformat() if w else ""
+
+
 def undated(sent):
     n = sum(1 for r in sent if not when(r["date"]))
     return f" · {n} without a usable date, left out" if n else ""
@@ -136,7 +142,7 @@ def render(d):
 
     # Applications table
     rows_sorted = sorted(rows, key=lambda r: (r["company"] or "").lower())
-    rows_sorted.sort(key=lambda r: r["date"] or "", reverse=True)
+    rows_sorted.sort(key=iso_date, reverse=True)
     show_deadline = any((r.get("deadline") or "").strip() for r in rows)
     trs = []
     for r in rows_sorted:
@@ -144,12 +150,12 @@ def render(d):
         short = notes[:90] + ("…" if len(notes) > 90 else "")
         src = (r.get("source") or "").strip()
         src_cell = (f"<a href='{E(src)}' rel='noopener noreferrer' target='_blank'>Open</a>"
-                    if src.startswith(("http://", "https://")) else (E(src[:24]) or BLANK))
+                    if src.lower().startswith(("http://", "https://")) else (E(src[:24]) or BLANK))
         fit = (r.get("fit_rating") or "").strip()
         dl = (r.get("deadline") or "").strip()
         sector, channel = (r["sector"] or "").strip(), (r.get("channel") or "").strip()
         cells = [
-            f"<td class='num' data-v='{E(r['date'] or '')}'>{E(r['date']) or BLANK}</td>",
+            f"<td class='num' data-v='{E(iso_date(r))}'>{E(r['date']) or BLANK}</td>",
             f"<td class='num' data-v='{E(dl)}'>{E(dl) or BLANK}</td>" if show_deadline else "",
             f"<td data-v='{E(r['company'].lower())}'><strong>{E(r['company'])}</strong></td>",
             f"<td data-v='{E(r['role'].lower())}'>{E(r['role'])}</td>",
@@ -484,8 +490,9 @@ def main():
     a = p.parse_args()
     a.out = os.path.expanduser(a.out)  # a quoted ~/Desktop/report.html is not expanded by the shell
     # settings.json pre-approves this script, so --out must not reach arbitrary files
-    if not a.out.lower().endswith(".html"):
-        p.error("--out must end in .html")
+    # realpath: an out.html symlink must not redirect the pre-approved write to another file type
+    if not (a.out.lower().endswith(".html") and os.path.realpath(a.out).lower().endswith(".html")):
+        p.error("--out must end in .html (and not be a symlink to another kind of file)")
     data = load(a.root)
     html = render(data)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
