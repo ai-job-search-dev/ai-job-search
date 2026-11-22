@@ -652,16 +652,12 @@ class InputHandling(GuardFixture):
         root = Path("/tmp").resolve()
         if root.is_relative_to(Path(tempfile.gettempdir()).resolve()):
             self.skipTest("/tmp resolves into the temp directory here")
-        if not root.exists():
-            root.mkdir()
-            self.addCleanup(root.rmdir)
         target = root / f"posting_guard_test_{os.getpid()}.py"
         self.addCleanup(lambda: target.unlink(missing_ok=True))
         code, out, err = self.run_main("--text", "--out", str(target), stdin_text="Job.\n")
         self.assertEqual(code, 2, err)
         self.assertIn("outside the temp directory", err)
         self.assertFalse(target.exists())
-        target.write_text("Job.\n", encoding="utf-8")
         code, out, err = self.run_main("--in", str(target), "--text")
         self.assertEqual(code, 2, err)
         self.assertIn("refusing to read", err)

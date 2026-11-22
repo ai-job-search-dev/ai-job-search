@@ -178,9 +178,6 @@ class SchemeAndPathGuards(FetchPageFixture):
         root = Path("/tmp").resolve()
         if root.is_relative_to(Path(tempfile.gettempdir()).resolve()):
             self.skipTest("/tmp resolves into the temp directory here")
-        if not root.exists():
-            root.mkdir()
-            self.addCleanup(root.rmdir)
         target = root / f"fetch_page_test_{os.getpid()}.py"
         self.addCleanup(lambda: target.unlink(missing_ok=True))
         code, out, err = self.run_main(f"{self.base}/ok.html", "--out", str(target))
