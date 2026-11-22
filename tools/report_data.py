@@ -18,7 +18,8 @@ STATUS_ORDER = ["Drafted", "Active", "Interview", "Offer", "Hired", "Rejected/Cl
 
 
 def norm(x):
-    return re.sub(r"[^a-z0-9]", "", (x or "").lower())
+    # letters and digits of any script, so a Cyrillic or Japanese name keeps its key
+    return "".join(ch for ch in (x or "").lower() if ch.isalnum())
 
 
 def load(root="."):
@@ -34,27 +35,19 @@ def load(root="."):
             unknown.add(s)
         return "Rejected/Closed"
 
-    # archives
-    # every archive folder counts, so a new application's own folder (no outcome.md yet)
-    # is matched instead of falling back to an older same-company archive
+    # archives: a folder name is derived from company + role by the Subfolder naming rule in
+    # documents/README.md, so a row matches only the folder with its exact normalised name.
+    # A folder without outcome.md still counts, with no ticked stages.
     arch = {}
-    for d in glob.glob(os.path.join(root, "documents/applications/*/")):
+    for d in sorted(glob.glob(os.path.join(root, "documents/applications/*/"))):
         f = os.path.join(d, "outcome.md")
         txt = open(f, encoding="utf-8").read() if os.path.exists(f) else ""
         arch[os.path.basename(os.path.normpath(d))] = re.findall(r"- \[( |x)\] (.+)", txt)
+    by_key = {norm(d): d for d in arch}
 
     def find_arch(r):
-        key = norm(r["company"] + r["role"]); c = norm(r["company"])
-        best = None
-        for d in arch:
-            dn = norm(d)
-            if dn == key or (len(dn) > 6 and (dn in key or key in dn)):
-                return d
-            if dn.startswith(c) and c and best is None:
-                rw = [w for w in re.findall(r"[a-z]+", r["role"].lower()) if len(w) > 3]
-                if any(w in d for w in rw):
-                    best = d
-        return best
+        key = norm(r["company"] + r["role"])
+        return by_key.get(key) if key else None
 
     for r in rows:
         b = bucket(r["status"]); r["_b"] = b

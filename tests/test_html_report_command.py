@@ -206,6 +206,38 @@ class HtmlReportScriptTests(unittest.TestCase):
         )
         self.assertIn("past CV screen 50%", summary)
 
+    @staticmethod
+    def folder(company, role):
+        """documents/README.md Subfolder naming: lowercase, spaces to underscores, drop the rest."""
+        name = re.sub(r"[^\w]", "", f"{company} {role}".lower().replace(" ", "_"))
+        return re.sub(r"_+", "_", name).strip("_")
+
+    def past_screen(self, rows, archives):
+        _, summary = self.render([self.row(*r) for r in rows],
+                                 {self.folder(c, r): o for (c, r), o in archives.items()})
+        return re.search(r"past CV screen (\S+),", summary).group(1)
+
+    INTERVIEWED = "- [x] Phone screen\n- [x] Technical interview\n"
+
+    def test_shorter_role_does_not_match_a_longer_roles_folder(self):
+        rows = [("Acme", "Engineering Manager", "rejected"), ("Acme", "Engineer", "applied")]
+        both = {("Acme", "Engineering Manager"): self.INTERVIEWED, ("Acme", "Engineer"): None}
+        self.assertEqual(self.past_screen(rows, both), "50%")
+        first_only = {("Acme", "Engineering Manager"): self.INTERVIEWED}
+        self.assertEqual(self.past_screen(rows, first_only), "50%")
+
+    def test_company_prefix_does_not_match_another_company(self):
+        rows = [("Metabase", "Software Engineer", "rejected"), ("Meta", "Software Engineer", "applied")]
+        archives = {("Metabase", "Software Engineer"): "- [x] Phone screen\n"}
+        self.assertEqual(self.past_screen(rows, archives), "50%")
+
+    def test_non_latin_names_match_their_own_folder(self):
+        names = [("Яндекс", "Инженер"), ("Сбер", "Аналитик"), ("Τράπεζα", "Μηχανικός"),
+                 ("Εταιρεία", "Αναλυτής"), ("楽天", "エンジニア"), ("任天堂", "開発者")]
+        archives = {n: None for n in names}
+        archives[names[3]] = "- [x] Phone screen\n"
+        self.assertEqual(self.past_screen([(c, r, "rejected") for c, r in names], archives), "17%")
+
 
 @unittest.skipUnless(
     _HAVE_YAML,
