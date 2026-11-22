@@ -192,6 +192,13 @@ class HtmlReportScriptTests(unittest.TestCase):
         self.assertNotIn("<img src=x", html)
         self.assertIn("x&#x27; onmouseover=&#x27;alert(1)&#x27; &quot; onfocus=", html)
 
+    def test_empty_cells_do_not_print_none_and_the_rate_reading_is_stated(self):
+        row = self.row("Acme", "Dev", "ghosted")
+        row[self.HEADER.index("sector")] = ""
+        html, _ = self.render([row])
+        self.assertNotIn(">None<", html)
+        self.assertIn("(ghosted) are counted under Closed but left out of the rate", html)
+
     def test_values_are_escaped_and_page_is_offline(self):
         html, _ = self.render([
             self.row("<script>alert(1)</script>", "Engineer", "applied", "https://example.com/job"),

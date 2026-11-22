@@ -30,7 +30,7 @@ Status normalisation — tracker values map to six canonical buckets before stat
 - `offer` → **Offer**
 - `hired` → **Hired**
 - `rejected` / `no_response` / `no response` / `offer_declined` / `offer declined` / `withdrawn` → **Rejected/Closed**
-- anything else → **Rejected/Closed**, and the unrecognised value is named once on the page — matching is case-insensitive
+- anything else → **Rejected/Closed**, and the unrecognised value is named once on the page and in the summary line — matching is case-insensitive. It stays out of the rejection rate's denominator (it is not a known final outcome), and the page says so
 
    The bucket map tolerates the legacy space spellings on read so nothing written before
    the canonical forms were locked drops out of the stats; the **Tracker status vocabulary**
@@ -60,7 +60,7 @@ The page contains a KPI strip, the funnel, a status mix bar, applications over t
 
 ### Table: columns to include
 
-`Date` · `Deadline` · `Company` · `Role` · `Sector` · `Channel` · `Status` · `Fit` · `Notes` (truncated to 90 chars with `title` tooltip for full text) · `Source` (link or None)
+`Date` · `Deadline` · `Company` · `Role` · `Sector` · `Channel` · `Status` · `Fit` · `Notes` (truncated to 90 chars with `title` tooltip for full text) · `Source` (link or —). An empty cell shows —.
 
 The Deadline column is omitted while every row's deadline is empty.
 

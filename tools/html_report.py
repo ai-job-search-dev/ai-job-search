@@ -16,6 +16,7 @@ from html import escape
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from report_data import STAGES, STATUS_ORDER, load, when  # noqa: E402
 
+BLANK = "<span class='muted' aria-label='empty'>—</span>"
 KEY = {"Drafted": "drafted", "Active": "active", "Interview": "interview", "Offer": "offer",
        "Hired": "hired", "Rejected/Closed": "rejected"}
 
@@ -138,20 +139,20 @@ def render(d):
         short = notes[:90] + ("…" if len(notes) > 90 else "")
         src = (r.get("source") or "").strip()
         src_cell = (f"<a href='{E(src)}' rel='noopener noreferrer' target='_blank'>Open</a>"
-                    if src.startswith(("http://", "https://")) else (E(src[:24]) or "<span class='muted'>None</span>"))
+                    if src.startswith(("http://", "https://")) else (E(src[:24]) or BLANK))
         fit = (r.get("fit_rating") or "").strip()
         dl = (r.get("deadline") or "").strip()
         sector, channel = (r["sector"] or "").strip(), (r.get("channel") or "").strip()
         cells = [
-            f"<td class='num' data-v='{E(r['date'] or '')}'>{E(r['date'] or 'None')}</td>",
-            f"<td class='num' data-v='{E(dl)}'>{E(dl) or '<span class=muted>None</span>'}</td>" if show_deadline else "",
+            f"<td class='num' data-v='{E(r['date'] or '')}'>{E(r['date']) or BLANK}</td>",
+            f"<td class='num' data-v='{E(dl)}'>{E(dl) or BLANK}</td>" if show_deadline else "",
             f"<td data-v='{E(r['company'].lower())}'><strong>{E(r['company'])}</strong></td>",
             f"<td data-v='{E(r['role'].lower())}'>{E(r['role'])}</td>",
-            f"<td data-v='{E(sector.lower())}'>{E(sector) or '<span class=muted>None</span>'}</td>",
-            f"<td data-v='{E(channel.lower())}'>{E(channel) or '<span class=muted>None</span>'}</td>",
+            f"<td data-v='{E(sector.lower())}'>{E(sector) or BLANK}</td>",
+            f"<td data-v='{E(channel.lower())}'>{E(channel) or BLANK}</td>",
             f"<td data-v='{E(r['_b'])}'><span class='badge b-{KEY[r['_b']]}'>{E(r['_b'])}</span></td>",
-            f"<td class='num right' data-v='{E(fit.zfill(3) if fit.isdigit() else '')}'>{E(fit) or '<span class=muted>None</span>'}</td>",
-            f"<td class='notes' title='{E(notes)}'>{E(short) or '<span class=muted>None</span>'}</td>",
+            f"<td class='num right' data-v='{E(fit.zfill(3) if fit.isdigit() else '')}'>{E(fit) or BLANK}</td>",
+            f"<td class='notes' title='{E(notes)}'>{E(short) or BLANK}</td>",
             f"<td>{src_cell}</td>",
         ]
         trs.append(
@@ -169,8 +170,12 @@ def render(d):
     sectors = sorted({(r["sector"] or "").strip() for r in rows if (r["sector"] or "").strip()})
     sector_opts = "".join(f"<option>{E(s)}</option>" for s in sectors)
     status_opts = "".join(f"<option>{E(s)}</option>" for s in STATUS_ORDER)
-    unknown = (f"<p class='muted small'>Unrecognised status values: {E(unknown_list(d))}</p>"
-               if d["unknown"] else "")
+    # The rate reads unknown statuses as unresolved: they sit under Closed but outside its
+    # denominator, so say so on the page rather than leave the two figures to disagree.
+    unknown = ("<p class='muted small'>Rejection rate: rejected and no_response ÷ rows with a final outcome "
+               "(rejected, no_response, offer_declined, withdrawn, hired)."
+               + (f" Unrecognised status values ({E(unknown_list(d))}) are counted under Closed but left out "
+                  "of the rate." if d["unknown"] else "") + "</p>")
 
     return TEMPLATE.format(
         today=E(today.strftime("%d %b %Y")), iso=E(d["today"]), kpis=kpi_html,
