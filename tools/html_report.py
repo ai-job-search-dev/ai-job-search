@@ -25,6 +25,11 @@ def E(v):
     return escape(str(v), quote=True)
 
 
+def undated(sent):
+    n = sum(1 for r in sent if not when(r["date"]))
+    return f" · {n} without a usable date, left out" if n else ""
+
+
 def unknown_list(d):
     return ", ".join(sorted(s or "(empty)" for s in d["unknown"]))
 
@@ -123,7 +128,7 @@ def render(d):
     # a partial date (year or month only) is kept, shown as "since <date>" rather than a day count
     waiting = sorted(((r, when(r["date"])) for r in rows if r["_b"] == "Active" and when(r["date"])),
                      key=lambda x: x[1][0])[:8]
-    waiting = [(r, (today - dt).days if p == "day" else f"since {r['date'].strip()}") for r, (dt, p) in waiting]
+    waiting = [(r, max((today - dt).days, 0) if p == "day" else f"since {r['date'].strip()}") for r, (dt, p) in waiting]
     wait_rows = "".join(
         f"<tr><td>{E(r['company'])}</td><td>{E(r['role'])}</td>"
         f"<td class='num right'>{E(days)}</td></tr>" for r, days in waiting) or \
@@ -180,7 +185,7 @@ def render(d):
     return TEMPLATE.format(
         today=E(today.strftime("%d %b %Y")), iso=E(d["today"]), kpis=kpi_html,
         funnel=funnel, funnel_table=hidden_table("Application funnel", fun),
-        mix=status_mix(counts), week=week_svg, week_table=hidden_table("Applications over time", week_pairs), unit=d["timeline"][0],
+        mix=status_mix(counts), week=week_svg, week_table=hidden_table("Applications over time", week_pairs), unit=d["timeline"][0] + undated(sent),
         stopped=stop_svg, stopped_table=hidden_table("Where closed applications stopped", stop_counts),
         closed=len(closed), wait_rows=wait_rows, rows="".join(trs), total=len(rows),
         sector_opts=sector_opts, status_opts=status_opts, unknown=unknown,

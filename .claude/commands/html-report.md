@@ -21,7 +21,7 @@ The script reads:
 
    Rows written before `deadline` existed have thirteen fields and no fourteenth value. Treat the missing field as empty - never drop the row, and never infer a deadline from its `date`.
 
-2. **`documents/applications/*/`** — every archive folder, with the stage checkboxes from its `outcome.md` when one exists. Each tracker row is matched to the folder whose name is its company+role under the **Subfolder naming** rule in `documents/README.md`, compared exactly after keeping only letters and digits of any script. A row with no folder of its own counts from its status alone; a folder without `outcome.md` still counts, with no stages ticked.
+2. **`documents/applications/*/`** — every archive folder, with the stage checkboxes from its `outcome.md` when one exists. Each tracker row is matched to the folder whose name is its company+role under the **Subfolder naming** rule in `documents/README.md`, compared exactly (letters and digits of any script, NFC). A row with no folder of its own counts from its status alone. A re-application to the same company and role shares the earlier application's folder and its ticked stages; a folder without `outcome.md` still counts, with no stages ticked.
 
 Status normalisation — tracker values map to six canonical buckets before stats are computed:
 - `drafted` → **Drafted** (documents written by `/apply`, not yet submitted)
@@ -42,7 +42,7 @@ Status normalisation — tracker values map to six canonical buckets before stat
 
 **Drafted rows are excluded from every statistic below** — they were never submitted. The Drafted count is reported on its own and appears only in the status breakdown.
 
-- **Totals by status bucket, sector, channel and time:** per week while the sent rows span under 12 weeks of full dates, otherwise per month up to the last application, or per year when some `date` values record only the year (e.g. `2025`). A partial date is never dropped.
+- **Totals by status bucket, sector, channel and time:** per week while the first application to today spans under 12 weeks of full dates, otherwise per month up to the last application, or per year when some `date` values record only the year (e.g. `2025`). A partial date is never dropped; a date before 1970 or over a year ahead (a typo) is left out of the chart and counted in its subtitle.
 - **Funnel rates:** what % progressed past resume screen (reached Interview or beyond). Stage-reached comes from history, not current status: an application counts as having reached a stage when its current status implies it **or** its matched `outcome.md` stage checkboxes show the stage was reached. Current status alone structurally undercounts every earlier stage. `interview` implies Interview, `offer` and `offer_declined` imply Offer, `hired` implies Hired. The "where closed applications stopped" chart reads the same furthest stage, so the two never disagree.
 - **Rejection rate:** true rejections (`rejected`, `no_response`) ÷ applications with a final outcome. `offer_declined` (the candidate turned the offer down - a success) and `withdrawn` (candidate-initiated) are not rejections and stay out of the numerator; Interview and Offer rows are unresolved, so they stay out of the denominator along with Active.
 

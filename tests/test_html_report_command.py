@@ -13,6 +13,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import unittest
 from pathlib import Path
 
@@ -178,15 +179,15 @@ class HtmlReportScriptTests(unittest.TestCase):
         13-field row. Counting withdrawn/offer_declined as rejections, drafted rows as sent, or
         dropping the legacy spelling each changes this line."""
         statuses = ["drafted", "applied", "interview", "offer", "hired", "rejected", "no_response",
-                    "no response", "offer_declined", "withdrawn", "ghosted"]
+                    "no response", "offer_declined", "offer declined", "withdrawn", "ghosted"]
         rows = [self.row(f"Co{i}", "Dev", st) for i, st in enumerate(statuses)]
         rows.append(self.row("Legacy", "Dev", "applied")[:13])
         rows[1][self.HEADER.index("notes")] = self.PAYLOAD
         html, summary = self.render(rows)
         self.assertEqual(
             summary.split(": ", 1)[1].strip(),
-            "sent 11, drafted 1, active 2, interview 1, offer 1, hired 1, closed 6, "
-            "past CV screen 36%, rejection rate 50%; unrecognised status values: ghosted")
+            "sent 12, drafted 1, active 2, interview 1, offer 1, hired 1, closed 7, "
+            "past CV screen 42%, rejection rate 43%; unrecognised status values: ghosted")
         self.assertNotIn("onmouseover='alert", html)
         self.assertNotIn('onfocus="alert', html)
         self.assertNotIn("<img src=x", html)
@@ -264,8 +265,15 @@ class HtmlReportScriptTests(unittest.TestCase):
         self.assertIn(needle, result.stdout + result.stderr)
 
     def test_excel_csv_utf8_with_bom_is_read(self):
-        result = self.run_raw(self.csv_text([self.row("Acme", "Dev", "applied")]).encode("utf-8-sig"))
-        self.assert_clean_exit(result, 0, "sent 1,")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "job_search_tracker.csv").write_bytes(
+                self.csv_text([self.row("Acme", "Dev", "applied")]).encode("utf-8-sig"))
+            result = subprocess.run([sys.executable, str(self.SCRIPT), "--root", tmp, "--out", str(root / "o.html")],
+                                    capture_output=True, text=True, cwd=REPO_ROOT)
+            self.assert_clean_exit(result, 0, "sent 1,")
+            self.assertIn("data-v='2026-10-01'", (root / "o.html").read_text(encoding="utf-8"),
+                          "the BOM must not swallow the date header")
 
     def test_row_with_fewer_fields_than_the_header_is_kept(self):
         short = self.row("Acme", "Dev", "applied")[:13]
@@ -309,6 +317,35 @@ class HtmlReportScriptTests(unittest.TestCase):
         html, _ = self.render([self.dated("2025"), self.dated("2026-02-11", "rejected", "Beta")])
         self.assertEqual(self.table(html, "Applications over time"), {"2025": "1", "2026": "1"})
         self.assertIn("since 2025", html)
+
+    def test_names_that_differ_only_in_underscores_or_accent_encoding_match_their_own_folder(self):
+        self.assertEqual(self.past_screen([("Ab", "C", "rejected"), ("A", "Bc", "rejected")],
+                                          {("Ab", "C"): "- [x] Final round\n", ("A", "Bc"): None}), "50%")
+        nfd = unicodedata.normalize("NFD", "café_müller_développeur")
+        _, summary = self.render([self.row("Café Müller", "Développeur", "rejected")], {nfd: "- [x] Phone screen\n"})
+        self.assertIn("past CV screen 100%", summary)
+
+    def test_outcome_that_is_not_utf8_asks_for_a_resave(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "job_search_tracker.csv").write_text(self.csv_text([self.row("Acme", "Dev", "applied")]),
+                                                         encoding="utf-8")
+            (root / "documents" / "applications" / "acme_dev").mkdir(parents=True)
+            (root / "documents" / "applications" / "acme_dev" / "outcome.md").write_bytes(b"- [x] Phone screen caf\xe9\n")
+            result = subprocess.run([sys.executable, str(self.SCRIPT), "--root", tmp, "--out", str(root / "o.html")],
+                                    capture_output=True, text=True, cwd=REPO_ROOT)
+            self.assert_clean_exit(result, 1, "re-save it as UTF-8")
+
+    def test_typo_years_and_slash_dates_do_not_distort_the_chart(self):
+        html, _ = self.render([self.dated("2999"), self.dated("9999-12-31", company="B"), self.dated("0001-01-01", company="C"),
+                               self.dated("2026/02/03", company="D"), self.dated("2026-03-04", company="E")])
+        self.assertEqual(self.table(html, "Applications over time"), {"Feb 2026": "1", "Mar 2026": "1"})
+        self.assertIn("3 without a usable date, left out", html)
+
+    def test_rows_of_bare_commas_are_not_applications(self):
+        _, summary = self.render([self.row("Acme", "Dev", "applied"), [""] * len(self.HEADER)])
+        self.assertIn("sent 1,", summary)
+        self.assertNotIn("unrecognised", summary)
 
     @staticmethod
     def table(html, caption):

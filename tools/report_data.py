@@ -12,6 +12,7 @@ import glob
 import os
 import re
 import sys
+import unicodedata
 
 BUCKET = {"drafted": "Drafted", "applied": "Active", "interview": "Interview", "offer": "Offer", "hired": "Hired"}
 CLOSED = {"rejected", "no_response", "no response", "offer_declined", "offer declined", "withdrawn"}
@@ -29,28 +30,38 @@ INTERVIEW, OFFER, HIRED = 1, 5, 6
 STATUS_ORDER = ["Drafted", "Active", "Interview", "Offer", "Hired", "Rejected/Closed"]
 
 
-def norm(x):
-    # letters and digits of any script, so a Cyrillic or Japanese name keeps its key
-    return "".join(ch for ch in (x or "").lower() if ch.isalnum())
+def folder_name(company, role):
+    """The Subfolder naming rule in documents/README.md: <company>_<role>, lowercase, spaces to
+    underscores, every character but a letter, digit or underscore dropped, runs of underscores
+    collapsed, ends trimmed. NFC first, so a name typed with combining accents matches its folder."""
+    name = unicodedata.normalize("NFC", f"{company} {role}").lower().replace(" ", "_")
+    name = "".join(ch for ch in name if ch.isalnum() or ch == "_")
+    return re.sub(r"_+", "_", name).strip("_")
 
 
-def when(s):
-    """(start of the period, precision) for a YYYY, YYYY-MM or YYYY-MM-DD date; None if unparseable."""
-    m = re.match(r"\s*(\d{4})(?:-(\d{1,2})(?:-(\d{1,2}))?)?(?!\d)", s or "")
+def when(s, today=None):
+    """(start of the period, precision) for a YYYY, YYYY-MM or YYYY-MM-DD date (- or / between the
+    parts); None if unparseable, before 1970 or over a year ahead, so a typo year cannot stretch
+    the chart over centuries."""
+    m = re.match(r"\s*(\d{4})(?:[-/](\d{1,2})(?:[-/](\d{1,2}))?)?(?!\d)", s or "")
     if not m:
         return None
     y, mo, d = m.groups()
     try:
-        return datetime.date(int(y), int(mo or 1), int(d or 1)), "day" if d else "month" if mo else "year"
+        day = datetime.date(int(y), int(mo or 1), int(d or 1))
     except ValueError:
         return None
+    today = today or datetime.date.today()
+    if not datetime.date(1970, 1, 1) <= day <= today + datetime.timedelta(days=366):
+        return None
+    return day, "day" if d else "month" if mo else "year"
 
 
 def timeline(sent, today):
-    """Sent applications per week while the search spans under 12 weeks of full dates, else per
+    """Sent applications per week while first application to today spans under 12 weeks of full dates, else per
     month, or per year when some rows record only the year. Months and years end at the last
     application, so a finished search is not a run of empty bars."""
-    w = [x for x in (when(r["date"]) for r in sent) if x]
+    w = [x for x in (when(r["date"], today) for r in sent) if x]
     if not w:
         return "week", []
     days = [d for d, _ in w]
@@ -79,6 +90,7 @@ def load(root="."):
     for r in rows:  # a short row (13-field legacy, or truncated) reads its missing fields as empty
         for h in FIELDS:
             r[h] = r.get(h) or ""
+    rows = [r for r in rows if any(r[h].strip() for h in FIELDS)]  # a row of bare commas is not an application
     today = datetime.date.today().isoformat()
     unknown = set()
 
@@ -90,24 +102,28 @@ def load(root="."):
             unknown.add(s)
         return "Rejected/Closed"
 
-    # archives: a folder name is derived from company + role by the Subfolder naming rule in
-    # documents/README.md, so a row matches only the folder with its exact normalised name.
-    # A folder without outcome.md still counts, with no ticked stages.
+    # archives: a row matches only the folder named from its company + role by the Subfolder
+    # naming rule. A folder without outcome.md still counts, with no ticked stages.
+    # ponytail: a re-application to the same company + role shares the earlier one's folder (and
+    # ticks); the naming rule gives them one name, so it cannot be told apart here.
     arch = {}
     for d in sorted(glob.glob(os.path.join(root, "documents/applications/*/"))):
         f = os.path.join(d, "outcome.md")
-        txt = open(f, encoding="utf-8").read() if os.path.exists(f) else ""
-        arch[os.path.basename(os.path.normpath(d))] = re.findall(r"- \[( |x)\] (.+)", txt)
-    by_key = {norm(d): d for d in arch}
+        try:
+            txt = open(f, encoding="utf-8").read() if os.path.exists(f) else ""
+        except UnicodeDecodeError:
+            sys.exit(f"{f} is not UTF-8 text - re-save it as UTF-8")
+        arch[unicodedata.normalize("NFC", os.path.basename(os.path.normpath(d))).lower()] = \
+            (d, re.findall(r"- \[( |x)\] (.+)", txt))
 
     def find_arch(r):
-        key = norm(r["company"] + r["role"])
-        return by_key.get(key) if key else None
+        key = folder_name(r["company"], r["role"])
+        return key if key in arch else None
 
     for r in rows:
         b = bucket(r["status"]); r["_b"] = b
         a = find_arch(r); r["_a"] = a
-        ticked = [n for t, n in arch.get(a, []) if t == "x"] if a else []
+        ticked = [n for t, n in arch[a][1] if t == "x"] if a else []
         tick = max((next((i for i, pat in TICK_STAGE if re.search(pat, n, re.I)), 0) for n in ticked), default=0)
         r["_stage"] = max(STATUS_STAGE.get(r["status"].strip().lower(), 0), tick)
 
