@@ -21,7 +21,7 @@ The script reads:
 
    Rows written before `deadline` existed have thirteen fields and no fourteenth value. Treat the missing field as empty - never drop the row, and never infer a deadline from its `date`.
 
-2. **`documents/applications/*/`** — every archive folder, with the stage checkboxes from its `outcome.md` when one exists. Each tracker row is matched to the folder whose name is its company+role under the **Subfolder naming** rule in `documents/README.md`, compared exactly (letters and digits of any script, NFC). A row with no folder of its own counts from its status alone. A re-application to the same company and role shares the earlier application's folder and its ticked stages; a folder without `outcome.md` still counts, with no stages ticked.
+2. **`documents/applications/*/`** — every archive folder, with the stage checkboxes from its `outcome.md` when one exists. Each tracker row is matched to the folder whose name is its company+role under the **Subfolder naming** rule in `documents/README.md`, with the folder's own name put through the same rule before comparing (letters and digits of any script, NFC), so archives named under the older rule (hyphens and dots kept) or by hand still match. A row with no folder of its own counts from its status alone. A re-application to the same company and role shares the earlier application's folder and its ticked stages; a folder without `outcome.md` still counts, with no stages ticked.
 
 Status normalisation — tracker values map to six canonical buckets before stats are computed:
 - `drafted` → **Drafted** (documents written by `/apply`, not yet submitted)

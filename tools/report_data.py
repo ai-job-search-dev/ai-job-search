@@ -120,7 +120,9 @@ def load(root="."):
             txt = open(f, encoding="utf-8").read() if os.path.exists(f) else ""
         except UnicodeDecodeError:
             sys.exit(f"{f} is not UTF-8 text - re-save it as UTF-8")
-        arch[unicodedata.normalize("NFC", os.path.basename(os.path.normpath(d))).lower()] = \
+        # the folder name goes through the same rule as the row key, so archives named under the
+        # older rule (hyphens, dots kept) or by hand, and names with vowel signs, still match
+        arch[folder_name(os.path.basename(os.path.normpath(d)), "")] = \
             (d, [(t.lower(), n) for t, n in re.findall(r"- \[( |x|X)\] (.+)", stages_section(txt))])
 
     def find_arch(r):

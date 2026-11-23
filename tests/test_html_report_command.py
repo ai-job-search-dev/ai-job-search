@@ -343,6 +343,21 @@ class HtmlReportScriptTests(unittest.TestCase):
         self.assertEqual(self.table(html, "Applications over time"), {"2025": "1", "2026": "1"})
         self.assertIn("since 2025", html)
 
+    def test_folders_named_under_the_older_rule_still_match(self):
+        """Before #329 the rule was only lowercase + underscores, so hyphens and dots stayed."""
+        rows = [("Coca-Cola Europacific Partners", "Data Analyst", "rejected"),
+                ("Acme Inc.", "Sr. Engineer", "rejected")]
+        _, summary = self.render([self.row(*r) for r in rows],
+                                 {"coca-cola_europacific_partners_data_analyst": "- [x] Phone screen\n",
+                                  "acme_inc._sr._engineer": "- [x] Phone screen\n"})
+        self.assertIn("past CV screen 100%", summary)
+
+    def test_names_with_vowel_signs_match_a_folder_that_keeps_them(self):
+        company, role = "टाटा", "इंजीनियर"  # Devanagari vowel signs are marks, not isalnum()
+        _, summary = self.render([self.row(company, role, "rejected")],
+                                 {f"{company}_{role}": "- [x] Phone screen\n"})
+        self.assertIn("past CV screen 100%", summary)
+
     def test_names_that_differ_only_in_underscores_or_accent_encoding_match_their_own_folder(self):
         self.assertEqual(self.past_screen([("Ab", "C", "rejected"), ("A", "Bc", "rejected")],
                                           {("Ab", "C"): "- [x] Final round\n", ("A", "Bc"): None}), "50%")
