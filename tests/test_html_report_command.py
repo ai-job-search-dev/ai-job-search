@@ -314,6 +314,13 @@ class HtmlReportScriptTests(unittest.TestCase):
         result = self.run_raw(text.encode("utf-8-sig"))
         self.assert_clean_exit(result, 1, "re-save it as comma-separated CSV UTF-8")
 
+    def test_empty_tracker_exits_with_a_message(self):
+        self.assert_clean_exit(self.run_raw(b""), 1, "re-save it as comma-separated CSV UTF-8")
+
+    def test_capitalised_header_is_read(self):
+        result = self.run_raw(b"Date,Company,Role,Status\n2026-10-01,Acme,Dev,applied\n")
+        self.assert_clean_exit(result, 0, "sent 1,")
+
     def test_missing_tracker_exits_with_a_message(self):
         self.assert_clean_exit(self.run_raw(None), 1, "job_search_tracker.csv not found")
 
