@@ -374,6 +374,11 @@ class HtmlReportScriptTests(unittest.TestCase):
         nfd = unicodedata.normalize("NFD", "café_müller_développeur")
         _, summary = self.render([self.row("Café Müller", "Développeur", "rejected")], {nfd: "- [x] Phone screen\n"})
         self.assertIn("past CV screen 100%", summary)
+        # and the other way round: decomposed accents in the tracker row, precomposed folder
+        nfd_row = [unicodedata.normalize("NFD", v) for v in ("Café Müller", "Développeur")]
+        _, summary = self.render([self.row(*nfd_row, "rejected")],
+                                 {unicodedata.normalize("NFC", "café_müller_développeur"): "- [x] Phone screen\n"})
+        self.assertIn("past CV screen 100%", summary)
 
     def test_outcome_that_is_not_utf8_asks_for_a_resave(self):
         with tempfile.TemporaryDirectory() as tmp:
