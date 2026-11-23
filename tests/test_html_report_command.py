@@ -343,6 +343,11 @@ class HtmlReportScriptTests(unittest.TestCase):
         html, _ = self.render([self.dated(datetime.date.today().isoformat())])
         self.assertIn("Sent, per week", html)
 
+    def test_active_rows_without_a_usable_date_are_counted_in_the_waiting_table(self):
+        html, _ = self.render([self.dated("01-10-2026"), self.dated("02-10-2026", company="Beta")])
+        self.assertIn("2 active applications have no usable date", html)
+        self.assertNotIn("Nothing is waiting on a reply", html)
+
     def test_a_year_only_date_is_charted_and_waits(self):
         html, _ = self.render([self.dated("2025"), self.dated("2026-02-11", "rejected", "Beta")])
         self.assertEqual(self.table(html, "Applications over time"), {"2025": "1", "2026": "1"})

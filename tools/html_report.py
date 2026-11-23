@@ -139,8 +139,12 @@ def render(d):
     waiting = [(r, max((today - dt).days, 0) if p == "day" else f"since {r['date'].strip()}") for r, (dt, p) in waiting]
     wait_rows = "".join(
         f"<tr><td>{E(r['company'])}</td><td>{E(r['role'])}</td>"
-        f"<td class='num right'>{E(days)}</td></tr>" for r, days in waiting) or \
-        "<tr><td colspan='3' class='empty'>Nothing is waiting on a reply.</td></tr>"
+        f"<td class='num right'>{E(days)}</td></tr>" for r, days in waiting)
+    no_date = sum(1 for r in rows if r["_b"] == "Active" and not when(r["date"]))
+    if no_date:  # e.g. Excel re-saved the dates as 01-10-2026; they are still waiting
+        wait_rows += (f"<tr><td colspan='3' class='empty'>{no_date} active application"
+                      f"{'s have' if no_date > 1 else ' has'} no usable date, so the wait cannot be counted.</td></tr>")
+    wait_rows = wait_rows or "<tr><td colspan='3' class='empty'>Nothing is waiting on a reply.</td></tr>"
 
     # Applications table
     rows_sorted = sorted(rows, key=lambda r: (r["company"] or "").lower())
