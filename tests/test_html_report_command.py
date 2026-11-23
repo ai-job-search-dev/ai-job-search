@@ -309,6 +309,11 @@ class HtmlReportScriptTests(unittest.TestCase):
         result = self.run_raw(self.csv_text([self.row("Café Ünïon", "Dev", "applied")]).encode("cp1252"))
         self.assert_clean_exit(result, 1, "re-save it as CSV UTF-8")
 
+    def test_semicolon_tracker_asks_for_a_comma_separated_resave(self):
+        text = self.csv_text([self.row("Acme", "Dev", "applied")]).replace(",", ";")
+        result = self.run_raw(text.encode("utf-8-sig"))
+        self.assert_clean_exit(result, 1, "re-save it as comma-separated CSV UTF-8")
+
     def test_missing_tracker_exits_with_a_message(self):
         self.assert_clean_exit(self.run_raw(None), 1, "job_search_tracker.csv not found")
 

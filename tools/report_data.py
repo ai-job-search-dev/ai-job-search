@@ -91,9 +91,14 @@ def load(root="."):
     try:
         # utf-8-sig: Excel's "CSV UTF-8" save starts with a BOM that would land in the first header
         with open(path, newline="", encoding="utf-8-sig") as fh:
-            rows = list(csv.DictReader(fh))
+            reader = csv.DictReader(fh)
+            rows = list(reader)
     except UnicodeDecodeError:
         sys.exit(f"{path} is not UTF-8 text - re-save it as CSV UTF-8")
+    # Excel in a Danish or German locale saves "CSV UTF-8" with semicolons: one unreadable
+    # column would otherwise render a valid-looking page of zeros
+    if not {"company", "role", "status"} <= set(reader.fieldnames or []):
+        sys.exit(f"{path} has no company, role and status columns - re-save it as comma-separated CSV UTF-8")
     for r in rows:  # a short row (13-field legacy, or truncated) reads its missing fields as empty
         for h in FIELDS:
             r[h] = r.get(h) or ""
