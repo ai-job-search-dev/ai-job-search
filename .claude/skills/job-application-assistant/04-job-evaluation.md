@@ -16,7 +16,7 @@ Read the posting's eligibility / work rights / "who can apply" section **verbati
 |-----------------|---------|
 | Names a **citizenship or permanent-residency requirement** ("must be a citizen of X", "permanent resident", "PR required", "full working rights" where the employer means citizen/PR) | **FAIL — hard stop.** Do not score, do not draft. Quote the exact wording back to the user. |
 | Requires a **security clearance** at any level | **FAIL** in most countries, since clearance is normally gated on citizenship. Verify the specific scheme rather than assuming. |
-| States that it **does not sponsor or support** work authorisation ("we do not offer visa sponsorship", "no sponsorship available", "must already have the right to work without sponsorship", "unable to support relocation") | **FAIL — hard stop**, unless the candidate already holds the right to work there. Quote the exact wording back to the user. |
+| States that it **does not sponsor or support** work authorisation ("we do not offer visa sponsorship", "no sponsorship available", "must already have the right to work without sponsorship", "we cannot support visa or work-authorisation applications") | **FAIL — hard stop**, unless the candidate already holds the right to work there. Quote the exact wording back to the user. |
 | **Explicitly names** the candidate's permit class, or says "international applicants welcome", "visa holders considered", "we sponsor" | **PASS** — verified acceptance. Worth noting as a positive in the application. |
 | **Silent** on citizenship or residency | **PROCEED, but mark unverified.** Check the employer's own careers or international-applicant page before drafting. |
 
