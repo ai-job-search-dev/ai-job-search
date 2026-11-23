@@ -129,9 +129,11 @@ def load(root="."):
         except UnicodeDecodeError:
             sys.exit(f"{f} is not UTF-8 text - re-save it as UTF-8")
         # the folder name goes through the same rule as the row key, so archives named under the
-        # older rule (hyphens, dots kept) or by hand, and names with vowel signs, still match
-        arch[folder_name(os.path.basename(os.path.normpath(d)), "")] = \
-            (d, [(t.lower(), n) for t, n in re.findall(r"- \[( |x|X)\] (.+)", stages_section(txt))])
+        # older rule (hyphens, dots kept) or by hand, and names with vowel signs, still match.
+        # Folders that share a key (an old-rule archive next to the one /outcome writes now) merge
+        # their ticks, so none is lost and the result does not depend on sort order.
+        arch.setdefault(folder_name(os.path.basename(os.path.normpath(d)), ""), (d, []))[1].extend(
+            (t.lower(), n) for t, n in re.findall(r"- \[( |x|X)\] (.+)", stages_section(txt)))
 
     def find_arch(r):
         key = folder_name(r["company"], r["role"])

@@ -369,6 +369,15 @@ class HtmlReportScriptTests(unittest.TestCase):
                                   "acme_inc._sr._engineer": "- [x] Phone screen\n"})
         self.assertIn("past CV screen 100%", summary)
 
+    def test_folders_sharing_a_key_merge_their_stages(self):
+        """An archive from before #329 next to the folder /outcome writes now: the later-sorted
+        folder must not drop the earlier one's ticks."""
+        html, summary = self.render([self.row("Acme Inc.", "Dev", "rejected")],
+                                    {"acme_inc._dev": "- [x] Phone screen\n- [x] Final round\n",
+                                     "acme_inc_dev": "- [ ] Phone screen\n"})
+        self.assertIn("past CV screen 100%", summary)
+        self.assertEqual(self.table(html, "Where closed applications stopped")["Final round"], "1")
+
     def test_names_with_vowel_signs_match_a_folder_that_keeps_them(self):
         company, role = "टाटा", "इंजीनियर"  # Devanagari vowel signs are marks, not isalnum()
         _, summary = self.render([self.row(company, role, "rejected")],
