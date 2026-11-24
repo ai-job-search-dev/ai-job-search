@@ -22,12 +22,30 @@ excluded: the contract is about the search output /scrape consumes.
 """
 
 import re
+import tempfile
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRAPER_SKILL = REPO_ROOT / ".claude" / "skills" / "job-scraper" / "SKILL.md"
-PORTAL_CLIS = sorted((REPO_ROOT / ".agents" / "skills").glob("*-search"))
+
+
+def find_portal_clis(skills_dir: Path | None = None) -> list[Path]:
+    """Every `*-search` skill with a CLI source tree, matching test_apply_host_check.
+
+    Ignores orphaned directories from pre-#829 checkouts where git removed
+    tracked files but retained gitignored cli/node_modules/ directories.
+    """
+    if skills_dir is None:
+        skills_dir = REPO_ROOT / ".agents" / "skills"
+    if not skills_dir.exists():
+        return []
+    return sorted(
+        d for d in skills_dir.glob("*-search") if (d / "cli" / "src").is_dir()
+    )
+
+
+PORTAL_CLIS = find_portal_clis()
 
 # Derived, never copied: a hardcoded field list drifts in lockstep with
 # nothing - if Step 2's prose drops or adds a field, the known-good portals
@@ -73,6 +91,23 @@ class ScrapeSearchOutputContractTests(unittest.TestCase):
             if missing:
                 failures.append(f"{portal.name}: missing {missing} in search output")
         self.assertEqual([], failures, "; ".join(failures))
+
+    def test_find_portal_clis_ignores_orphaned_directories_without_src(self):
+        """Pre-#829 checkouts retain gitignored cli/node_modules with no cli/src."""
+        with tempfile.TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            # Valid portal skill
+            valid = tmp / "valid-search"
+            (valid / "cli" / "src").mkdir(parents=True)
+            # Orphaned directory (gitignored leftover node_modules from before #829)
+            orphan = tmp / "orphan-search"
+            (orphan / "cli" / "node_modules").mkdir(parents=True)
+            # Empty shell directory
+            empty = tmp / "empty-search"
+            empty.mkdir()
+
+            found = find_portal_clis(tmp)
+            self.assertEqual(found, [valid])
 
 
 # Step 4's storage schema, derived the same way as the Step 2 contract above:
