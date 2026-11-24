@@ -56,7 +56,8 @@
 \address{[Your Address, City, Country]}{}{}
 \phone[mobile]{[+XX XXXXXXXXXX]}
 \email{[your.email@example.com]}
-\extrainfo{\href{[https://linkedin.com/in/your-profile]}{LinkedIn}, \href{[https://github.com/your-username]}{GitHub}}
+% Print the URLs as visible text: a hyperlink's target URL is not in the PDF text layer, so an ATS sees only the link text.
+\extrainfo{\urlstyle{same}\href{[https://linkedin.com/in/your-profile]}{\nolinkurl{[https://linkedin.com/in/your-profile]}} \textbar{} \href{[https://github.com/your-username]}{\nolinkurl{[https://github.com/your-username]}}}
 
 \begin{document}
 
