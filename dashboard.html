@@ -187,7 +187,9 @@ const COLUMNS = [
 ];
 const CLOSED = new Set(["rejected", "no_response", "no response", "offer_declined", "offer declined", "withdrawn"]);
 
-let state = { seen: {}, tracker: [], jobs: [], fingerprint: "", openId: null, loadedAt: null };
+// openRef remembers what the open drawer shows beyond its card id, because the id changes when a
+// job moves (s-<key> or r-<run> becomes t-... once /apply writes the tracker row).
+let state = { seen: {}, tracker: [], jobs: [], fingerprint: "", openId: null, openRef: null, loadedAt: null };
 
 // ---------- helpers ----------
 const $ = s => document.querySelector(s);
@@ -196,15 +198,19 @@ const norm = s => String(s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 // Join key for matching a tracker row to its scraped entry: punctuation-insensitive, so
 // "Lead Specialist - API" (tracker) and "Lead Specialist, API" (scrape) are the same job.
 const joinKey = s => String(s ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-// LinkedIn job ID, so sa./www. and slug variants of one posting match. The host must be
-// linkedin.com or a subdomain (same rule as tools/apply_progress.py), so a look-alike host
-// or a LinkedIn URL embedded in another URL never joins to a real li-<id> run.
+// LinkedIn job ID, so sa./www. and slug variants of one posting match. Same rule as
+// linkedin_id() in tools/apply_progress.py (tests/test_apply_progress.py pins the two together):
+// the host must be linkedin.com or a subdomain, and the ID comes from a posting path or from
+// `currentJobId` on a /jobs/ page - never from a company page, profile or other digits.
+const LI_POSTING_PATH = /^(?:\/comm)?\/jobs\/view\/(?:[^/]*-)?(\d{6,})\/?$|^\/jobs-guest\/jobs\/api\/jobPosting\/(\d{6,})\/?$/;
 const linkedinId = u => {
   let url; try { url = new URL(String(u || "").trim()); } catch { return null; }
   const host = url.hostname.toLowerCase().replace(/\.$/, "");
   if (host !== "linkedin.com" && !host.endsWith(".linkedin.com")) return null;
-  const m = /(\d{6,})\/?$/.exec(url.pathname);
-  return m ? m[1] : null;
+  const m = LI_POSTING_PATH.exec(url.pathname);
+  if (m) return m[1] || m[2];
+  const current = url.pathname.startsWith("/jobs/") ? url.searchParams.get("currentJobId") : null;
+  return current && /^\d{6,}$/.test(current) ? current : null;
 };
 function ago(iso) {
   const t = Date.parse(iso || ""); if (isNaN(t)) return "";
@@ -481,8 +487,9 @@ function openDrawer(id, push = true, refresh = false) {
     || (id.startsWith("s-") && state.jobs.find(x => x.seenKey === id.slice(2)));
   if (!j) return;
   id = j.id;
-  const keepScroll = refresh && state.openId === id && $("#drawer").classList.contains("open") ? $("#dBody").scrollTop : 0;
+  const keepScroll = refresh && $("#drawer").classList.contains("open") ? $("#dBody").scrollTop : 0;
   state.openId = id;
+  state.openRef = { seenKey: j.seenKey || null, runId: j.run ? j.run.id : null };
   if (push) history.replaceState(null, "", "#" + encodeURIComponent(id));
   const s = j.seen || {}, t = j.tracker || {};
   $("#dTitle").textContent = j.title;
@@ -497,7 +504,7 @@ function openDrawer(id, push = true, refresh = false) {
   html.push(blk("Job ID & commands", `
     <span class="jobid" role="button" tabindex="0" data-copy="${esc(j.jobId)}" title="Click to copy">⧉ ${esc(j.jobId)}</span>
     <div class="cmds">${cmds.map(([c, t]) => `<button type="button" data-copy="${esc(c)}" title="${esc(t)} - click to copy">${esc(c)}</button>`).join("")}</div>
-    ${j.url ? "" : `<p class="muted" style="margin:6px 0 0;font-size:12px">No posting URL is stored for this job (it was pasted as text), so <code>/apply</code> cannot re-fetch it from the ID. Paste the posting into <code>/apply</code> again.</p>`}
+    ${j.url ? "" : `<p class="muted" style="margin:6px 0 0;font-size:12px">No posting URL is stored for this job, so <code>/apply</code> cannot re-fetch it from the ID. Paste the posting into <code>/apply</code> again.</p>`}
     <p class="muted" style="margin:6px 0 0;font-size:12px">Click to copy, then paste into Claude Code.</p>`));
   html.push(blk("Overview", kv([
     ["Board column", col ? col.title : j.stage],
@@ -576,6 +583,7 @@ function openDrawer(id, push = true, refresh = false) {
 
 function closeDrawer() {
   state.openId = null;
+  state.openRef = null;
   $("#drawer").classList.remove("open");
   $("#drawer").setAttribute("aria-hidden", "true");
   document.body.classList.remove("drawer-open");
@@ -670,7 +678,14 @@ async function load() {
   try { runs = progressText ? (JSON.parse(progressText).runs || {}) : {}; } catch { runs = {}; }
   state.jobs = buildJobs(state.seen, state.tracker, runs);
   render();
-  if (state.openId) state.jobs.some(j => j.id === state.openId) ? openDrawer(state.openId, false, true) : closeDrawer();
+  if (state.openId) {
+    // Same card, else the same scraped job or /apply run under its new card id.
+    const ref = state.openRef || {};
+    const j = state.jobs.find(x => x.id === state.openId)
+      || (ref.seenKey && state.jobs.find(x => x.seenKey === ref.seenKey))
+      || (ref.runId && state.jobs.find(x => x.run && x.run.id === ref.runId));
+    j ? openDrawer(j.id, j.id !== state.openId, true) : closeDrawer();
+  }
 }
 function hash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; }
 

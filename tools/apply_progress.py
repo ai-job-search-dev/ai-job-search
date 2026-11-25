@@ -41,7 +41,7 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 STATE = ROOT / "job_scraper" / "apply_progress.json"
@@ -90,11 +90,32 @@ def is_linkedin_host(url: str | None) -> bool:
     return host == "linkedin.com" or host.endswith(".linkedin.com")
 
 
+# LinkedIn paths that name one job posting. Anything else on linkedin.com (a
+# company page, a profile, the feed) is not a posting, even when it ends in digits.
+_LI_POSTING_PATH = re.compile(
+    r"^(?:/comm)?/jobs/view/(?:[^/]*-)?(\d{6,})/?$"   # /jobs/view/<id>, /jobs/view/<slug>-<id>, email /comm/ links
+    r"|^/jobs-guest/jobs/api/jobPosting/(\d{6,})/?$"  # the guest API linkedin-search's `detail` fetches
+)
+
+
 def linkedin_id(url: str | None) -> str | None:
+    """The LinkedIn job ID a posting URL names, or None.
+
+    Same rule as linkedinId() in dashboard.html (tests pin the two together):
+    the host must be linkedin.com or a subdomain, and the ID comes from a
+    posting path, or from `currentJobId` on a /jobs/ search or collection page.
+    """
     if not is_linkedin_host(url):
         return None
-    m = re.search(r"(\d{6,})(?:/?(?:[?#].*)?)$", url.strip())
-    return m.group(1) if m else None
+    parsed = urlparse(url.strip())
+    m = _LI_POSTING_PATH.match(parsed.path)
+    if m:
+        return m.group(1) or m.group(2)
+    if parsed.path.startswith("/jobs/"):
+        current = parse_qs(parsed.query).get("currentJobId", [""])[0]
+        if re.fullmatch(r"\d{6,}", current):
+            return current
+    return None
 
 
 def run_id(url: str | None, explicit: str | None) -> str:

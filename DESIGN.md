@@ -249,7 +249,7 @@ It is a read-only kanban. Each job is a card, and each column is a state:
 | Column | Source |
 |--------|--------|
 | **Backlog** | `seen_jobs.json` entries with status `new`, `ranked` or `unreachable` that are not in the tracker. Sorted by priority: ranked by score (nearest deadline breaks ties), then unranked by scrape fit, then unreachable, then location/language vetoes last |
-| **Applying** | `apply_progress.json` runs at a stage before `drafted`/`stopped` (fetching, evaluating, awaiting your go-ahead, drafting, reviewing, revising, compiling, recording). Includes runs on postings `/scrape` never saw. A run that reaches `drafted` gives way to its tracker row; a `stopped` run moves to Skipped / Expired |
+| **Applying** | `apply_progress.json` runs at a stage before `drafted`/`stopped` (fetching, evaluating, awaiting your go-ahead, drafting, reviewing, revising, compiling, recording). Includes runs on postings `/scrape` never saw. A run that reaches `drafted` gives way to its tracker row; a `stopped` run moves to Skipped / Expired. Exception: a job that already has a tracker row (a re-draft) stays in its tracker-status column, with the run's progress shown in its panel |
 | **Drafted, Applied, Interview, Offer, Hired** | tracker `status` |
 | **Closed** | tracker `rejected`, `no_response`, `offer_declined`, `withdrawn` |
 | **Unrecognized status** (only when non-empty) | tracker rows whose `status` is blank or outside `/outcome`'s vocabulary, flagged so the row gets fixed rather than shown as a stage it may not be in |

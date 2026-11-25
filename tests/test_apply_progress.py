@@ -26,6 +26,34 @@ TOOL = REPO / "tools" / "apply_progress.py"
 sys.path.insert(0, str(REPO / "tools"))
 import apply_progress  # noqa: E402
 
+# Every URL shape the LinkedIn rule must decide, with the answer both implementations must give.
+LINKEDIN_CASES = [
+    ("https://www.linkedin.com/jobs/view/4312345678/", "4312345678"),
+    ("https://sa.linkedin.com/jobs/view/backend-engineer-at-acme-4312345678", "4312345678"),
+    ("https://www.linkedin.com/jobs/view/4312345678?refId=abc&trk=x", "4312345678"),
+    ("https://linkedin.com/jobs/view/4312345678/#apply", "4312345678"),
+    ("  https://www.linkedin.com/jobs/view/4312345678  ", "4312345678"),
+    ("https://www.linkedin.com/comm/jobs/view/4312345678/", "4312345678"),
+    ("https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/4345841651", "4345841651"),
+    ("https://www.linkedin.com/jobs/search/?currentJobId=4312345678", "4312345678"),
+    # The old end-of-string rule read the geoId here, not the job.
+    ("https://www.linkedin.com/jobs/search/?currentJobId=4312345678&geoId=103644278", "4312345678"),
+    ("https://www.linkedin.com/jobs/collections/recommended/?currentJobId=4312345678", "4312345678"),
+    # LinkedIn, but not a posting: numeric company pages, query-only digits, profiles.
+    ("https://www.linkedin.com/company/1234567/", None),
+    ("https://www.linkedin.com/company/acme/", None),
+    ("https://www.linkedin.com/feed/?x=1234567", None),
+    ("https://www.linkedin.com/jobs/search/?geoId=103644278", None),
+    ("https://www.linkedin.com/in/someone-1234567/", None),
+    ("https://www.linkedin.com/feed/?currentJobId=4312345678", None),
+    # Not LinkedIn at all.
+    ("https://notlinkedin.com/jobs/view/4312345678/", None),
+    ("https://linkedin.com.evil.example/jobs/view/4312345678/", None),
+    ("https://careers.example.com/redirect?to=linkedin.com/jobs/view/4312345678", None),
+    ("https://example.com/linkedin.com/jobs/view/4312345678", None),
+    ("", None),
+]
+
 TRACKER_FIELDS = ["date", "company", "sector", "role", "role_type", "channel", "status", "contact_person",
                   "fit_rating", "notes", "cv_file", "cover_letter_file", "source", "deadline"]
 
@@ -87,6 +115,45 @@ class LinkedinId(unittest.TestCase):
         self.assertIsNone(apply_progress.linkedin_id(None))
         self.assertIsNone(apply_progress.linkedin_id(""))
         self.assertIsNone(apply_progress.linkedin_id("https://www.linkedin.com/company/acme/"))
+
+    def test_numeric_non_posting_pages_are_not_postings(self):
+        """A company page or a query value that ends in digits is not a job:
+        keying it as li-<digits> would merge it with an unrelated /apply run."""
+        for url in ("https://www.linkedin.com/company/1234567/",
+                    "https://www.linkedin.com/feed/?x=1234567",
+                    "https://www.linkedin.com/in/someone-1234567/"):
+            with self.subTest(url=url):
+                self.assertIsNone(apply_progress.linkedin_id(url))
+
+    def test_current_job_id_wins_over_other_query_digits(self):
+        self.assertEqual(apply_progress.linkedin_id(
+            "https://www.linkedin.com/jobs/search/?currentJobId=4312345678&geoId=103644278"), "4312345678")
+
+    def test_every_case(self):
+        for url, want in LINKEDIN_CASES:
+            with self.subTest(url=url):
+                self.assertEqual(apply_progress.linkedin_id(url), want)
+
+
+@unittest.skipUnless(shutil.which("node"), "node is not installed")
+class DashboardParity(unittest.TestCase):
+    """dashboard.html joins /apply runs to cards with its own linkedinId(); if it
+    disagrees with linkedin_id() here, a run keyed by the tool lands on the wrong
+    card (or none). Run the page's actual function in Node over every case."""
+
+    def test_dashboard_linkedin_id_matches_the_tool(self):
+        html = (REPO / "dashboard.html").read_text(encoding="utf-8")
+        start = html.index("const LI_POSTING_PATH")
+        end = html.index("\n};", html.index("const linkedinId")) + 3
+        script = (html[start:end] + "\nconst cases = JSON.parse(process.argv[1]);"
+                  "\nprocess.stdout.write(JSON.stringify(cases.map(linkedinId)));")
+        urls = [u for u, _ in LINKEDIN_CASES]
+        out = subprocess.run(["node", "-e", script, json.dumps(urls)], capture_output=True, text=True, check=True)
+        got = json.loads(out.stdout)
+        for (url, want), js in zip(LINKEDIN_CASES, got):
+            with self.subTest(url=url):
+                self.assertEqual(js, apply_progress.linkedin_id(url))
+                self.assertEqual(js, want)
 
 
 class RunId(unittest.TestCase):
