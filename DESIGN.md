@@ -11,7 +11,7 @@ This document maps the agents in this workspace and how work flows from one to t
 | **Skills** | `.claude/skills/*/SKILL.md` | `job-scraper` (`/scrape`), `job-application-assistant` (profile and method files `01`-`09`), `upskill` |
 | **Subagents** | `.claude/agents/*.md` | `posting-fetcher`, `posting-scorer`, `application-reviewer`. They can read, search and fetch, but **cannot edit or write** |
 | **Portal CLIs** | `.agents/skills/*-search/` | Per-board search and `detail` CLIs (LinkedIn, freehire and others), added with `/add-portal` |
-| **Python tools** | `tools/`, `salary_lookup.py` | Deterministic helpers: `posting_guard.py`, `fetch_page.py`, `robots_check.py`, `scrape_state.py`, `rank_state.py`, `job_key.py`, `verify_pdf.py` |
+| **Python tools** | `tools/`, `salary_lookup.py` | Deterministic helpers: `posting_guard.py`, `fetch_page.py`, `robots_check.py`, `scrape_state.py`, `rank_state.py`, `job_key.py`, `apply_progress.py`, `verify_pdf.py` |
 
 ### Trust boundary
 
@@ -234,10 +234,11 @@ drafted ─► applied ─► interview ─► offer ─► hired
 | `cv/`, `cover_letters/` | `/apply` | `/interview` (fallback), `/outcome` (archive) |
 | `documents/applications/<co>_<role>/` | `/apply` 6b, `/outcome`, `/gmail-sync` | `/interview`, `/html-report`, `/setup` (calibration) |
 | `company_research/*.json` | `/apply` Step 4 (from the reviewer's research block) | `/apply`, `/interview` |
+| `job_scraper/apply_progress.json` (gitignored) | `/apply` at each stage (via `apply_progress.py set`) | `dashboard.html` (Applying column, `/apply progress` panel), `/apply` Step 0 (via `apply_progress.py resolve`) |
 | `gmail_sync/state.json` | `/gmail-sync` | `/gmail-sync` |
 | `upskill/report-*.md` | `/upskill` | `/upskill` (diff against the last report) |
 | `reports/application-dashboard.html` | `/html-report` | the user (browser) |
-| `dashboard.html` (code, not data) | developer | reads `seen_jobs.json`, the tracker, the archive and `company_research/` live |
+| `dashboard.html` (code, not data) | developer | reads `seen_jobs.json`, the tracker, `apply_progress.json`, the archive and `company_research/` live |
 
 ## Live dashboard (`dashboard.html`)
 
@@ -248,11 +249,15 @@ It is a read-only kanban. Each job is a card, and each column is a state:
 | Column | Source |
 |--------|--------|
 | **Backlog** | `seen_jobs.json` entries with status `new`, `ranked` or `unreachable` that are not in the tracker. Sorted by priority: ranked by score (nearest deadline breaks ties), then unranked by scrape fit, then unreachable, then location/language vetoes last |
+| **Applying** | `apply_progress.json` runs at a stage before `drafted`/`stopped` (fetching, evaluating, awaiting your go-ahead, drafting, reviewing, revising, compiling, recording). Includes runs on postings `/scrape` never saw. A run that reaches `drafted` gives way to its tracker row; a `stopped` run moves to Skipped / Expired |
 | **Drafted, Applied, Interview, Offer, Hired** | tracker `status` |
 | **Closed** | tracker `rejected`, `no_response`, `offer_declined`, `withdrawn` |
+| **Unrecognized status** (only when non-empty) | tracker rows whose `status` is blank or outside `/outcome`'s vocabulary, flagged so the row gets fixed rather than shown as a stage it may not be in |
 | **Skipped / Expired** (toggle) | `seen_jobs.json` entries with status `skipped` or `expired` |
 
-A tracker row is joined to its scraped entry on company + role (casefold), the same match `rank_state.py` uses, so a card keeps its `/rank` output after it moves to Applied.
+A tracker row is joined to its scraped entry on company + role, lowercased with every run of punctuation and whitespace treated as one separator, so "Lead Specialist - API" in the tracker and "Lead Specialist, API" from the scrape are the same card and it keeps its `/rank` output after it moves to Applied. This is looser than `rank_state.py`'s tracker exclusion, which keeps `+` and `#` ("C++" and "C" stay different jobs): the dashboard can join two rows that `/rank` still treats as separate, so do not read the board as a preview of what `/rank` will exclude.
+
+An `/apply` run is attached to a card by the first match of: the `seen_key` the run stored, the LinkedIn job ID of the posting URL (host `linkedin.com` or a subdomain, so `sa.`/`www.` and slug variants match), then the same company + role key.
 
 Clicking a card opens a panel with everything recorded for that job:
 

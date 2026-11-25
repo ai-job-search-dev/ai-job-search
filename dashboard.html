@@ -180,6 +180,8 @@ const COLUMNS = [
   { id: "offer",     title: "Offer",     c: "#1f9a8a", desc: "Offer received",                      match: j => j.stage === "offer" },
   { id: "hired",     title: "Hired",     c: "#1f8a4c", desc: "Accepted",                            match: j => j.stage === "hired" },
   { id: "closed",    title: "Closed",    c: "#b42318", desc: "Rejected, no response, declined or withdrawn", match: j => j.stage === "closed" },
+  { id: "unknown",   title: "Unrecognized status", c: "#b54708", hideEmpty: true,
+    desc: "Tracker rows whose status is blank or not in /outcome's vocabulary - fix the row", match: j => j.stage === "unknown" },
   { id: "archive",   title: "Skipped / Expired", c: "#98a2b3", archive: true,
     desc: "Filtered out by /scrape or retired by /rank", match: j => j.stage === "archive" },
 ];
@@ -194,8 +196,16 @@ const norm = s => String(s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 // Join key for matching a tracker row to its scraped entry: punctuation-insensitive, so
 // "Lead Specialist - API" (tracker) and "Lead Specialist, API" (scrape) are the same job.
 const joinKey = s => String(s ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-// LinkedIn job ID, so sa./www. and slug variants of one posting match.
-const linkedinId = u => { const m = /linkedin\.com\/.*?(\d{6,})\/?(?:[?#].*)?$/.exec(String(u || "").trim()); return m ? m[1] : null; };
+// LinkedIn job ID, so sa./www. and slug variants of one posting match. The host must be
+// linkedin.com or a subdomain (same rule as tools/apply_progress.py), so a look-alike host
+// or a LinkedIn URL embedded in another URL never joins to a real li-<id> run.
+const linkedinId = u => {
+  let url; try { url = new URL(String(u || "").trim()); } catch { return null; }
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  if (host !== "linkedin.com" && !host.endsWith(".linkedin.com")) return null;
+  const m = /(\d{6,})\/?$/.exec(url.pathname);
+  return m ? m[1] : null;
+};
 function ago(iso) {
   const t = Date.parse(iso || ""); if (isNaN(t)) return "";
   const m = Math.round((Date.now() - t) / 60000);
@@ -287,7 +297,8 @@ function stageFromTracker(status) {
   const s = norm(status);
   if (CLOSED.has(s)) return "closed";
   if (["drafted", "applied", "interview", "offer", "hired"].includes(s)) return s;
-  return "applied";
+  // Blank or unrecognized: never guess a lifecycle stage (that would claim a submission).
+  return "unknown";
 }
 
 function buildJobs(seen, tracker, runs = {}) {
@@ -317,7 +328,7 @@ function buildJobs(seen, tracker, runs = {}) {
     jobs.push({
       id: "t-" + (archiveSlug(row.company, row.role) || i) + "-" + i,
       stage: stageFromTracker(row.status),
-      status: row.status || "applied",
+      status: row.status || "(blank)",
       company: row.company, title: row.role,
       location: s?.location || "", url: row.source || s?.url || "",
       deadline: row.deadline || s?.deadline || "",
@@ -396,6 +407,7 @@ function cardHTML(j) {
     if (j.run.note) tags.push(`<span class="tag" title="${esc(j.run.note)}">${esc(j.run.note.length > 48 ? j.run.note.slice(0, 47) + "…" : j.run.note)}</span>`);
   }
   if (j.stage === "backlog") tags.push(`<span class="tag">${esc(j.status === "new" ? `new · ${s.fit || "?"} fit` : j.status)}</span>`);
+  if (j.stage === "unknown") tags.push(`<span class="tag bad">⚠ status: ${esc(j.status)}</span>`);
   if (j.stage === "closed" || j.stage === "archive") tags.push(`<span class="tag">${esc(j.status.replace(/_/g, " "))}</span>`);
   if (excluded(j)) tags.push(`<span class="tag bad">excluded (${s.location_verdict === "FAIL" ? "location" : "language"})</span>`);
   if (s.location_verdict === "FLAG") tags.push(`<span class="tag warn">⚠ location</span>`);
@@ -417,7 +429,7 @@ function render() {
   const board = $("#board");
   const scroll = {};
   board.querySelectorAll(".column").forEach(c => scroll[c.dataset.col] = c.querySelector(".cards").scrollTop);
-  board.innerHTML = COLUMNS.filter(c => showArchive || !c.archive).map(col => {
+  board.innerHTML = COLUMNS.filter(c => (showArchive || !c.archive) && (!c.hideEmpty || state.jobs.some(c.match))).map(col => {
     const list = sortCards(col.id, visible.filter(col.match));
     return `<div class="column${col.wide ? " wide" : ""}" data-col="${col.id}" style="--c:${col.c}">
       <div class="colhead"><div class="t"><span>${esc(col.title)}</span><span class="n">${list.length}</span></div><div class="d">${esc(col.desc)}</div></div>
@@ -427,7 +439,8 @@ function render() {
 
   const count = id => state.jobs.filter(j => j.stage === id).length;
   const ranked = state.jobs.filter(j => j.stage === "backlog" && j.status === "ranked" && !excluded(j));
-  const active = ["drafted", "applied", "interview", "offer"].reduce((n, id) => n + count(id), 0);
+  // Sent and still open; `drafted` rows have not been submitted, so they are not counted.
+  const active = ["applied", "interview", "offer"].reduce((n, id) => n + count(id), 0);
   $("#stats").innerHTML = [
     ["Backlog", count("backlog")], ["Ranked", ranked.length], ["Applying", count("applying")],
     ["Strong/Good fit to apply", ranked.filter(j => j.score >= 60).length],
@@ -459,13 +472,16 @@ function renderResearch(obj) {
   return parts.join("");
 }
 
-function openDrawer(id, push = true) {
+// `refresh` is true when a live poll re-renders the drawer that is already open: keep the
+// reader's place instead of jumping to the top. A user-initiated open starts at the top.
+function openDrawer(id, push = true, refresh = false) {
   // A scraped job keeps its seen_jobs key after /apply moves it into the tracker,
   // so an old "s-<key>" link still finds its card.
   const j = state.jobs.find(x => x.id === id)
     || (id.startsWith("s-") && state.jobs.find(x => x.seenKey === id.slice(2)));
   if (!j) return;
   id = j.id;
+  const keepScroll = refresh && state.openId === id && $("#drawer").classList.contains("open") ? $("#dBody").scrollTop : 0;
   state.openId = id;
   if (push) history.replaceState(null, "", "#" + encodeURIComponent(id));
   const s = j.seen || {}, t = j.tracker || {};
@@ -475,11 +491,13 @@ function openDrawer(id, push = true) {
   const col = COLUMNS.find(c => c.match(j));
 
   const html = [];
-  const cmds = [[`/apply ${j.jobId}`, "Fetch, evaluate and draft for this job"]];
+  // `/apply <id>` resolves the ID to a stored posting URL; a run started from pasted text has none.
+  const cmds = j.url ? [[`/apply ${j.jobId}`, "Fetch, evaluate and draft for this job"]] : [];
   if (j.tracker) cmds.push([`/outcome ${j.company}`, "Record what happened"], [`/interview ${j.company}`, "Build an interview prep pack"]);
   html.push(blk("Job ID & commands", `
     <span class="jobid" role="button" tabindex="0" data-copy="${esc(j.jobId)}" title="Click to copy">⧉ ${esc(j.jobId)}</span>
     <div class="cmds">${cmds.map(([c, t]) => `<button type="button" data-copy="${esc(c)}" title="${esc(t)} - click to copy">${esc(c)}</button>`).join("")}</div>
+    ${j.url ? "" : `<p class="muted" style="margin:6px 0 0;font-size:12px">No posting URL is stored for this job (it was pasted as text), so <code>/apply</code> cannot re-fetch it from the ID. Paste the posting into <code>/apply</code> again.</p>`}
     <p class="muted" style="margin:6px 0 0;font-size:12px">Click to copy, then paste into Claude Code.</p>`));
   html.push(blk("Overview", kv([
     ["Board column", col ? col.title : j.stage],
@@ -545,11 +563,15 @@ function openDrawer(id, push = true) {
   html.push(blk("Raw records", `<details><summary>Show every stored field</summary><pre class="raw">${linkify(JSON.stringify(raw, null, 2))}</pre></details>`));
 
   $("#dBody").innerHTML = html.join("");
-  $("#dBody").scrollTop = 0;
+  $("#dBody").scrollTop = keepScroll;
   $("#drawer").classList.add("open");
   $("#drawer").setAttribute("aria-hidden", "false");
   document.body.classList.add("drawer-open");
-  loadExtras(j);
+  // The documents/archive/research sections fill in asynchronously; until they do the body
+  // is shorter, so the restored position may have been clamped. Re-apply it once they land.
+  loadExtras(j).finally(() => {
+    if (keepScroll && state.openId === id && $("#dBody").scrollTop < keepScroll) $("#dBody").scrollTop = keepScroll;
+  });
 }
 
 function closeDrawer() {
@@ -648,7 +670,7 @@ async function load() {
   try { runs = progressText ? (JSON.parse(progressText).runs || {}) : {}; } catch { runs = {}; }
   state.jobs = buildJobs(state.seen, state.tracker, runs);
   render();
-  if (state.openId) state.jobs.some(j => j.id === state.openId) ? openDrawer(state.openId, false) : closeDrawer();
+  if (state.openId) state.jobs.some(j => j.id === state.openId) ? openDrawer(state.openId, false, true) : closeDrawer();
 }
 function hash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; }
 

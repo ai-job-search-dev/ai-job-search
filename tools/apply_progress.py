@@ -7,7 +7,7 @@ gated, the fit is evaluated, the user decides, two documents are drafted,
 reviewed, revised and compiled. Nothing on disk recorded any of that, so the
 dashboard could not show a job that was mid-flight. This file is that record.
 
-Two subcommands:
+Three subcommands:
 
   set    record that a run reached a stage (creates the run on first call)
   list     print the runs as JSON (all, or --active only)
@@ -41,10 +41,12 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 STATE = ROOT / "job_scraper" / "apply_progress.json"
 SEEN = ROOT / "job_scraper" / "seen_jobs.json"
+TRACKER = ROOT / "job_search_tracker.csv"
 
 # Ordered pipeline stages. `drafted` and `stopped` are terminal.
 STAGES = [
@@ -60,6 +62,9 @@ STAGES = [
     "stopped",            # user said no, duplicate application, or posting dead
 ]
 TERMINAL = {"drafted", "stopped"}
+# Tracker statuses that close an application (/outcome "Tracker status vocabulary",
+# legacy space spellings included). Every other status is an open row.
+FINAL_STATUSES = {"hired", "rejected", "no_response", "no response", "offer_declined", "offer declined", "withdrawn"}
 HISTORY_CAP = 50
 
 
@@ -71,8 +76,22 @@ def join_key(s: str | None) -> str:
     return re.sub(r"[^\w]+", " ", (s or "").lower().replace("_", " ")).strip()
 
 
+def is_linkedin_host(url: str | None) -> bool:
+    """True only for linkedin.com or a subdomain of it (www., sa., ...).
+
+    A substring test would accept look-alike hosts (notlinkedin.com,
+    linkedin.com.evil.example) or a LinkedIn URL embedded in another site's
+    query string, and key that posting as an unrelated li-<id> run.
+    """
+    try:
+        host = (urlparse((url or "").strip()).hostname or "").lower().rstrip(".")
+    except ValueError:
+        return False
+    return host == "linkedin.com" or host.endswith(".linkedin.com")
+
+
 def linkedin_id(url: str | None) -> str | None:
-    if not url or "linkedin.com" not in url:
+    if not is_linkedin_host(url):
         return None
     m = re.search(r"(\d{6,})(?:/?(?:[?#].*)?)$", url.strip())
     return m.group(1) if m else None
@@ -165,16 +184,34 @@ def cmd_set(a: argparse.Namespace) -> None:
     runs[rid] = run
     data["updated"] = run["updated"]
     save(data)
-    print(json.dumps({"id": rid, "stage": a.stage, "seen_key": run.get("seen_key")}))
+    print(json.dumps({"id": rid, "stage": a.stage, "seen_key": run.get("seen_key")}, ensure_ascii=False))
 
 
 def tracker_rows() -> list[dict]:
     import csv
     try:
-        with open(ROOT / "job_search_tracker.csv", newline="", encoding="utf-8") as fh:
+        with open(TRACKER, newline="", encoding="utf-8") as fh:
             return list(csv.DictReader(fh))
     except FileNotFoundError:
         return []
+
+
+def pick_row(rows: list[dict]) -> dict | None:
+    """The tracker row a company+role ID means when several match.
+
+    /apply Step 6b appends a new row beside a final one when the user
+    re-applies, so one company+role can hold an old closed application and a
+    current one. Prefer an open row, then the latest date, then the row that
+    comes last in the file (the most recently appended).
+    """
+    if not rows:
+        return None
+    ranked = sorted(
+        enumerate(rows),
+        key=lambda ir: ((ir[1].get("status") or "").strip().lower() not in FINAL_STATUSES,
+                        (ir[1].get("date") or "").strip(), ir[0]),
+    )
+    return ranked[-1][1]
 
 
 def archive_slug(company: str, role: str) -> str:
@@ -192,10 +229,16 @@ def cmd_resolve(a: argparse.Namespace) -> None:
     if jid in seen:  # seen_jobs.json key, e.g. cisco_ai-engineer
         v = seen[jid]
         hit = {"url": v.get("url"), "company": v.get("company"), "role": v.get("title"), "source": "seen_jobs"}
-    if not hit:  # /apply run id (li-<digits> / url-<hash>) or a bare LinkedIn job ID
+    pasted_run = None
+    if not hit:  # /apply run id (li-<digits> / url-<hash> / --id) or a bare LinkedIn job ID
         run = load(STATE).get("runs", {}).get(jid)
         if run and run.get("url"):
             hit = {"url": run["url"], "company": run.get("company"), "role": run.get("role"), "source": "apply_progress"}
+        elif run:
+            # Started from pasted text with --id: no URL was ever stored, and the
+            # posting text is deliberately not kept here. The tracker may still
+            # know the job (a drafted run); otherwise the user has to paste again.
+            pasted_run = run
         else:
             m = re.fullmatch(r"(?:li-)?(\d{6,})", jid)
             if m:
@@ -204,16 +247,19 @@ def cmd_resolve(a: argparse.Namespace) -> None:
                 hit = ({"url": v.get("url"), "company": v.get("company"), "role": v.get("title"), "source": "seen_jobs"} if v
                        else {"url": f"https://www.linkedin.com/jobs/view/{lid}/", "company": None, "role": None, "source": "linkedin_id"})
     if not hit:  # tracker / archive slug, e.g. microsoft_solutions_architect
-        row = next((r for r in tracker_rows() if archive_slug(r.get("company", ""), r.get("role", "")) == jid), None)
+        row = pick_row([r for r in tracker_rows() if archive_slug(r.get("company", ""), r.get("role", "")) == jid])
         if row:
             hit = {"url": row.get("source") or None, "company": row.get("company"), "role": row.get("role"),
                    "status": row.get("status"), "source": "tracker"}
+    if not hit and pasted_run is not None:
+        sys.exit(f"error: '{jid}' is an /apply run started from pasted posting text, so no posting URL is stored; "
+                 "paste the posting text into /apply again")
     if not hit:
         sys.exit(f"error: no job with id '{jid}' in seen_jobs.json, apply_progress.json or the tracker")
     if hit["source"] != "tracker" and hit.get("company") and hit.get("role"):
         # A scraped job that was already applied to: report the tracker row so /apply asks first.
         want = (join_key(hit["company"]), join_key(hit["role"]))
-        row = next((r for r in tracker_rows() if (join_key(r.get("company")), join_key(r.get("role"))) == want), None)
+        row = pick_row([r for r in tracker_rows() if (join_key(r.get("company")), join_key(r.get("role"))) == want])
         if row:
             hit.update(source="tracker", status=row.get("status"), tracked_on=row.get("date"),
                        cv_file=row.get("cv_file") or None, cover_letter_file=row.get("cover_letter_file") or None)
@@ -228,7 +274,21 @@ def cmd_list(a: argparse.Namespace) -> None:
     print(json.dumps(runs, indent=1, ensure_ascii=False))
 
 
+def _force_utf8_output() -> None:
+    """Write UTF-8 whatever the host's default encoding is (same guard as job_key.py).
+
+    A piped stdout on Windows defaults to the ANSI code page (cp1252 on most
+    Western installs), so printing a company or role outside it raised
+    UnicodeEncodeError before /apply saw any output.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)  # absent on a StringIO under test
+        if reconfigure:
+            reconfigure(encoding="utf-8")
+
+
 def main() -> None:
+    _force_utf8_output()
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("set", help="record that a run reached a stage")

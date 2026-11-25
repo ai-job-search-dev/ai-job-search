@@ -84,6 +84,10 @@ ALLOWED_PERMISSIONS = {
     "Bash(python3 tools/rank_state.py:*)",
     "Bash(python tools/job_key.py:*)",
     "Bash(python3 tools/job_key.py:*)",
+    # /apply's progress log for the dashboard. No network; it reads seen_jobs.json
+    # and the tracker and writes only job_scraper/apply_progress.json (gitignored).
+    "Bash(python tools/apply_progress.py:*)",
+    "Bash(python3 tools/apply_progress.py:*)",
     "Bash(python tools/scrape_state.py:*)",
     "Bash(python3 tools/scrape_state.py:*)",
     "Bash(python tools/verify_pdf.py:*)",

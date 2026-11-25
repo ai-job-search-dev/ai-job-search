@@ -18,6 +18,8 @@ This rule is the input side of the Step 3 Factual Grounding Audit, not a competi
 
 **Progress log (feeds the dashboard's "Applying" column).** Record each stage as the run reaches it, so a job that is mid-flight is visible between "URL pasted" and "drafted row in the tracker":
 
+> **Windows:** run these tools as `python`, not `python3`. A python.org install ships no `python3`, so that name reaches the Microsoft Store alias, which either exits 49 with no output (#669) or starts a separate Store Python without the packages `pip` installed (such as pypdf). `.claude/settings.json` allows both spellings.
+
 ```bash
 python3 tools/apply_progress.py set --url '<posting URL>' --stage <stage> [--company '<company>' --role '<role>'] [--fit N --verdict '<band>'] [--note '<one short line>']
 ```
@@ -41,7 +43,7 @@ For pasted text (no URL) pass `--id <company>_<role>` (the Subfolder naming rule
 
 ## Step 0: Parse Input
 
-- **A job ID from the dashboard** (a single token with no spaces and no `://`, e.g. `acme_backend-engineer`, `li-1234567890`, `1234567890` or `cisco_solutions_architect`): resolve it first with `python3 tools/apply_progress.py resolve '$ARGUMENTS'`. It prints the stored posting `url`, `company`, `role` and, for a tracked application, its `status`. Continue below with that `url` as the input, exactly as if the user had pasted it - the posting is still fetched and gated fresh. If it exits 1 (unknown ID), tell the user and stop. If it returns `"source": "tracker"`, the job is already in the tracker: report its status and ask before re-drafting (Step 6b's open-row rule applies). Never read `job_scraper/seen_jobs.json` into the conversation to look an ID up.
+- **A job ID from the dashboard** (a single token with no spaces and no `://`, e.g. `acme_backend-engineer`, `li-1234567890`, `1234567890` or `cisco_solutions_architect`): resolve it first with `python3 tools/apply_progress.py resolve '$ARGUMENTS'`. It prints the stored posting `url`, `company`, `role` and, for a tracked application, its `status`. Continue below with that `url` as the input, exactly as if the user had pasted it - the posting is still fetched and gated fresh. If it exits 1 (unknown ID, or a run that was started from pasted text and so has no stored URL - the error says which), tell the user and stop; for a pasted run, ask them to paste the posting again. When several tracker rows share the company and role (a re-application beside a closed one), it reports the open row, else the most recent. If it returns `"source": "tracker"`, the job is already in the tracker: report its status and ask before re-drafting (Step 6b's open-row rule applies). Never read `job_scraper/seen_jobs.json` into the conversation to look an ID up.
 - If `$ARGUMENTS` looks like a URL, **dispatch the `posting-fetcher` agent** via the Agent tool (`subagent_type: posting-fetcher`, the shipped definition in `.claude/agents/posting-fetcher.md`: it can read and fetch but not edit or write, so the component that touches the raw web page has no way to act on it). Pass it the URL only - no profile data, no pasted posting text. It discovers installed portals itself, follows the escalation order below, runs `tools/posting_guard.py` on whatever it retrieved, and returns the gate's verdict, its findings, the extracted metadata and the **cleaned posting text**. The escalation order it applies, from `.claude/skills/job-application-assistant/09-web-research.md`:
   - **Portal CLI first:** If the URL's host matches an installed portal skill in `.agents/skills/` (derived from the board hosts in `.agents/skills/*/cli/src` and `url-reference.md`, e.g. `linkedin.com` -> `linkedin-search`), run that CLI's `detail` command first:
     ```bash
@@ -65,8 +67,6 @@ Read the evaluation framework:
 - `.claude/skills/job-application-assistant/01-candidate-profile.md`
 
 Using the framework from `04-job-evaluation.md`, evaluate the job posting against the candidate's profile. If the salary lookup tool is configured, run:
-
-> **Windows:** run these tools as `python`, not `python3`. A python.org install ships no `python3`, so that name reaches the Microsoft Store alias, which either exits 49 with no output (#669) or starts a separate Store Python without the packages `pip` installed (such as pypdf). `.claude/settings.json` allows both spellings.
 
 ```bash
 python3 salary_lookup.py "<Company Name>" --json
