@@ -23,6 +23,7 @@ FRAMEWORK_FILES = [
     ".claude/skills/job-application-assistant/07-interview-prep.md",
     ".claude/skills/job-application-assistant/08-application-forms.md",
     ".claude/skills/job-application-assistant/09-web-research.md",
+    ".claude/skills/job-application-assistant/10-echo-traps.md",
     ".claude/skills/job-application-assistant/SKILL.md",
     "AGENTS.md",
 ]

@@ -1,5 +1,5 @@
 ---
-framework_version: 1.2.0
+framework_version: 1.2.1
 ---
 
 # Writing Style Guide
@@ -66,7 +66,7 @@ The cover letter is **not a CV repetition**. It should be forward-looking:
 
 ### Motivation / Why This Company (place early)
 - The **first section** after the opening should explain why you're applying to *this specific company*
-- Use language and themes from the job posting and company website
+- Address the themes of the job posting and company website, using their hard keywords but not their sentences or voice words (see `10-echo-traps.md`)
 - Focus on how you'll contribute to their goals, not what you gain from employment
 - If you spoke with someone at the company, reference the conversation naturally
 
