@@ -254,6 +254,23 @@ class SchemeAndPathGuards(FetchPageFixture):
         self.assertTrue(link.is_symlink())
         self.assertFalse(self.out.exists())
 
+    def test_out_that_cannot_be_resolved_fails_before_any_network(self):
+        fetch_page.gate = lambda url: self.fail("gate must not run for a refused --out")
+        for error in (OSError(22, "Invalid argument"), RuntimeError("Symlink loop")):
+            with self.subTest(error=type(error).__name__):
+                with mock.patch.object(Path, "resolve", side_effect=error):
+                    code, out, err = self.run_main(f"{self.base}/ok.html", "--out", str(self.out))
+                self.assertEqual(code, 2, err)
+                self.assertIn("cannot resolve", err)
+                self.assertFalse(self.out.exists())
+
+    @unittest.skipIf(os.name == "nt", "~user expands to a guessed path on Windows")
+    def test_out_under_an_unknown_users_home_fails_before_any_network(self):
+        fetch_page.gate = lambda url: self.fail("gate must not run for a refused --out")
+        code, out, err = self.run_main(f"{self.base}/ok.html", "--out", f"~no_such_user_{os.getpid()}/page.html")
+        self.assertEqual(code, 2, err)
+        self.assertIn("cannot resolve", err)
+
     def test_refuses_out_inside_repo_before_any_network(self):
         fetch_page.gate = lambda url: self.fail("gate must not run for a refused --out")
         inside = REPO_ROOT / "cv" / "fetched.html"

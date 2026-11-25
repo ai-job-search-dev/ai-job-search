@@ -722,17 +722,62 @@ class InputHandling(GuardFixture):
         self.assertTrue((home / "clean.txt").exists())
         self.assertFalse((cwd / "~").exists())
 
-    def test_in_under_documents_applications_is_read(self):
-        applications = Path(posting_guard.ROOT) / "documents" / "applications"
-        folder = applications / f"_posting_guard_test_{os.getpid()}"
-        created = [p for p in (applications.parent, applications) if not p.exists()]
-        folder.mkdir(parents=True)
-        self.addCleanup(lambda: [shutil.rmtree(folder, ignore_errors=True)] + [p.rmdir() for p in reversed(created) if p.exists()])
-        posting = folder / "job_posting.md"
-        posting.write_text("Archived posting.", encoding="utf-8")
-        code, out, err = self.run_main("--in", str(posting), "--text")
-        self.assertEqual(code, 0, err)
-        self.assertIn("Archived posting.", self.text_of(out))
+    def documents_folder(self, name):
+        folder = Path(posting_guard.ROOT) / "documents" / name / f"_posting_guard_test_{os.getpid()}"
+        folder.mkdir()
+        self.addCleanup(shutil.rmtree, folder, ignore_errors=True)
+        return folder
+
+    def test_in_under_documents_applications_and_postings_is_read(self):
+        for name in ("applications", "postings"):
+            with self.subTest(name=name):
+                posting = self.documents_folder(name) / "job_posting.md"
+                posting.write_text("Saved posting.", encoding="utf-8")
+                code, out, err = self.run_main("--in", str(posting), "--text")
+                self.assertEqual(code, 0, err)
+                self.assertIn("Saved posting.", self.text_of(out))
+
+    def test_in_through_a_link_under_documents_that_leaves_it_is_refused(self):
+        outside = REPO_ROOT / f".posting_guard_outside_test_{os.getpid()}"
+        outside.mkdir()
+        self.addCleanup(shutil.rmtree, outside, ignore_errors=True)
+        (outside / "job_posting.md").write_text("Outside content.", encoding="utf-8")
+        kinds = {"symlink": lambda link: link.symlink_to(outside, target_is_directory=True)}
+        if os.name == "nt":
+            import _winapi
+            kinds["junction"] = lambda link: _winapi.CreateJunction(str(outside), str(link))
+        for name in ("applications", "postings"):
+            folder = self.documents_folder(name)
+            for kind, make_link in kinds.items():
+                with self.subTest(name=name, kind=kind):
+                    link = folder / kind
+                    try:
+                        make_link(link)
+                    except OSError as exc:
+                        self.skipTest(f"{kind} unavailable: {exc}")
+                    self.addCleanup(os.unlink, link)
+                    code, out, err = self.run_main("--in", str(link / "job_posting.md"), "--text")
+                    self.assertEqual(code, 2, err)
+                    self.assertIn("refusing to read", err)
+                    self.assertNotIn("Outside content.", out)
+
+    def test_in_or_out_that_cannot_be_resolved_fails_cleanly(self):
+        for error in (OSError(22, "Invalid argument"), RuntimeError("Symlink loop")):
+            for argv in (("--in", str(self.write("posting.txt", "Job.\n"))), ("--out", str(self.tmp / "clean.txt"))):
+                with self.subTest(error=type(error).__name__, flag=argv[0]):
+                    with mock.patch.object(Path, "resolve", side_effect=error):
+                        code, out, err = self.run_main(*argv, "--text", stdin_text="Job.\n")
+                    self.assertEqual(code, 2, err)
+                    self.assertIn("cannot resolve", err)
+                    self.assertNotIn("--- text ---", out)
+
+    @unittest.skipIf(os.name == "nt", "~user expands to a guessed path on Windows")
+    def test_in_or_out_under_an_unknown_users_home_fails_cleanly(self):
+        for flag in ("--in", "--out"):
+            with self.subTest(flag=flag):
+                code, out, err = self.run_main(flag, f"~no_such_user_{os.getpid()}/x.txt", "--text", stdin_text="Job.\n")
+                self.assertEqual(code, 2, err)
+                self.assertIn("cannot resolve", err)
 
     def hardlink_from_outside(self, content):
         outside = REPO_ROOT / f".posting_guard_link_test_{os.getpid()}"

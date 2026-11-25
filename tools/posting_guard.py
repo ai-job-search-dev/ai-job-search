@@ -55,9 +55,10 @@ a documented path. Output: the verdict line, a `--- findings ---` block (JSON
 with --json), then `--- text ---` and the cleaned text, or `saved=<path>` when
 --out is given. Exit 0 when a posting is evaluated; 1 when the input has no text
 to evaluate; 2 when --in cannot be read, is a hard link, or lies outside the
-temp directory, /tmp (not on Windows) and documents/applications/, or --out
-cannot be written or it or its directory points inside this repository or
-outside the temp directory and /tmp (not on Windows). --out is replaced, never
+temp directory, /tmp (not on Windows), documents/applications/ and
+documents/postings/, or --out cannot be written or it or its directory points
+inside this repository or outside the temp directory and /tmp (not on
+Windows), or either path cannot be resolved. --out is replaced, never
 written through (the cleaned posting is untrusted text and belongs in the
 session scratchpad, never next to the workflow's own files or the user's).
 """
@@ -88,8 +89,9 @@ def _inside_temp(path: Path) -> bool:
 
 
 def _readable_input(path: Path) -> bool:
-    applications = (ROOT / "documents" / "applications").resolve()
-    return (_inside_temp(path) and not _inside_repo(path.resolve())) or path.resolve().is_relative_to(applications)
+    resolved = path.resolve()
+    folders = [(ROOT / "documents" / name).resolve() for name in ("applications", "postings")]
+    return (_inside_temp(path) and not _inside_repo(resolved)) or any(resolved.is_relative_to(f) for f in folders)
 
 
 def _hardlinked(path: Path) -> bool:
@@ -567,10 +569,31 @@ def _read_input(path, mode):
     return data.decode("utf-8", errors="replace")
 
 
+def _path_refusal(infile, out):
+    if infile is not None and not _readable_input(infile):
+        return (
+            f"posting_guard: refusing to read {infile}; --in takes a file in the session scratchpad, "
+            "the temp directory, /tmp (not on Windows), documents/applications/ or documents/postings/"
+        )
+    if out is not None and (_inside_repo(out.resolve()) or _inside_repo(out.parent.resolve())):
+        return (
+            f"posting_guard: refusing to write inside the repo ({out}); the cleaned "
+            "posting is untrusted text and belongs in the session scratchpad"
+        )
+    if out is not None and not (_inside_temp(out) and _inside_temp(out.parent)):
+        return (
+            f"posting_guard: refusing to write outside the temp directory and /tmp, not on Windows ({out}); the "
+            "cleaned posting is untrusted text and belongs in the session scratchpad"
+        )
+    if infile is not None and _hardlinked(infile):
+        return f"posting_guard: refusing to read {infile}; it is hard-linked to another file"
+    return None
+
+
 def main(argv=None) -> int:
     _force_utf8_output()
     parser = argparse.ArgumentParser(prog="posting_guard.py", description="Integrity gate for a fetched posting; see module docstring.")
-    parser.add_argument("--in", dest="infile", type=Path, default=None, help="input file in the system temp dir, /tmp (not on Windows) or documents/applications/ (default: stdin)")
+    parser.add_argument("--in", dest="infile", type=Path, default=None, help="input file in the system temp dir, /tmp (not on Windows), documents/applications/ or documents/postings/ (default: stdin)")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--html", action="store_const", const="html", dest="mode")
     mode.add_argument("--text", action="store_const", const="text", dest="mode")
@@ -578,34 +601,18 @@ def main(argv=None) -> int:
     parser.add_argument("--json", action="store_true", help="print findings as JSON")
     parser.set_defaults(mode="auto")
     args = parser.parse_args(argv)
-    if args.infile is not None:
-        args.infile = args.infile.expanduser()
-    if args.out is not None:
-        args.out = args.out.expanduser()
 
-    if args.infile is not None and not _readable_input(args.infile):
-        print(
-            f"posting_guard: refusing to read {args.infile}; --in takes a file in the session "
-            "scratchpad, the temp directory, /tmp (not on Windows) or documents/applications/",
-            file=sys.stderr,
-        )
-        return 2
-    if args.out is not None and (_inside_repo(args.out.resolve()) or _inside_repo(args.out.parent.resolve())):
-        print(
-            f"posting_guard: refusing to write inside the repo ({args.out}); the cleaned "
-            "posting is untrusted text and belongs in the session scratchpad",
-            file=sys.stderr,
-        )
-        return 2
-    if args.out is not None and not (_inside_temp(args.out) and _inside_temp(args.out.parent)):
-        print(
-            f"posting_guard: refusing to write outside the temp directory and /tmp, not on Windows ({args.out}); the "
-            "cleaned posting is untrusted text and belongs in the session scratchpad",
-            file=sys.stderr,
-        )
-        return 2
-    if args.infile is not None and _hardlinked(args.infile):
-        print(f"posting_guard: refusing to read {args.infile}; it is hard-linked to another file", file=sys.stderr)
+    given = ", ".join(f"{flag} {path}" for flag, path in (("--in", args.infile), ("--out", args.out)) if path is not None)
+    try:
+        if args.infile is not None:
+            args.infile = args.infile.expanduser()
+        if args.out is not None:
+            args.out = args.out.expanduser()
+        refusal = _path_refusal(args.infile, args.out)
+    except (OSError, RuntimeError) as exc:
+        refusal = f"posting_guard: cannot resolve {given}: {exc}"
+    if refusal:
+        print(refusal, file=sys.stderr)
         return 2
 
     try:

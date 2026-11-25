@@ -22,7 +22,8 @@ Properties, each pinned by tests/test_fetch_page.py:
   * Fetched content never lands in the repo or outside the temp directory.
     --out defaults to the system temp directory; a path that, or whose
     directory, resolves inside the repo root or outside the system temp
-    directory and /tmp (not on Windows) is refused.
+    directory and /tmp (not on Windows) is refused, as is one that cannot be
+    resolved.
   * Bounded: 45 s, 5 redirects, 10 MB - on both the curl and the urllib path,
     and the size cap is applied after Content-Encoding is undone.
 
@@ -272,15 +273,22 @@ def main(argv=None) -> int:
         print(f"fetch_page: only http(s) URLs are fetched, got scheme {scheme!r}", file=sys.stderr)
         return 2
 
-    out = (args.out if args.out is not None else _default_out(args.url)).expanduser()
-    if _inside_repo(out.resolve()) or _inside_repo(out.parent.resolve()):
+    out = args.out if args.out is not None else _default_out(args.url)
+    try:
+        out = out.expanduser()
+        in_repo = _inside_repo(out.resolve()) or _inside_repo(out.parent.resolve())
+        in_temp = _inside_temp(out) and _inside_temp(out.parent)
+    except (OSError, RuntimeError) as exc:
+        print(f"fetch_page: cannot resolve the --out path ({out}): {exc}", file=sys.stderr)
+        return 2
+    if in_repo:
         print(
             f"fetch_page: refusing to write inside the repo ({out}); fetched content is "
             "untrusted and belongs in the session scratchpad or the temp directory",
             file=sys.stderr,
         )
         return 2
-    if not (_inside_temp(out) and _inside_temp(out.parent)):
+    if not in_temp:
         print(
             f"fetch_page: refusing to write outside the temp directory ({out}); fetched content "
             "is untrusted and belongs in the session scratchpad or the temp directory",
