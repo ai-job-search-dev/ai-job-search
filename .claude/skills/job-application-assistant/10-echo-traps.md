@@ -38,10 +38,7 @@ interviewer later said it read as copied from the posting. In the field's regist
 
 Any run of **5 or more words** copied from the posting, outside quotation marks, is a
 lift. Names, job titles and tool lists ("Python, SQL, dbt") do not count.
-`tools/echo_check.py` finds the candidates (`LIFT` lines); judgment is only needed to drop
-the ones that are just a keyword list. Its stock-phrase filter knows English function
-words only, so in a draft in another language also drop hits that are a common phrase of
-that language rather than wording distinctive to this posting. A lift reads as the posting pasted back, even when
+A lift reads as the posting pasted back, even when
 every word is a hard keyword. Rewrite the sentence from the candidate's facts, keeping
 the keywords.
 
@@ -56,13 +53,6 @@ that.
 The same as Trap 2 for the company's own pages: "About us" copy, mission statements,
 recruiting slogans. Use researched facts (office cities, products, segments), not their
 marketing sentences.
-
-## Trap 4: Reuse across applications
-
-The same letter sentence or paragraph sent to different companies. `tools/echo_check.py
---others "cover_letters/cover_*.tex"` reports these as `REUSE` lines. Shared facts are
-fine; shared sentences are not. CV bullets are exempt: a master bullet reused across CVs
-is normal, so CVs are not compared with each other.
 
 ## Not traps
 
