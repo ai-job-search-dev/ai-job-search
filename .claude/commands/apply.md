@@ -378,7 +378,7 @@ Summarize 3-5 key decisions made to tailor the application:
 - Any gaps that were acknowledged or reframed
 
 ### Echo Traps
-Show the flag table from `10-echo-traps.md` with each original, its rewrite, and any "your call" items. Ask whether to rewrite any "your call" item or revert any rewrite; if anything changes, re-run Step 5 on the changed document. When there were no hits, say so in one line.
+Show the flag table from `10-echo-traps.md` with each original, its rewrite, and any "your call" items. Ask whether to rewrite any "your call" item or revert any rewrite. Check each new rewrite against `10-echo-traps.md` (a revert stays as the user chose it), then re-run Step 5 on the changed document. When there were no hits, say so in one line.
 
 ### Files Created
 List the files written:
