@@ -233,6 +233,7 @@ Once the reviewer agent returns its feedback:
    - **Echo traps:** rewrite every hit per `10-echo-traps.md`, keeping the hard keywords. Leave borderline cases as they are for the user's call. Keep the flag table with each original and rewrite for Step 6.
    Use Edit for targeted changes; only re-read a file if an edit fails because the surrounding text has shifted.
 3. Do NOT incorporate any suggestion that would fabricate skills or experience. If a posting requirement is a genuine gap, acknowledge it honestly and frame adjacent experience instead.
+4. **Re-check what this step changed.** The reviewer only saw the first drafts. Run the traps in `10-echo-traps.md` over every sentence you added or rewrote in items 1 and 2, above all the woven-in company research (that is where website echoes come in), rewrite any new hit and add it to the flag table.
 
 After all edits are applied, the two files on disk are the final drafts.
 
@@ -377,7 +378,7 @@ Summarize 3-5 key decisions made to tailor the application:
 - Any gaps that were acknowledged or reframed
 
 ### Echo Traps
-Show the flag table from `10-echo-traps.md` with each original, its rewrite, and any "your call" items, and ask the user to keep or revert the "your call" items. When there were no hits, say so in one line.
+Show the flag table from `10-echo-traps.md` with each original, its rewrite, and any "your call" items. Ask whether to rewrite any "your call" item or revert any rewrite; if anything changes, re-run Step 5 on the changed document. When there were no hits, say so in one line.
 
 ### Files Created
 List the files written:
@@ -422,7 +423,7 @@ Check whether the posting or the portal it came from asks for free-text fields t
 
 > "This posting has free-text application fields I can draft too — [name the specific fields, e.g. a self-introduction paragraph and structured project entries]. Want those drafted?"
 
-**Only on yes**, read `08-application-forms.md` and draft the fields per its rules, grounded against the same three-source union as the CV and cover letter. Save per that file's "Output format" section, in `documents/applications/<company>_<role>/`. Before presenting the fields, check them against `10-echo-traps.md` and rewrite each hit. **On no, or when the posting has no such fields, say nothing further and move on** — this is an optional addition and never changes the default two-document output.
+**Only on yes**, read `08-application-forms.md` and draft the fields per its rules, grounded against the same three-source union as the CV and cover letter. Before saving, check them against `10-echo-traps.md`: rewrite each hit, list each original and its rewrite for the user, and re-count each rewritten field against its word or character limit. Then save per that file's "Output format" section. **On no, or when the posting has no such fields, say nothing further and move on** — this is an optional addition and never changes the default two-document output.
 
 ### Next Steps
 - **Submitted?** `/outcome <company>` moves the `drafted` row to `applied` and starts the per-application record that `/setup` later uses to calibrate the fit framework.

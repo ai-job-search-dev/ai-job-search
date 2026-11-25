@@ -25,8 +25,10 @@ before you write it.
 | **Hard keywords** | Tools, methods, certifications, the job title, domain nouns: Kubernetes, MILP, IFRS 17, PRINCE2, RAG | Reuse exactly. ATS matching is often literal. |
 | **Voice words** | Informal, idiomatic or metaphorical words, company coinages, and anything unusual for the field's register: "messy", "create leverage", "how things actually get done", "ship quickly", "startup-like" | Never reuse as the candidate's own words. Say the same thing in the field's normal register. |
 
-**Spoken-word test:** would the candidate use this word unprompted when describing their
-own work in an interview? If not, it does not go in the document.
+**Spoken-word test (voice words only):** would the candidate use this word unprompted
+when describing their own work in an interview? If not, it does not go in the document.
+Hard keywords never take this test: a candidate who says "ML deployment" still writes
+"MLOps" when the posting asks for it and the profile supports it.
 
 **Example.** An operations-research posting asked for someone who "understands messy
 operational and planning problems". The CV profile came back as "turns messy operational
@@ -37,8 +39,10 @@ interviewer later said it read as copied from the posting. In the field's regist
 ## Trap 2: Phrase lifts
 
 Any run of **5 or more words** copied from the posting, outside quotation marks, is a
-lift. Names, job titles and tool lists ("Python, SQL, dbt") do not count.
-A lift reads as the posting pasted back, even when
+lift. Names, job titles and tool lists ("Python, SQL, dbt") do not count, nor does a
+hard keyword that is itself 5 or more words (a certification or degree name), nor a
+stock phrase of the draft's language that any letter might use ("work closely with the
+team"). A lift reads as the posting pasted back, even when
 every word is a hard keyword. Rewrite the sentence from the candidate's facts, keeping
 the keywords.
 
@@ -69,6 +73,6 @@ The reviewer returns every hit in this table; the drafter carries it into the fi
 |---|---|---|---|---|
 
 Default handling in `/apply` Step 4: rewrite every hit, keeping the hard keywords, and
-list original and rewrite in the Step 6 report so the user can revert any. Borderline
-cases (a word that may be standard in the field) stay as they are and are listed as
-"your call".
+list original and rewrite in the Step 6 report. Borderline cases (a word that may be
+standard in the field) stay as they are and are listed as "your call". The user can
+revert any rewrite or have any "your call" item rewritten.

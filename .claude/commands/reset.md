@@ -85,6 +85,7 @@ Present as:
 The following files are NOT touched (they contain framework rules, not candidate data):
   - 08-application-forms.md
   - 09-web-research.md
+  - 10-echo-traps.md
 
 Outside the profile scope, still holding your personal data: CLAUDE.md and
 cv/main_example.tex. This scope covers skill files only.

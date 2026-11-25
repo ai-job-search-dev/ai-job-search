@@ -35,13 +35,14 @@ When the user provides a job posting (URL or text), follow this workflow:
 - Follow the guidelines in `05-cv-templates.md`
 - Create `cv/main_<company>_<role>.tex` with tailored content
 - Adjust: profile statement, skills section, experience bullet emphasis, section order
+- Check the CV against `10-echo-traps.md`: rewrite voice words and phrases lifted from the posting, and show the flag table
 
 ### Step 3: Write Cover Letter
 - Follow the writing style rules in `03-writing-style.md` (critical: no em-dashes, no cliches)
 - Follow the template structure in `06-cover-letter-templates.md`
 - Create `cover_letters/cover_<company>_<role>.tex`
 - Ensure the letter connects specific experience to the role requirements
-- Run `10-echo-traps.md` over both documents (and any form free text): rewrite voice words and phrases lifted from the posting, and show the flag table
+- Check the letter (and any form free text) against `10-echo-traps.md` the same way
 
 ### Step 3b: Record the Application
 - Run this once both documents exist. A CV or cover letter drafted alone is not yet an application.
