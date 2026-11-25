@@ -2,12 +2,6 @@
   "permissions": {
     "allow": [
       "Skill(job-application-assistant)",
-      "Bash(bun run .agents/skills/jobbank-search/cli/src/cli.ts:*)",
-      "Bash(bun run .agents/skills/jobdanmark-search/cli/src/cli.ts:*)",
-      "Bash(bun run .agents/skills/jobindex-search/cli/src/cli.ts:*)",
-      "Bash(bun run .agents/skills/jobnet-search/cli/src/cli.ts:*)",
-      "Bash(bun run .agents/skills/linkedin-search/cli/src/cli.ts:*)",
-      "Bash(bun run .agents/skills/freehire-search/cli/src/cli.ts:*)",
       "Bash(python salary_lookup.py:*)",
       "Bash(python3 salary_lookup.py:*)",
       "Bash(python tools/rank_state.py:*)",
@@ -26,6 +20,8 @@
       "Bash(python3 tools/fetch_page.py:*)",
       "Bash(python tools/posting_guard.py:*)",
       "Bash(python3 tools/posting_guard.py:*)",
+      "Bash(python tools/html_report.py:*)",
+      "Bash(python3 tools/html_report.py:*)",
       "Bash(python tools/echo_check.py:*)",
       "Bash(python3 tools/echo_check.py:*)"
     ],

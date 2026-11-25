@@ -4,7 +4,7 @@
 
 ## Installed portal CLIs (primary for `/scrape`)
 
-`/scrape` discovers every portal skill under `.agents/skills/*/SKILL.md` and runs its CLI first. Shipped country-agnostic CLIs include `linkedin-search` and `freehire-search`; Danish demos and any skill you add with `/add-portal` are included the same way. You do **not** need a matching `site:` line below for those CLIs to run.
+`/scrape` discovers every portal skill under `.agents/skills/*/SKILL.md` and runs its CLI first. None ship with AI Job Search: copy the ones for your market from [community-portals](https://github.com/ai-job-search-dev/community-portals) (e.g. `linkedin-search`, `freehire-search` under `portals/global/`), or build one with `/add-portal`. You do **not** need a matching `site:` line below for those CLIs to run.
 
 The `site:` query templates in this file are the **WebSearch fallback** — for portals without a CLI, company career pages, or when a CLI fails.
 
@@ -14,7 +14,7 @@ The `site:` query templates in this file are the **WebSearch fallback** — for 
 
 Primary (your market's job boards - scaffold one with `/add-portal`):
 - **[YOUR_JOB_BOARD]** - your market's largest general job board
-- **linkedin.com/jobs** - LinkedIn job listings (filter: [YOUR_COUNTRY] / [YOUR_CITY]); also covered by `linkedin-search` CLI
+- **linkedin.com/jobs** - LinkedIn job listings (filter: [YOUR_COUNTRY] / [YOUR_CITY]); also covered by the community `linkedin-search` CLI once installed
 - **[YOUR_INDUSTRY_JOB_BOARD]** - a niche/industry board for your field (optional)
 - **[YOUR_ADDITIONAL_JOB_BOARD]** - another major board for your market (optional)
 
@@ -25,11 +25,23 @@ Secondary (company career pages via Google):
 
 Queries are grouped by priority. Write **each category in every language from your Languages table** (see Language scope above). Combine each query with your location terms (e.g. your city, region, or metro area) where the site supports it.
 
+Each priority has two kinds of block. **Plain terms** blocks are what the portal CLIs consume: one term per line, one CLI call per term, no `OR`, no `site:` prefix, and no location (the CLI's location flag, or the city in `--query` where that portal's SKILL.md says so, carries it). Quote a multi-word phrase only if the portal's `Query syntax:` line says quoting is honoured. **WebSearch-only** blocks are Google syntax (`site:`, quotes, `OR`) for the fallback path and are never passed to a CLI.
+
 **Organize by function, not job title.** The same underlying work carries different titles across companies and markets (a "Data Scientist" role at one employer may be posted as "Insights Analyst" or "Data Consultant" at another). Name each priority category after the function it covers, and list several plausible job titles as query variants within that category rather than betting an entire priority tier on one exact title string.
 
 ### Priority 1: [YOUR_PRIMARY_ROLE_TYPE]
 
 These match your strongest and most desired career direction.
+
+#### Plain terms (portal CLIs)
+
+```
+[YOUR_PRIMARY_JOB_TITLE_1]
+[YOUR_PRIMARY_JOB_TITLE_2]
+[YOUR_KEY_SKILL]
+```
+
+#### WebSearch-only (`site:` fallback)
 
 ```
 site:[YOUR_JOB_BOARD] "[YOUR_PRIMARY_JOB_TITLE_1]" [YOUR_CITY]
@@ -42,6 +54,15 @@ site:linkedin.com/jobs "[YOUR_PRIMARY_JOB_TITLE_1]" [YOUR_COUNTRY]
 
 These match your domain expertise.
 
+#### Plain terms (portal CLIs)
+
+```
+[YOUR_DOMAIN_KEYWORD_1]
+[YOUR_DOMAIN_KEYWORD_2]
+```
+
+#### WebSearch-only (`site:` fallback)
+
 ```
 site:[YOUR_JOB_BOARD] [YOUR_DOMAIN_KEYWORD_1] [YOUR_CITY] OR [YOUR_REGION]
 site:[YOUR_JOB_BOARD] [YOUR_DOMAIN_KEYWORD_2] [YOUR_COUNTRY]
@@ -52,6 +73,15 @@ site:linkedin.com/jobs [YOUR_DOMAIN_KEYWORD_1] [YOUR_CITY] [YOUR_COUNTRY]
 
 Adjacent roles you could pivot into.
 
+#### Plain terms (portal CLIs)
+
+```
+[YOUR_ADJACENT_TITLE_1]
+[YOUR_ADJACENT_TITLE_2]
+```
+
+#### WebSearch-only (`site:` fallback)
+
 ```
 site:[YOUR_JOB_BOARD] "[YOUR_ADJACENT_TITLE_1]" [YOUR_KEY_SKILL] [YOUR_CITY]
 site:[YOUR_JOB_BOARD] "[YOUR_ADJACENT_TITLE_2]" [YOUR_KEY_SKILL] [YOUR_CITY]
@@ -60,6 +90,15 @@ site:[YOUR_JOB_BOARD] "[YOUR_ADJACENT_TITLE_2]" [YOUR_KEY_SKILL] [YOUR_CITY]
 ### Priority 4: Broader Technical / Consulting
 
 Wider net for general technical roles.
+
+#### Plain terms (portal CLIs)
+
+```
+[YOUR_KEY_SKILL] developer
+technical consultant
+```
+
+#### WebSearch-only (`site:` fallback)
 
 ```
 site:[YOUR_JOB_BOARD] [YOUR_KEY_SKILL] developer [YOUR_CITY]
@@ -82,7 +121,7 @@ Your working languages and levels are in CLAUDE.md's Languages table. When filte
 
 ## Date Filter
 
-Only include jobs posted within the last 14 days, or with an application deadline that has not yet passed. If a posting date cannot be determined, include it but flag as "date unknown".
+Only include jobs posted within the last 14 days, matching `/scrape` Step 1b.3: use a supported recency filter or filter the returned publication dates client-side. A future application deadline does not bypass this discovery window; `/rank` handles deadline expiry and urgency separately after discovery. If a posting date cannot be determined, include it but flag as "date unknown".
 
 ## Adapting Queries
 

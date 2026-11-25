@@ -66,6 +66,14 @@ class ToolsWriteUtf8(unittest.TestCase):
             "portal": "example", "status": "new", "first_seen": "2026-09-20",
         }
 
+    def test_html_report_prints_an_output_path_outside_cp1252(self):
+        (self.tmp / "job_search_tracker.csv").write_text("date,company,role,status\n2026-10-01,Acme,Dev,applied\n",
+                                                         encoding="utf-8")
+        out = self.tmp / f"{CYRILLIC}.html"
+        proc = run_legacy_stdout([TOOLS / "html_report.py", "--root", self.tmp, "--out", out])
+        self.assert_clean_utf8(proc, 0, CYRILLIC)
+        self.assertTrue(out.is_file())
+
     def test_rank_candidates_lists_non_latin_postings(self):
         state = self.write_state({"a": self.entry(CYRILLIC, "Инженер"), "b": self.entry(CJK, "工程师")})
         proc = run_legacy_stdout([TOOLS / "rank_state.py", "candidates", "--state", state, "--today", "2026-09-21"])
@@ -84,6 +92,20 @@ class ToolsWriteUtf8(unittest.TestCase):
         ])
         out = json.loads(self.assert_clean_utf8(proc, 0, CJK))
         self.assertEqual([row["key"] for row in out["ranked"]], ["a"])
+
+    def test_scrape_candidates_lists_non_latin_hits(self):
+        # Copy the tool so its repo-relative history and tracker paths point at the temp dir.
+        tools_dir = self.tmp / "tools"
+        tools_dir.mkdir()
+        for name in ("scrape_state.py", "rank_state.py", "job_key.py"):
+            shutil.copy(TOOLS / name, tools_dir / name)
+        results = self.tmp / "hits.json"
+        results.write_text(json.dumps([
+            {"title": "Инженер", "company": CYRILLIC, "url": "https://example.com/jobs/1"},
+        ], ensure_ascii=False), encoding="utf-8")
+        proc = run_legacy_stdout([tools_dir / "scrape_state.py", "candidates", "--results", results])
+        out = json.loads(self.assert_clean_utf8(proc, 0, CYRILLIC))
+        self.assertEqual(len(out["selected"]), 1)
 
     def test_job_key_audit_reports_non_latin_entries(self):
         state = self.write_state({f"{CYRILLIC}_Инженер": self.entry(CYRILLIC, "Инженер")})

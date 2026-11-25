@@ -40,13 +40,14 @@ Read the current state of these files and report whether each has content or is 
 
 - `.claude/skills/job-application-assistant/01-candidate-profile.md`
 - `.claude/skills/job-application-assistant/02-behavioral-profile.md`
+- `.claude/skills/job-application-assistant/03-writing-style.md` *(any "Patterns Observed in Past Applications" section only — the writing rules are preserved)*
 - `.claude/skills/job-application-assistant/04-job-evaluation.md` *(personalized match areas, career goals, and life-situation constraints only — the scoring framework is preserved)*
 - `.claude/skills/job-application-assistant/05-cv-templates.md` *(profile statements section and the contact block inside the LaTeX template only — framework structure is preserved)*
 - `.claude/skills/job-application-assistant/06-cover-letter-templates.md` *(contact line and signature inside the LaTeX template only — framework structure is preserved)*
 - `.claude/skills/job-application-assistant/07-interview-prep.md` *(STAR examples and STAR candidates sections only — framework structure is preserved)*
 - `.claude/skills/job-scraper/search-queries.md` *(role titles, domain keywords, and location terms only — query structure is preserved)*
 
-This list must stay in step with what `/setup` Step 3 populates: every skill file it writes candidate data into is cleared here.
+This list must stay in step with what `/setup` writes in Step 3 and infers in Path A's Step A5: every skill file that receives candidate data from either path is cleared here. Known gap: the opening patterns Path A adds to `06-cover-letter-templates.md` are not labelled, so they cannot yet be told apart from the shipped templates and are kept.
 
 Present as:
 
@@ -58,6 +59,10 @@ Present as:
 
 - 02-behavioral-profile.md — [has content / already empty]
   Full file will be replaced with a blank template.
+
+- 03-writing-style.md — [has observations from past applications / nothing to clear]
+  Any "Patterns Observed in Past Applications" section that /setup drew from your
+  own cover letters will be removed. The writing rules are preserved.
 
 - 04-job-evaluation.md — [has personalized criteria / already blank]
   Your match areas, career goals, energizing/draining tasks, and life-situation
@@ -78,7 +83,8 @@ Present as:
   restored to placeholders. The query structure and filter sections are preserved.
 
 The following files are NOT touched (they contain framework rules, not candidate data):
-  - 03-writing-style.md
+  - 08-application-forms.md
+  - 09-web-research.md
 
 Outside the profile scope, still holding your personal data: CLAUDE.md and
 cv/main_example.tex. This scope covers skill files only.
@@ -196,6 +202,8 @@ Every skill file under `.claude/skills/job-application-assistant/` opens with a 
 
 ## Using This in Applications
 ```
+
+**For `03-writing-style.md`**, remove any `## Patterns Observed in Past Applications` section, which `/setup` Path A writes from the user's own cover letters. The shipped file has no such section, so leave every other section of `03-writing-style.md` intact: its rules are framework, not candidate data.
 
 **For `04-job-evaluation.md`**, restore the values `/setup` Step 3.4 personalized back to their placeholder tokens, leaving every surrounding line untouched:
 

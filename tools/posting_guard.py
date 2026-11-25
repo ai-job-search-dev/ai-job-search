@@ -53,18 +53,54 @@ for a saved page and --text for portal CLI output, pasted or archived text;
 without either the mode is guessed from the content, which is a fallback, not
 a documented path. Output: the verdict line, a `--- findings ---` block (JSON
 with --json), then `--- text ---` and the cleaned text, or `saved=<path>` when
---out is given. Exit 0 whenever the input could be read; 2 when --in cannot.
+--out is given. Exit 0 when a posting is evaluated; 1 when the input has no text
+to evaluate; 2 when --in cannot be read or --out points inside this repository
+(the cleaned posting is untrusted text and belongs in the session scratchpad,
+never next to the workflow's own files).
 """
 
 import argparse
 import html
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from page_decode import decode_page  # noqa: E402
+
+ROOT = Path(__file__).resolve().parent.parent
+
+NO_TEXT_VERDICT = "posting_guard: refused (no text to evaluate)"
+
+
+def _inside_repo(path: Path) -> bool:
+    """True when `path` would land inside this repository.
+
+    Compares by identity, not by string: the nearest existing ancestor of the
+    target is checked against the repo root with `os.path.samefile`, so a
+    differently cased spelling of the repo path (macOS and Windows file
+    systems are case-insensitive) or a symlinked parent still counts as inside.
+    """
+    candidate = path.expanduser()
+    if not candidate.is_absolute():
+        candidate = Path.cwd() / candidate
+    probe = candidate
+    while not probe.exists():
+        parent = probe.parent
+        if parent == probe:
+            return False
+        probe = parent
+    # Walk up by identity: samefile sees through case differences and symlinks
+    # that a resolved-path string comparison does not.
+    for ancestor in (probe, *probe.parents):
+        try:
+            if os.path.samefile(ancestor, ROOT):
+                return True
+        except OSError:
+            return False
+    return False
 
 EXCERPT = 120
 LINE_MAX = 200
@@ -97,14 +133,15 @@ VARIATION = re.compile("[︀-️\U000E0100-\U000E01EF]")
 VARIATION_RUN = re.compile("[︀-️\U000E0100-\U000E01EF]{2,}")
 
 HIDDEN_STYLE = re.compile(
-    r"display\s*:\s*none"
-    r"|visibility\s*:\s*hidden"
+    r"(?:^|;)\s*(?:display\s*:\s*none"
+    r"|visibility\s*:\s*(?:hidden|collapse)"
     r"|opacity\s*:\s*0(?![.\d]*[1-9])"
-    r"|font-size\s*:\s*0(?:\.0+)?(?:px|pt|em|rem|%)?(?![\d.])"
+    r"|font-size\s*:\s*(?:0(?:\.0+)?(?:px|pt|em|rem|%)?(?![\d.])|[012](?:\.\d+)?px(?![\w.%]))"
+    r"|transform\s*:[^;]*\bscale(?:[XYZ]|3d)?\(\s*0(?![.\d]*[1-9])"
     r"|color\s*:\s*transparent"
     r"|clip\s*:\s*rect\(\s*0"
-    r"|clip-path\s*:\s*inset\(\s*100%"
-    r"|(?:left|top|text-indent)\s*:\s*-\d{4,}px",
+    r"|clip-path\s*:\s*inset\(\s*(?:100%|(?:5\d|[6-9]\d|100)(?:\.\d+)?%\s*\))"
+    r"|(?:(?:margin-)?(?:left|top)|text-indent)\s*:\s*-(?:99\d+|\d{4,})(?:px|em|rem))",
     re.I,
 )
 PRESTRIP = re.compile(r"<!DOCTYPE[^>]*>|<\?[^>]*\?>", re.I)
@@ -147,7 +184,13 @@ INSTRUCTION_PATTERNS = [re.compile(p, re.I) for p in (
     r"\[INST\]",
     r"###\s*(system|instruction)",
     r"\b(curl|wget|ssh|scp)\b",
-    r"\.env\b",
+    # Every .env except `window.ENV`, the Remix config object each
+    # job-boards.greenhouse.io page sets in a script block (script blocks are
+    # scanned, so it read as a .env file on every one of those pages). Only
+    # that idiom is exempt: `prod.env`, `secrets.env` and `process.env.KEY` in
+    # an injection still flag, and none of them appeared in the 24 real posting
+    # pages this was measured on, so exempting them would buy nothing.
+    r"(?<!\bwindow)\.env\b",
     r"settings\.json",
     r"allowed-tools",
     r"\btool_use\b|\bfunction_call\b",
@@ -288,6 +331,7 @@ def clean_html(markup: str):
     visible = []
     hidden_buf = []
     stack = []  # open element names, innermost last
+    nav_at = set()  # stack indices of open navigation elements
     hidden_at = None  # stack index of the element that started the hidden run
     pos = 0
 
@@ -308,7 +352,9 @@ def clean_html(markup: str):
             hidden_parts.append(block)
 
     def pop_to(index):
+        nonlocal nav_at
         del stack[index:]
+        nav_at = {i for i in nav_at if i < index}
         if hidden_at is not None and hidden_at >= len(stack):
             flush_hidden()
 
@@ -329,6 +375,11 @@ def clean_html(markup: str):
             if index is not None:
                 pop_to(index)
             continue  # a closer with no matching opener is ignored
+        is_nav = bool(nav_at) or name == "nav" or _attrs(raw_attrs).get("role", "").strip().lower() == "navigation"
+        is_hidden = (hidden_at is not None) or _is_hidden(raw_attrs)
+        if is_hidden and not is_nav:
+            for u in URL.findall(html.unescape(raw_attrs)):
+                hidden_parts.append(u)
         if name in VOID:
             continue
         if name in IMPLIED_END and stack and stack[-1] == name:
@@ -336,8 +387,11 @@ def clean_html(markup: str):
         elif name in CLOSES_P and stack and stack[-1] == "p":
             pop_to(len(stack) - 1)
         stack.append(name)
+        idx = len(stack) - 1
+        if is_nav:
+            nav_at.add(idx)
         if hidden_at is None and _is_hidden(raw_attrs):
-            hidden_at = len(stack) - 1
+            hidden_at = idx
     emit(markup[pos:])
     if hidden_at is not None:
         flush_hidden()
@@ -398,6 +452,8 @@ def _plural(n: int, one: str, many: str) -> str:
 
 
 def verdict(findings: dict) -> str:
+    if findings.get("verdict") == NO_TEXT_VERDICT:
+        return NO_TEXT_VERDICT
     alarms = []
     n = len(findings.get("instruction_like") or [])
     if n:
@@ -453,7 +509,11 @@ def guard(raw: str, mode: str):
     tf["invisible_text"] += hidden_tf["invisible_text"]
     hidden_text = "\n".join([hidden_text, *tf["invisible_text"]])
     findings = {"hidden_blocks": hidden_blocks, **tf, **scan(text, hidden_text)}
-    findings["verdict"] = verdict(findings)
+    verdict_line = verdict(findings)
+    if not text and verdict_line == "posting_guard: clean":
+        findings["verdict"] = NO_TEXT_VERDICT
+    else:
+        findings["verdict"] = verdict_line
     return text, findings
 
 
@@ -512,13 +572,26 @@ def main(argv=None) -> int:
     print("--- findings ---")
     print(json.dumps(findings, ensure_ascii=False, indent=2) if args.json else _plain_findings(findings))
     if args.out is not None:
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(cleaned + "\n", encoding="utf-8")
-        print(f"saved={args.out}")
+        if _inside_repo(args.out):
+            # The gate runs under the fetch agents' pre-approved Bash grant on
+            # text that is untrusted by definition. fetch_page.py refuses the
+            # same thing for the same reason: an injected --out must never be
+            # able to create or overwrite a file in the repo - a command, agent
+            # or skill definition least of all.
+            print(
+                f"posting_guard: refusing to write inside the repo ({args.out}); the cleaned "
+                "posting is untrusted text and belongs in the session scratchpad",
+                file=sys.stderr,
+            )
+            return 2
+        if findings["verdict"] != NO_TEXT_VERDICT:
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(cleaned + "\n", encoding="utf-8")
+            print(f"saved={args.out}")
     else:
         print("--- text ---")
         print(cleaned)
-    return 0
+    return 1 if findings["verdict"] == NO_TEXT_VERDICT else 0
 
 
 if __name__ == "__main__":

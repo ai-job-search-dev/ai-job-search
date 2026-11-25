@@ -27,10 +27,11 @@ from pathlib import Path
 
 DATA_FILE = Path(__file__).parent / "salary_data.json"
 
-# Common Danish <-> anglicized spelling variants
+# Common Nordic <-> anglicized spelling variants
 SPELLING_VARIANTS = {
     "ø": "o", "æ": "ae", "å": "aa",
     "ö": "o", "ä": "ae", "ü": "u",
+    "þ": "th", "ð": "d",
 }
 
 # Legal suffixes and noise to strip when matching company names

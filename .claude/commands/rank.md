@@ -56,7 +56,7 @@ State how many jobs will be ranked and how many are deferred before proceeding.
 
 Dispatch parallel **`posting-scorer`** agents via the **Agent tool** (`subagent_type: posting-scorer`, the shipped definition in `.claude/agents/posting-scorer.md`: Read, WebFetch, WebSearch and the allowlisted Bash only - no Edit, no Write, because these agents hold untrusted posting text), ~5 jobs per agent (a single agent is fine for ≤5 jobs). Token-efficiency rules, consistent with `/apply`:
 
-- Pass each agent everything it needs **inline in the prompt** - the job list (title, company, URL) and a compact scoring rubric extracted from the files you read in Step 1: the strong/moderate/weak skill match areas, direct/adjacent experience domains, behavioral thrive/drain factors, career goals, deal-breakers, and the location constraints. Do **not** make agents re-read the profile files.
+- Pass each agent everything it needs **inline in the prompt** - the job list (`key`, title, company, URL - the `key` exactly as Step 1's `candidates` output printed it, because the agent must echo it back and cannot derive it: it is a company+title slug from `tools/job_key.py`, not the URL) and a compact scoring rubric extracted from the files you read in Step 1: the strong/moderate/weak skill match areas, direct/adjacent experience domains, behavioral thrive/drain factors, career goals, deal-breakers, and the location constraints. Do **not** make agents re-read the profile files.
 - Agents fetch each posting URL following the escalation order in `.claude/skills/job-application-assistant/09-web-research.md` (using the installed portal CLI's `detail` command when the URL belongs to a portal in `.agents/skills/`, or `WebFetch` otherwise) and score **only from actually fetched content** - never from the title alone, never from fabricated posting content. A job that is not scored gets one of two statuses, and they mean different things:
   - `expired` - **positive evidence the posting is closed**: the page says it is no longer available or the deadline has passed, the server answers 410 Gone, or the URL redirects to a listing page instead of the posting.
   - `unreachable` - **retrieval failed, so nothing is known about the posting**: 401/403 or a login wall, a 404, a timeout, a 5xx, or an empty or unparseable page. The agent adds `"fetch_error"`, one short plain-text line naming the failure (e.g. `"403 after curl retry"`). A 404 is `unreachable`, not `expired`: links break while postings stay live (#538 was one).
@@ -68,7 +68,7 @@ Each agent returns a JSON array, one object per job:
 
 ```json
 {
-  "key": "<the job's key in job_scraper/seen_jobs.json>",
+  "key": "<the key from the orchestrator's job list, echoed back unchanged>",
   "status": "scored" | "expired" | "unreachable",
   "fetch_error": "<one short line, only when unreachable>",
   "scores": { "technical": 0-100, "experience": 0-100, "behavioral": 0-100, "career": 0-100 },
@@ -166,8 +166,10 @@ Swept <S> previously ranked entries (<E> newly expired, <C> closing soon).
 | 1 | 78 | Strong Fit | ... | ... | ... | ... | 🔥 | [Link](...) |
 
 ### Why these ranked highest
-**1. <Title> at <Company> (78)** - [2-3 strength bullets and the honest gap, from the agent's findings]
+**1. <Title> at <Company> (78)**[ · <employment type>] - [2-3 strength bullets and the honest gap, from the agent's findings]
 [repeat for each shortlisted job]
+
+**Employment type:** show a shortlisted entry's stored `employment_type` (`full_time`, `part_time`, `contract`, `freelance`) after the score in its "Why these ranked highest" line, as above. The ` · <employment type>` part is bracketed because it is optional: leave out the whole bracket, separator included, when the value is `null` or the key is missing, so no dangling `·` is left behind. If the profile or `CLAUDE.md` states what kind of engagement the user wants (for example "contract only" under career goals) and the stored type differs, add a visible ⚠ marker naming both (e.g. "⚠ full_time, profile prefers contract"). Same treatment as a location or language FLAG: a signal for the user to judge, never a veto, and no score change. A `null` or absent type gets no marker and no guess; this costs no fetch because `/scrape` already stored the value.
 
 ### Closing soon
 | Deadline | Title | Company | URL |

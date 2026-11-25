@@ -41,16 +41,16 @@ Confirm the Gmail MCP tools (`mcp__claude_ai_Gmail__*`) are available. If not, t
 
 Lookback window: `since <date>` argument if given, else `state.last_sync` if set, else `newer_than:30d`.
 
-1. Call `list_labels` and look for a user label whose name suggests job-search email (e.g. contains "job", "application", "career" case-insensitively). Note its `id` if found.
+1. Call `list_labels` and look for a user label whose name suggests job-search email (e.g. contains "job", "application", "career" case-insensitively). Keep its `name` for the search query if found; the opaque `id` belongs only in a separate API `labelIds` filter, never after the query operator `label:`.
 2. Normalize each open application's company name for matching later (lowercase; strip `inc`, `inc.`, `llc`, `ltd`, `a/s`, `corp`, `corporation`, `group`; strip punctuation; collapse whitespace).
 3. Build a Gmail query combining (with `OR` groups via `{}`):
-   - `label:<id>` if a job-search label was found
+   - `label:"<name>"` if a job-search label was found, using its name rather than its ID (e.g. a label with `id: "Label_42"` and `name: "Job Search"` contributes `label:"Job Search"`, not `label:Label_42`). Quote names with spaces as shown, and pass the query as data to the MCP search tool rather than constructing a shell command.
    - A quoted-name OR-group of the open applications' company names, e.g. `{"Acme Corp" "BigCo"}`
    - A sender-domain OR-group of common ATS platforms: `{from:greenhouse.io from:lever.co from:myworkday.com from:ashbyhq.com from:smartrecruiters.com from:icims.com from:bamboohr.com}`
    - The lookback bound, e.g. `newer_than:30d` or `after:2026/06/15`
    - `-in:sent -in:drafts` (status signals come from what employers send you, not what you sent them; the negative operators keep **archived** mail and label-filtered mail in scope - restricting to the Inbox instead would silently drop both, including exactly the mail matched by the job-search label from step 1, since the standard filter that applies such a label also archives it)
 
-Example: `newer_than:30d -in:sent -in:drafts ({"Acme Corp" "BigCo"} OR {from:greenhouse.io from:lever.co from:myworkday.com from:ashbyhq.com})`
+Example with a `Job Search` label: `newer_than:30d -in:sent -in:drafts (label:"Job Search" OR {"Acme Corp" "BigCo"} OR {from:greenhouse.io from:lever.co from:myworkday.com from:ashbyhq.com})`
 
 4. Call `search_threads` with `view: THREAD_VIEW_MINIMAL`, `pageSize: 50`, paginating via `pageToken` until exhausted or results are clearly outside the relevant window.
 

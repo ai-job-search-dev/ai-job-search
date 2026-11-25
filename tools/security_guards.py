@@ -26,9 +26,10 @@ Checks:
    them (leading whitespace is part of the pattern), and every .gitignore in
    a subdirectory, which outranks the root file, is checked for negations.
 3. .agents/**/package.json — no npm/bun lifecycle scripts (preinstall,
-   install, postinstall, prepare, prepack), no trustedDependencies, no
-   workspaces, and no bunfig.toml or .npmrc beside the manifest. Catches
-   code execution smuggled into `bun install`, and a registry swap.
+   install, postinstall, preprepare, prepare, postprepare, prepack), no
+   trustedDependencies, no workspaces, and no bunfig.toml or .npmrc beside
+   the manifest. Catches code execution smuggled into `bun install`, and a
+   registry swap.
 4. Skill and command frontmatter — every `allowed-tools` entry in
    .claude/skills/*/SKILL.md, .agents/skills/*/SKILL.md and
    .claude/commands/*.md must be in ALLOWED_SKILL_TOOLS (a portal skill may
@@ -53,6 +54,7 @@ Stdlib only. Exit 0 on success, 1 with a failure list otherwise.
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -65,17 +67,11 @@ errors: list[str] = []
 # an entry must add it here too - that is the point: the diff shows both.
 ALLOWED_PERMISSIONS = {
     "Skill(job-application-assistant)",
-    # Narrowed from the upstream template's blanket Bash(bun run:*), which
-    # pre-approved `bun run <any file>`. One entry per shipped portal CLI,
-    # matching what each SKILL.md already declares in its allowed-tools.
-    # A portal added by /add-portal needs its own entry here and in
-    # .claude/settings.json - that review step is the point.
-    "Bash(bun run .agents/skills/jobbank-search/cli/src/cli.ts:*)",
-    "Bash(bun run .agents/skills/jobdanmark-search/cli/src/cli.ts:*)",
-    "Bash(bun run .agents/skills/jobindex-search/cli/src/cli.ts:*)",
-    "Bash(bun run .agents/skills/jobnet-search/cli/src/cli.ts:*)",
-    "Bash(bun run .agents/skills/linkedin-search/cli/src/cli.ts:*)",
-    "Bash(bun run .agents/skills/freehire-search/cli/src/cli.ts:*)",
+    # No portal CLI ships here (they live in ai-job-search-dev/community-portals),
+    # and no blanket Bash(bun run:*), which pre-approved `bun run <any file>`.
+    # A fork's portal is pre-approved only inside its own skill (_own_cli_grant);
+    # for /scrape, /apply and /rank it adds `Bash(bun run .agents/skills/<name>/cli/src/cli.ts:*)`
+    # here and in .claude/settings.json, per /add-portal.
     "Bash(python salary_lookup.py:*)",
     "Bash(python3 salary_lookup.py:*)",
     "Bash(python tools/rank_state.py:*)",
@@ -101,6 +97,10 @@ ALLOWED_PERMISSIONS = {
     # Reads a file or stdin, writes only to an explicit --out, never fetches.
     "Bash(python tools/posting_guard.py:*)",
     "Bash(python3 tools/posting_guard.py:*)",
+    # /html-report. Reads the tracker and archives, writes one .html file;
+    # the script refuses any --out that does not end in .html.
+    "Bash(python tools/html_report.py:*)",
+    "Bash(python3 tools/html_report.py:*)",
     # The echo check (/apply Step 3). Reads the posting and draft files it is
     # given and prints hits; never writes a file and never fetches. It reads only
     # .tex/.md/.txt/.typ files outside dot-named paths and refuses symlinks, so
@@ -176,6 +176,7 @@ REQUIRED_IGNORE_RULES = [
     # to its own directory, so the state file lands under .claude/skills/... and
     # a repo-rooted rule silently fails to match it.
     "**/job_scraper/seen_jobs.json",
+    "**/job_scraper/seen_jobs.json.bak-*",
     "**/job_scraper/notion_sync.json",
     "**/job_scraper/*.md",
     "*_BehavioralReport.pdf",
@@ -235,6 +236,16 @@ ALLOWED_IGNORE_NEGATIONS = {
     "!documents/**/.gitkeep",
 }
 
+# Fork-local extension of the negation allowlist. A fork that adds its own tracked
+# directory under a personal-data ignore rule (say, `!leads/.gitkeep`) lists the
+# negation here instead of editing this file, so `git merge upstream/master` never
+# conflicts on ALLOWED_IGNORE_NEGATIONS. One negation per line, `#` comments and blank
+# lines allowed. The file can only EXTEND the negation allowlist: any other
+# non-comment line is a failure. Upstream never ships it (see
+# check_local_negations_absent_upstream).
+LOCAL_NEGATIONS_FILE = ROOT / ".github" / "security-guards-local.txt"
+UPSTREAM_REPO = "ai-job-search-dev/ai-job-search"
+
 # Hook commands the template legitimately ships, as "<Event>:<command>" strings.
 # Empty by design - the template ships no hooks at all.
 #
@@ -258,7 +269,11 @@ ALLOWED_HOOKS: set[str] = set()
 ALLOWED_SETTINGS_KEYS = {"permissions", "hooks"}
 ALLOWED_PERMISSIONS_KEYS = {"allow", "ask", "deny"}
 
-FORBIDDEN_SCRIPTS = {"preinstall", "install", "postinstall", "prepare", "prepack"}
+# Bun also runs the root package's preprepare and postprepare hooks on install,
+# even with no dependencies and no prepare script (verified on Bun 1.3.10/1.4.2).
+FORBIDDEN_SCRIPTS = {
+    "preinstall", "install", "postinstall", "preprepare", "prepare", "postprepare", "prepack"
+}
 # Manifest keys that pull code into `bun install` by another door: `workspaces`
 # installs sub-packages with their own lifecycle scripts (a workspace
 # postinstall ran under Bun 1.3.10, scripts the top-level check never saw), and
@@ -400,7 +415,9 @@ def check_skill_tool_grants() -> None:
     skills = sorted(ROOT.glob(".claude/skills/*/SKILL.md")) + sorted(
         ROOT.glob(".agents/skills/*/SKILL.md")
     )
-    commands = sorted((ROOT / ".claude" / "commands").glob("*.md"))
+    # rglob, not glob: Claude Code loads namespaced commands from subfolders of
+    # .claude/commands/, so a grant in commands/ops/evil.md is live too.
+    commands = sorted((ROOT / ".claude" / "commands").rglob("*.md"))
     for path in skills + commands:
         rel = path.relative_to(ROOT).as_posix()
         try:
@@ -585,12 +602,69 @@ def _gitignore_lines(path: Path) -> list[str]:
 
 def _other_gitignores():
     """Every .gitignore below the root, skipping .git and installed dependencies."""
-    import os
-
     for dirpath, dirnames, filenames in os.walk(ROOT):
         dirnames[:] = sorted(d for d in dirnames if d not in (".git", "node_modules"))
         if ".gitignore" in filenames and Path(dirpath) != ROOT:
             yield Path(dirpath) / ".gitignore"
+
+
+def _normalized_pattern(pattern: str) -> str:
+    """A .gitignore pattern with the spellings git treats as the same rule folded.
+
+    A leading ``/`` only anchors the pattern to the .gitignore's directory, and the
+    root ``.gitignore`` is that directory, so ``/salary_data.json`` and
+    ``salary_data.json`` are the same rule for a file at the repo root.
+    """
+    pattern = pattern.strip()
+    while pattern.startswith("./"):
+        pattern = pattern[2:]
+    return pattern.lstrip("/")
+
+
+_REQUIRED_IGNORE_PATTERNS = {
+    _normalized_pattern(rule) for rule in REQUIRED_IGNORE_RULES if not rule.startswith("!")
+}
+
+
+def load_local_negations() -> set[str]:
+    """Negations a fork lists in .github/security-guards-local.txt (empty if absent)."""
+    if not LOCAL_NEGATIONS_FILE.is_file():
+        return set()
+    try:
+        raw = LOCAL_NEGATIONS_FILE.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        errors.append(f".github/security-guards-local.txt: unreadable: {exc}")
+        return set()
+    extra: set[str] = set()
+    for number, line in enumerate(raw, start=1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if not line.startswith("!"):
+            errors.append(
+                f".github/security-guards-local.txt:{number}: {line!r} is not a negation. "
+                "The file may only list `!pattern` lines that extend the .gitignore "
+                "negation allowlist."
+            )
+            continue
+        if _normalized_pattern(line[1:]) in _REQUIRED_IGNORE_PATTERNS:
+            errors.append(
+                f".github/security-guards-local.txt:{number}: {line!r} negates a required "
+                "personal-data ignore rule (REQUIRED_IGNORE_RULES). A fork may re-include "
+                "its own tracked paths, never the rule that keeps personal data out of git."
+            )
+            continue
+        extra.add(line)
+    return extra
+
+
+def check_local_negations_absent_upstream() -> None:
+    """The local-negations file must never exist on the upstream template itself."""
+    if os.environ.get("GITHUB_REPOSITORY") == UPSTREAM_REPO and LOCAL_NEGATIONS_FILE.exists():
+        errors.append(
+            ".github/security-guards-local.txt must not exist on the upstream template: "
+            "it is a fork-only extension point. Remove it from this PR."
+        )
 
 
 def check_gitignore() -> None:
@@ -609,14 +683,17 @@ def check_gitignore() -> None:
                 "or was renamed intentionally, update REQUIRED_IGNORE_RULES in "
                 "tools/security_guards.py in the same PR."
             )
+    check_local_negations_absent_upstream()
+    allowed_negations = ALLOWED_IGNORE_NEGATIONS | load_local_negations()
     for line in lines:
-        if line.startswith("!") and line not in ALLOWED_IGNORE_NEGATIONS:
+        if line.startswith("!") and line not in allowed_negations:
             errors.append(
                 f".gitignore: negation rule not in the reviewed allowlist: {line!r}. "
                 "A negation re-includes a path an earlier rule excluded and can silently "
                 "re-expose personal data (a required ignore rule stays present but stops "
                 "taking effect). If this negation is intentional, add it to "
-                "ALLOWED_IGNORE_NEGATIONS in tools/security_guards.py in the same PR."
+                "ALLOWED_IGNORE_NEGATIONS in tools/security_guards.py in the same PR "
+                "(on a fork, list it in .github/security-guards-local.txt instead)."
             )
     # A .gitignore in a subdirectory outranks the root file for paths under it,
     # so a negation there re-includes personal data the root rules excluded.
@@ -645,8 +722,6 @@ def check_package_manifests() -> None:
     manifests = [
         p for p in ROOT.glob(".agents/**/package.json") if "node_modules" not in p.parts
     ]
-    if not manifests:
-        errors.append(".agents: no package.json files found - glob roots are wrong or the tree moved")
     for manifest in manifests:
         relpath = manifest.relative_to(ROOT)
         try:
@@ -716,7 +791,7 @@ def check_tracked_node_modules() -> None:
 
 
 def check_agent_tool_grants() -> None:
-    for path in sorted((ROOT / ".claude" / "agents").glob("*.md")):
+    for path in sorted((ROOT / ".claude" / "agents").rglob("*.md")):
         rel = path.relative_to(ROOT).as_posix()
         try:
             data = _frontmatter(path.read_text(encoding="utf-8"))

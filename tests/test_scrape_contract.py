@@ -1,8 +1,9 @@
-"""Tests for the /scrape Step 2 search-output contract across portal CLIs.
+"""Tests for the /scrape Step 2 search-output contract.
 
 Mirrors the pattern of test_html_report_command.py: derive the contract from
-the spec itself and compare it against the real portal CLIs, so a drift on
-either side fails with a clean diff.
+the spec itself and compare it against the portal CLIs installed under
+.agents/skills/. None ship upstream (they live in community-portals), so these
+checks run on the portals a fork copies in or builds with /add-portal.
 
 Why this test exists: .claude/skills/job-scraper/SKILL.md Step 2 promises
 "Search output already includes title, company, location, date, and URL" for
@@ -51,7 +52,7 @@ def search_output_source(search_ts: Path) -> str:
 
 
 class ScrapeSearchOutputContractTests(unittest.TestCase):
-    """Every portal CLI's search output must carry the Step 2 contract fields."""
+    """Every installed portal CLI's search output must carry the Step 2 contract fields."""
 
     def test_step2_contract_sentence_is_found_in_the_scraper_skill(self):
         """Guards the anchor the field list is derived from."""
@@ -71,8 +72,7 @@ class ScrapeSearchOutputContractTests(unittest.TestCase):
             missing = sorted(contract - emitted)
             if missing:
                 failures.append(f"{portal.name}: missing {missing} in search output")
-        self.assertEqual([], failures, "; ".join(failures) or "no portal CLIs checked")
-
+        self.assertEqual([], failures, "; ".join(failures))
 
 
 # Step 4's storage schema, derived the same way as the Step 2 contract above:
@@ -136,6 +136,74 @@ class SeenJobsPostingDateTests(unittest.TestCase):
         )
 
 
+RANK_COMMAND = REPO_ROOT / ".claude" / "commands" / "rank.md"
+EMPLOYMENT_TYPES = ("full_time", "part_time", "contract", "freelance")
+
+
+class SeenJobsEmploymentTypeTests(unittest.TestCase):
+    """The engagement type a posting states must be stored and surfaced, never guessed.
+
+    Part-time, contract and freelance postings reach the shortlist
+    indistinguishable from permanent roles: Step 3 reads the posting but its
+    only outputs are a fit band and highlights, so a "6-month contract" is only
+    visible if the reader happens to see the title. Persisting it as a nullable
+    field lets /rank show it and flag a mismatch with the user's stated
+    preference, without any new profile field.
+    """
+
+    def test_step4_schema_persists_employment_type(self):
+        self.assertIn(
+            "employment_type",
+            derive_stored_fields(),
+            "Step 4's seen_jobs.json schema stores no employment type",
+        )
+
+    def test_schema_lists_every_allowed_value_and_null(self):
+        text = SCRAPER_SKILL.read_text(encoding="utf-8")
+        line = next(l for l in text.splitlines() if l.strip().startswith('"employment_type"'))
+        for value in EMPLOYMENT_TYPES:
+            self.assertIn(f'"{value}"', line)
+        self.assertIn("null", line)
+
+    def test_employment_type_semantics_are_documented(self):
+        text = SCRAPER_SKILL.read_text(encoding="utf-8")
+        self.assertRegex(
+            text,
+            r"never infer an employment type",
+            "employment_type must carry the same never-backfill rule as `posted_date`",
+        )
+
+    @staticmethod
+    def _rank_employment_paragraph() -> str:
+        text = RANK_COMMAND.read_text(encoding="utf-8")
+        start = text.find("**Employment type:**")
+        if start == -1:
+            return ""
+        end = text.find("\n\n", start)
+        return text[start:] if end == -1 else text[start:end]
+
+    def test_rank_shows_it_as_a_flag_never_a_veto(self):
+        # Scoped to the paragraph: "never a veto" is said about age and the
+        # posting guard elsewhere in the file, so a file-wide search would
+        # keep passing if this paragraph lost the promise.
+        paragraph = self._rank_employment_paragraph()
+        self.assertIn("employment_type", paragraph, "/rank never reads the stored employment type")
+        self.assertRegex(paragraph, r"never a veto", "the mismatch flag must not veto")
+
+    def test_rank_marks_the_type_and_its_separator_as_optional(self):
+        # A null type must not leave a dangling "·" after the score.
+        text = RANK_COMMAND.read_text(encoding="utf-8")
+        self.assertIn("(78)**[ \u00b7 <employment type>]", text)
+        self.assertRegex(self._rank_employment_paragraph(), r"separator included")
+
+    def test_portal_detail_output_counts_as_a_source(self):
+        # Step 3 reads the posting text, but a portal's `detail` output is what
+        # Step 2 fetched; the rule must not restrict the source to one of them.
+        text = SCRAPER_SKILL.read_text(encoding="utf-8")
+        start = text.index("**Employment type:**")
+        self.assertIn("`detail` output", text[start:text.index("\n\n", start)])
+
+
 class SeenJobsDedupContinuityTests(unittest.TestCase):
     """The new key rule must not replay jobs stored under legacy keys."""
 
@@ -150,6 +218,36 @@ class SeenJobsDedupContinuityTests(unittest.TestCase):
     def test_step4_presentation_mentions_url_deduplication(self):
         text = SCRAPER_SKILL.read_text(encoding="utf-8")
         self.assertRegex(text, r"matched by URL or\s+company\+title")
+
+
+# Step 1b sends one plain term per CLI call and takes quoting from the portal's
+# own SKILL.md. The rule is data each portal carries, so the test derives the
+# portal list from the skills tree and names no portal.
+_QUERY_SYNTAX_LINE = re.compile(r"^Query syntax:\s*\S", re.MULTILINE)
+
+
+class PortalQuerySyntaxTests(unittest.TestCase):
+    """Every installed portal SKILL.md must state its query syntax."""
+
+    def test_step1b_points_at_the_query_syntax_line(self):
+        text = SCRAPER_SKILL.read_text(encoding="utf-8")
+        step1b = re.search(r"#### 1b\..*?(?=#### 1c\.)", text, re.DOTALL)
+        self.assertIsNotNone(step1b, "Step 1b section not found")
+        self.assertIn("`Query syntax:`", step1b.group(0), "Step 1b no longer defers quoting to the portal's Query syntax line")
+        self.assertIn("inside the argument the CLI receives", step1b.group(0))
+        self.assertIn("deduplicate the pool by URL before Step 2", step1b.group(0))
+
+    def test_every_installed_portal_skill_has_a_query_syntax_line(self):
+        missing = [
+            portal.name
+            for portal in PORTAL_CLIS
+            if not _QUERY_SYNTAX_LINE.search((portal / "SKILL.md").read_text(encoding="utf-8"))
+        ]
+        self.assertEqual(
+            [],
+            missing,
+            "portal SKILL.md files without a `Query syntax:` line: " + ", ".join(missing),
+        )
 
 
 if __name__ == "__main__":

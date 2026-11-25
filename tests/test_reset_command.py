@@ -131,6 +131,78 @@ def setup_step3_skill_files():
     return files
 
 
+def setup_path_a_inference_rules():
+    """(skill file, section headings) pairs /setup Path A's Step A5 writes into.
+
+    Step A5's inference rules are bullets of the form
+    '- **`<file>`** ...: ... under "## <Heading>" ...'. Path A writes from the
+    user's own documents and past applications, outside Step 3's headings, so
+    deriving coverage from Step 3 alone missed these targets.
+    """
+    a5 = section(SETUP.read_text(encoding="utf-8"), "### Step A5:", "### Step A6:")
+    rules = []
+    for line in a5.splitlines():
+        match = re.match(r"^- \*\*`([^`]+\.md)`", line)
+        if match:
+            rules.append((match.group(1), re.findall(r'"(## [^"]+)"', line)))
+    return rules
+
+
+class TestResetCoversPathAInferredContent(unittest.TestCase):
+    """/reset profile must clear what /setup Path A infers from past applications.
+
+    The regression: Path A adds '## Patterns Observed in Past Applications' to
+    03-writing-style.md from the user's own cover letters, while reset.md listed
+    03 as 'NOT touched (they contain framework rules, not candidate data)' - so
+    the user's past phrasing survived a reset that said the file held none.
+    """
+
+    def setUp(self):
+        self.text = RESET.read_text(encoding="utf-8")
+        self.rules = setup_path_a_inference_rules()
+        self.files = {name for name, _ in self.rules}
+        # Guard against a vacuous pass if Step A5's bullet format changes.
+        self.assertGreaterEqual(len(self.files), 6, self.rules)
+        self.assertIn("03-writing-style.md", self.files)
+
+    def test_step1_reads_every_path_a_file(self):
+        """The preview's has-content/nothing-to-clear verdicts come from Step 1's read list."""
+        inventory = section(self.text, "Read the current state of these files", "Present as:")
+        missing = sorted(f for f in self.files if f not in inventory)
+        self.assertEqual(missing, [], f"Step 1 never reads these Path A targets, so their preview line is unchecked: {missing}")
+
+    def test_preview_lists_every_path_a_file(self):
+        preview = section(
+            self.text, "### If scope includes `profile`:", "### If scope includes `documents`:"
+        )
+        listed = section(preview, "## Profile reset will clear:", "The following files are NOT touched")
+        missing = sorted(f for f in self.files if f not in listed)
+        self.assertEqual(missing, [], f"Path A writes into these, but the preview never offers to clear them: {missing}")
+
+    def test_preserved_list_claims_no_path_a_file_is_framework_only(self):
+        preserved = section(self.text, "The following files are NOT touched", "```")
+        mislabeled = sorted(f for f in self.files if f in preserved)
+        self.assertEqual(mislabeled, [], f"listed as framework-only, but Path A writes candidate data into: {mislabeled}")
+
+    def test_execution_removes_every_section_path_a_adds(self):
+        """Each heading must be named in the Step 3 instruction for its own file.
+
+        An instruction runs from its '**For `<file>`**' line to the next one, so
+        a heading attached to another file's instruction does not count.
+        """
+        execution = section(self.text, "### Profile reset", "### Documents reset")
+        blocks = {}
+        for match in re.finditer(r"^\*\*For `(?:[^`]*/)?([^`/]+)`\*\*(.*?)(?=^\*\*For `|\Z)", execution, re.S | re.M):
+            blocks[match.group(1)] = blocks.get(match.group(1), "") + match.group(2)
+        missing = sorted(
+            f"{name}: {heading}"
+            for name, headings in self.rules
+            for heading in headings
+            if heading not in blocks.get(name, "")
+        )
+        self.assertEqual(missing, [], f"Path A adds these sections, but no Step 3 instruction for that file removes them: {missing}")
+
+
 class TestResetCoversEveryPersonalizedSkillFile(unittest.TestCase):
     def setUp(self):
         self.text = RESET.read_text(encoding="utf-8")

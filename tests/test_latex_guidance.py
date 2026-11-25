@@ -176,6 +176,28 @@ class TestPdflatexFontEncodingGuard(unittest.TestCase):
         self.assert_has_guarded_fontenc(CV_TEMPLATES)
 
 
+class TestMissingPackageGuidance(unittest.TestCase):
+    """A minimal TeX install only behaves like a full one if every compile
+    loop installs a missing package instead of editing the source around it.
+    The rule lives once in 05-cv-templates.md; every agent compile loop (05, 06,
+    /apply, /add-template) points to it. SETUP.md's smoke tests are run by people
+    and list every package up front, so they carry no pointer."""
+
+    HEADING = "Missing LaTeX packages"
+
+    def test_cv_guide_states_the_rule(self):
+        body = section(CV_TEMPLATES.read_text(encoding="utf-8"), self.HEADING)
+        self.assertIsNotNone(body, f"05-cv-templates.md needs a '{self.HEADING}' section")
+        self.assertIn("tlmgr search --global --file", body)
+        self.assertIn("never run `sudo`", body.lower(), "the rule must say what to do when an install needs root")
+
+    def test_every_compile_loop_points_to_the_rule(self):
+        add_template = REPO / ".claude" / "commands" / "add-template.md"
+        for path in (COVER_TEMPLATES, APPLY, add_template):
+            with self.subTest(path=path.name):
+                self.assertIn(self.HEADING, path.read_text(encoding="utf-8"))
+
+
 class TestGeometryScaleAlignment(unittest.TestCase):
     """The geometry scale specified in 05-cv-templates.md must match cv/main_example.tex."""
 
