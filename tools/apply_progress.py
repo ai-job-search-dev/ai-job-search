@@ -112,7 +112,9 @@ def linkedin_id(url: str | None) -> str | None:
     if m:
         return m.group(1) or m.group(2)
     if parsed.path.startswith("/jobs/"):
-        current = parse_qs(parsed.query).get("currentJobId", [""])[0]
+        # keep_blank_values: take the first currentJobId even when it is blank, exactly as
+        # URLSearchParams.get() does in the dashboard, so a repeated parameter cannot split them.
+        current = parse_qs(parsed.query, keep_blank_values=True).get("currentJobId", [""])[0]
         if re.fullmatch(r"\d{6,}", current):
             return current
     return None

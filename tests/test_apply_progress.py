@@ -39,6 +39,9 @@ LINKEDIN_CASES = [
     # The old end-of-string rule read the geoId here, not the job.
     ("https://www.linkedin.com/jobs/search/?currentJobId=4312345678&geoId=103644278", "4312345678"),
     ("https://www.linkedin.com/jobs/collections/recommended/?currentJobId=4312345678", "4312345678"),
+    # A repeated parameter: both implementations read the first value, blank or not.
+    ("https://www.linkedin.com/jobs/search/?currentJobId=&currentJobId=4312345678", None),
+    ("https://www.linkedin.com/jobs/search/?currentJobId=4312345678&currentJobId=4399999999", "4312345678"),
     # LinkedIn, but not a posting: numeric company pages, query-only digits, profiles.
     ("https://www.linkedin.com/company/1234567/", None),
     ("https://www.linkedin.com/company/acme/", None),
