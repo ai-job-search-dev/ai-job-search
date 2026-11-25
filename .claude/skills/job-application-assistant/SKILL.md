@@ -35,7 +35,7 @@ When the user provides a job posting (URL or text), follow this workflow:
 - Follow the guidelines in `05-cv-templates.md`
 - Create `cv/main_<company>_<role>.tex` with tailored content
 - Adjust: profile statement, skills section, experience bullet emphasis, section order
-- Check the CV against `10-echo-traps.md`: rewrite voice words and phrases lifted from the posting, and show the flag table
+- Check the CV against `10-echo-traps.md`: rewrite voice words and phrases lifted from the posting or the company's own pages, and show the flag table
 
 ### Step 3: Write Cover Letter
 - Follow the writing style rules in `03-writing-style.md` (critical: no em-dashes, no cliches)

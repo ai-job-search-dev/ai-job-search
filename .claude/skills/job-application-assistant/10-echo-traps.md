@@ -22,11 +22,12 @@ before you write it.
 
 | Class | What it is | Rule |
 |---|---|---|
-| **Hard keywords** | Tools, methods, certifications, the job title, domain nouns: Kubernetes, MILP, IFRS 17, PRINCE2, RAG | Reuse exactly. ATS matching is often literal. |
+| **Hard keywords** | Tools, methods, certifications, the job title, domain nouns, and named skills a recruiter would search for: Kubernetes, MILP, IFRS 17, PRINCE2, RAG, stakeholder management | Reuse exactly. ATS matching is often literal. |
 | **Voice words** | Informal, idiomatic or metaphorical words, company coinages, and anything unusual for the field's register: "messy", "create leverage", "how things actually get done", "ship quickly", "startup-like" | Never reuse as the candidate's own words. Say the same thing in the field's normal register. |
 
-**Spoken-word test (voice words only):** would the candidate use this word unprompted
-when describing their own work in an interview? If not, it does not go in the document.
+**Spoken-word test (any word that is not a hard keyword):** would the candidate use this
+word unprompted when describing their own work in an interview? If not, it does not go in
+the document.
 Hard keywords never take this test: a candidate who says "ML deployment" still writes
 "MLOps" when the posting asks for it and the profile supports it.
 
@@ -41,10 +42,10 @@ interviewer later said it read as copied from the posting. In the field's regist
 Any run of **5 or more words** copied from the posting, outside quotation marks, is a
 lift. Names, job titles and tool lists ("Python, SQL, dbt") do not count, nor does a
 hard keyword that is itself 5 or more words (a certification or degree name), nor a
-stock phrase of the draft's language that any letter might use ("work closely with the
-team"). A lift reads as the posting pasted back, even when
-every word is a hard keyword. Rewrite the sentence from the candidate's facts, keeping
-the keywords.
+stock phrase that carries none of the posting's content ("work closely with the team").
+A clause built from the posting's hard keywords and its own connecting words is still a
+lift: it reads as the posting pasted back. Rewrite the sentence from the candidate's
+facts, keeping the keywords.
 
 Example: a posting says "translate the client's business needs into data solutions and
 follow their delivery with the engineering team"; a letter that says "I translate the
