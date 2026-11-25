@@ -54,7 +54,9 @@ without either the mode is guessed from the content, which is a fallback, not
 a documented path. Output: the verdict line, a `--- findings ---` block (JSON
 with --json), then `--- text ---` and the cleaned text, or `saved=<path>` when
 --out is given. Exit 0 when a posting is evaluated; 1 when the input has no text
-to evaluate; 2 when --in cannot be read or --out points inside this repository
+to evaluate, or is an app shell whose posting exists only in a script block (a
+JSON-LD JobPosting description while the page shows almost nothing - the verdict
+names the next rung); 2 when --in cannot be read or --out points inside this repository
 (the cleaned posting is untrusted text and belongs in the session scratchpad,
 never next to the workflow's own files).
 """
@@ -72,7 +74,16 @@ from page_decode import decode_page  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
-NO_TEXT_VERDICT = "posting_guard: refused (no text to evaluate)"
+REFUSED = "posting_guard: refused ("
+NO_TEXT_VERDICT = REFUSED + "no text to evaluate)"
+APP_SHELL_VERDICT = REFUSED + "app shell: the posting is only in a script block - use the portal CLI or the employer's own page)"
+# A page that shows fewer non-whitespace characters than this while a JSON-LD
+# JobPosting description holds at least this many is an app shell: the
+# description is rendered by a script the gate never runs. The shortest of
+# 3738 live descriptions (Greenhouse, Ashby, Lever boards) is 1921 characters;
+# an Ashby page shows 62 before its script runs.
+APP_SHELL_CHARS = 200
+LD_JSON = re.compile(r"<script\b[^>]*\btype\s*=\s*[\"']?application/ld\+json[\"']?[^>]*>(.*?)</script\s*>", re.I | re.S)
 
 
 def _inside_repo(path: Path) -> bool:
@@ -400,6 +411,38 @@ def clean_html(markup: str):
     return _fold(text), {"hidden_blocks": hidden_blocks, "hidden_text": "\n".join(hidden_parts)}
 
 
+def _script_posting_chars(markup: str) -> int:
+    """Non-whitespace length of the longest JobPosting description in a JSON-LD block, or 0.
+
+    Job boards that render client-side (Ashby among them) still serve the
+    posting to crawlers as schema.org JSON-LD. The gate drops every script,
+    rightly, so that description is the one thing it can use to tell "this
+    posting is short" from "this page has not rendered the posting".
+    """
+    longest = 0
+    for m in LD_JSON.finditer(markup):
+        try:
+            data = json.loads(m.group(1))
+        except ValueError:
+            continue
+        stack = [data]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, list):
+                stack.extend(node)
+                continue
+            if not isinstance(node, dict):
+                continue
+            kind = node.get("@type")
+            kinds = kind if isinstance(kind, list) else [kind]
+            description = node.get("description")
+            if "JobPosting" in kinds and isinstance(description, str):
+                text = html.unescape(re.sub(r"<[^>]+>", " ", description))
+                longest = max(longest, len(re.sub(r"\s", "", text)))
+            stack.extend(v for v in node.values() if isinstance(v, (dict, list)))
+    return longest
+
+
 def _excerpt(line: str, at: int) -> str:
     """Up to LINE_MAX characters of `line`, always including position `at`.
 
@@ -452,8 +495,8 @@ def _plural(n: int, one: str, many: str) -> str:
 
 
 def verdict(findings: dict) -> str:
-    if findings.get("verdict") == NO_TEXT_VERDICT:
-        return NO_TEXT_VERDICT
+    if str(findings.get("verdict", "")).startswith(REFUSED):
+        return findings["verdict"]
     alarms = []
     n = len(findings.get("instruction_like") or [])
     if n:
@@ -492,9 +535,11 @@ def guard(raw: str, mode: str):
     """Run the whole gate. mode: "html", "text" or "auto". Returns (cleaned, findings)."""
     if mode == "auto":
         mode = "html" if HTML_HINT.search(raw) else "text"
+    script_chars = 0
     if mode == "html":
         text, hf = clean_html(raw)
         hidden_text, hidden_blocks = hf["hidden_text"], hf["hidden_blocks"]
+        script_chars = _script_posting_chars(raw)
     else:
         text, hidden_text, hidden_blocks = raw, "", []
     text, tf = clean_text(text)
@@ -512,6 +557,12 @@ def guard(raw: str, mode: str):
     verdict_line = verdict(findings)
     if not text and verdict_line == "posting_guard: clean":
         findings["verdict"] = NO_TEXT_VERDICT
+    elif (verdict_line.startswith("posting_guard: clean")
+          and len(re.sub(r"\s", "", text)) < APP_SHELL_CHARS <= script_chars):
+        # The posting is in a script the gate dropped; what it would return is
+        # a title. A ⚠ verdict stays: an instruction in that script is scanned
+        # with the other dropped blocks and the user must see it.
+        findings["verdict"] = APP_SHELL_VERDICT
     else:
         findings["verdict"] = verdict_line
     return text, findings
@@ -584,14 +635,14 @@ def main(argv=None) -> int:
                 file=sys.stderr,
             )
             return 2
-        if findings["verdict"] != NO_TEXT_VERDICT:
+        if not findings["verdict"].startswith(REFUSED):
             args.out.parent.mkdir(parents=True, exist_ok=True)
             args.out.write_text(cleaned + "\n", encoding="utf-8")
             print(f"saved={args.out}")
     else:
         print("--- text ---")
         print(cleaned)
-    return 1 if findings["verdict"] == NO_TEXT_VERDICT else 0
+    return 1 if findings["verdict"].startswith(REFUSED) else 0
 
 
 if __name__ == "__main__":
