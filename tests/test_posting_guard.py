@@ -761,6 +761,41 @@ class InputHandling(GuardFixture):
                     self.assertIn("refusing to read", err)
                     self.assertNotIn("Outside content.", out)
 
+    def test_in_under_a_documents_folder_that_is_itself_a_link_is_refused(self):
+        repo = self.tmp / "repo"
+        targets = {repo / "private": "Private content."}
+        outside = REPO_ROOT / f".posting_guard_outside_test_{os.getpid()}"
+        if not any(outside.is_relative_to(Path(root).resolve()) for root in (tempfile.gettempdir(), "/tmp")):
+            self.addCleanup(shutil.rmtree, outside, ignore_errors=True)
+            targets[outside] = "Outside content."
+        for target, content in targets.items():
+            (target / "postings").mkdir(parents=True)
+            for folder in (target, target / "postings"):
+                (folder / "job_posting.md").write_text(content, encoding="utf-8")
+        kinds = {"symlink": lambda target, link: link.symlink_to(target, target_is_directory=True)}
+        if os.name == "nt":
+            import _winapi
+            kinds["junction"] = lambda target, link: _winapi.CreateJunction(str(target), str(link))
+        with mock.patch.object(posting_guard, "ROOT", repo):
+            for spot in ("documents", "documents/applications", "documents/postings"):
+                link = repo / spot
+                link.parent.mkdir(exist_ok=True)
+                posting = link / ("postings/job_posting.md" if spot == "documents" else "job_posting.md")
+                for target, content in targets.items():
+                    for kind, make_link in kinds.items():
+                        with self.subTest(spot=spot, target=target.name, kind=kind):
+                            try:
+                                make_link(target, link)
+                            except OSError as exc:
+                                self.skipTest(f"{kind} unavailable: {exc}")
+                            try:
+                                code, out, err = self.run_main("--in", str(posting), "--text")
+                            finally:
+                                os.unlink(link)
+                            self.assertEqual(code, 2, err)
+                            self.assertIn("refusing to read", err)
+                            self.assertNotIn(content, out)
+
     def test_in_or_out_that_cannot_be_resolved_fails_cleanly(self):
         for error in (OSError(22, "Invalid argument"), RuntimeError("Symlink loop")):
             for argv in (("--in", str(self.write("posting.txt", "Job.\n"))), ("--out", str(self.tmp / "clean.txt"))):

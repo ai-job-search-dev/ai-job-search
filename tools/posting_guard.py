@@ -90,7 +90,7 @@ def _inside_temp(path: Path) -> bool:
 
 def _readable_input(path: Path) -> bool:
     resolved = path.resolve()
-    folders = [(ROOT / "documents" / name).resolve() for name in ("applications", "postings")]
+    folders = [ROOT.resolve() / "documents" / name for name in ("applications", "postings")]
     return (_inside_temp(path) and not _inside_repo(resolved)) or any(resolved.is_relative_to(f) for f in folders)
 
 
