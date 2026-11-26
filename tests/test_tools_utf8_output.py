@@ -33,6 +33,14 @@ CJK = "腾讯"
 POLISH = "Żabka Łódź"
 
 
+# Runs a tool script with every IPv4 address treated as global: the local test
+# server listens on loopback, which the robots gate refuses.
+LOOPBACK_AS_PUBLIC = (
+    "import ipaddress, runpy, sys; ipaddress.IPv4Address.is_global = True; "
+    "sys.argv = sys.argv[1:]; runpy.run_path(sys.argv[0], run_name='__main__')"
+)
+
+
 def run_legacy_stdout(argv, cwd=None):
     """Run a tool the way a Western-locale Windows host pipes it."""
     env = dict(os.environ, PYTHONIOENCODING="cp1252", PYTHONUTF8="0")
@@ -220,7 +228,7 @@ class ToolsWriteUtf8(unittest.TestCase):
             port = server.server_address[1]
             out = self.tmp / "saved.html"
             proc = run_legacy_stdout([
-                TOOLS / "fetch_page.py", f"http://127.0.0.1:{port}/posting", "--text", "--out", out,
+                "-c", LOOPBACK_AS_PUBLIC, TOOLS / "fetch_page.py", f"http://127.0.0.1:{port}/posting", "--text", "--out", out,
             ])
             self.assert_clean_utf8(proc, 0, POLISH, CYRILLIC)
         finally:
@@ -245,7 +253,7 @@ class ToolsWriteUtf8(unittest.TestCase):
         try:
             port = server.server_address[1]
             proc = run_legacy_stdout([
-                TOOLS / "robots_check.py", f"http://127.0.0.1:{port}/jobs/{POLISH}",
+                "-c", LOOPBACK_AS_PUBLIC, TOOLS / "robots_check.py", f"http://127.0.0.1:{port}/jobs/{POLISH}",
             ])
             self.assert_clean_utf8(proc, 0, "ALLOWED")
         finally:

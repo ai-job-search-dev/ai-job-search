@@ -25,39 +25,162 @@ Rules implemented (RFC 9309), deliberately on the cautious side:
   * only an http or https URL with a host is checked at all; anything else
     is unconfirmed without a request, and curl itself is pinned to http(s)
     on the first hop and on every redirect
+  * every hop, the first included, goes only to a host whose every resolved
+    address is globally routable; loopback, private, link-local, shared,
+    unique-local, site-local and 6to4 addresses (and IPv6 forms embedding
+    one) are unconfirmed without a request; curl sees no proxy variable but the one chosen here,
+    and a direct request (or one through a locally-resolving SOCKS proxy) is
+    pinned to the addresses that were checked (an IP literal is checked and
+    needs no pin)
+  * behind an http(s) or remote-resolving SOCKS proxy set in the environment,
+    curl is given exactly that proxy and the host is only pre-screened: it is
+    refused if local DNS answers with an internal address (internal IP
+    literals and localhost are refused either way), but the proxy resolves
+    the name again itself, so a proxy whose DNS differs from the local one can
+    reach a host whose local answer was public, and a name local DNS cannot
+    resolve is left to the proxy entirely
+  * a host name that is not plain ASCII, or holds '%', is unconfirmed: give
+    an international name in its punycode (xn--) form
+  * a robots.txt over 500 KiB (the size RFC 9309 asks parsers to handle) or
+    a URL path plus query over MAX_PATH characters is unconfirmed; curl 8.4
+    or later stops reading at the cap, older curl reads a chunked body whole
+    (within the 12 s deadline) before it is refused
+  * the 12 s deadline is set before the local DNS lookup, so the lookup uses
+    up the budget, but it has no timeout of its own
 
 Usage:  python3 tools/robots_check.py <url>
 Exit 0 = the retry may proceed. Exit 1 = do not retry; go to escalation step 3.
 """
 
-import re, subprocess, sys
+import ipaddress, os, socket, subprocess, sys, time
 from urllib.parse import urlsplit, unquote
+from urllib.request import getproxies_environment, proxy_bypass_environment
 
 BROWSER = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
            '(KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36')
+MAX_ROBOTS_BYTES = 500 * 1024
+MAX_PATH = 2048
+MAX_REDIRECTS = 5
+INTERNAL = 'a host on the way resolves to an internal address'
+_NAT64 = ipaddress.ip_network('64:ff9b::/96')
+_NOT_PUBLIC = [ipaddress.ip_network(n) for n in ('64:ff9b:1::/48', '::/96', '::ffff:0:0:0/96',
+                                                  '2002::/16', 'fec0::/10')]
+
+def _is_public(ip):
+    if ip.version == 6 and (ip.ipv4_mapped or ip in _NAT64):
+        ip = ipaddress.IPv4Address(int(ip) & 0xffffffff)
+    return ip.is_global and not any(ip in net for net in _NOT_PUBLIC)
+
+def _ip_literal(host):
+    """The address host spells, in any form curl accepts (2130706433, 0x7f.1., ...), or None."""
+    host = host.removesuffix('.')
+    try:
+        return ipaddress.ip_address(host)
+    except ValueError:
+        try:
+            return ipaddress.IPv4Address(socket.inet_aton(host))
+        except OSError:
+            return None
+
+def _public_addresses(host, port):
+    """Every address host resolves to, or RuntimeError if any is not global."""
+    addrs = sorted({info[4][0] for info in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)})
+    if not all(_is_public(ipaddress.ip_address(a.split('%')[0])) for a in addrs):
+        raise RuntimeError(INTERNAL)
+    return addrs
+
+def _proxy(scheme, host):
+    """The proxy Python's reading of the environment picks for this host, or None."""
+    proxies = getproxies_environment()
+    proxy = proxies.get(scheme) or proxies.get('all')
+    return None if not proxy or proxy_bypass_environment(host, proxies) else proxy
+
+def route(parts):
+    """(curl options, curl environment) that keep a request for this
+    urlsplit() URL on the host that was checked, or RuntimeError.
+
+    curl's environment holds no proxy variable but the one proxy chosen here,
+    if any, and no no_proxy list, so its own reading of the proxy variables can
+    never pick another route (the proxy goes in the environment rather than
+    argv because a proxy URL can carry credentials). Direct and through a
+    locally-resolving SOCKS proxy, curl is pinned to the checked addresses.
+    Through a proxy that resolves names itself, the host is only pre-screened:
+    refused if local DNS says internal, and otherwise left to the proxy, which
+    resolves the name again."""
+    host = parts.hostname
+    if not host.isascii() or '%' in host:
+        raise RuntimeError("host name is not plain ASCII or holds '%'; "
+                           'give an international name in its punycode (xn--) form')
+    port = parts.port if parts.port is not None else (443 if parts.scheme == 'https' else 80)
+    proxy = _proxy(parts.scheme, host)
+    env = {k: v for k, v in os.environ.items() if not k.lower().endswith('_proxy')}
+    if proxy:
+        env[parts.scheme + '_proxy'] = proxy
+    ip = _ip_literal(host)
+    if ip and not _is_public(ip):
+        raise RuntimeError(INTERNAL)
+    if ip and host.endswith('.'):
+        raise RuntimeError('an IP address host ends in a dot; give the address without it')
+    if proxy and not proxy.lower().startswith(('socks://', 'socks4://', 'socks5://')):
+        if ('.' + host.rstrip('.')).endswith('.localhost'):
+            raise RuntimeError(INTERNAL)
+        for name in dict.fromkeys((host, host.removesuffix('.'))):
+            try:
+                _public_addresses(name, port)
+                break
+            except socket.gaierror:
+                pass
+        return [], env
+    if ip:
+        return [], env
+    addrs = _public_addresses(host, port)
+    return ['--resolve', f'{host}:{port}:' + ','.join(f'[{a}]' if ':' in a else a for a in addrs)], env
 
 def _fetch(url, ua):
     """curl, not urllib: some hosts (jobup.ch) hang urllib indefinitely while
-    answering curl in under a second, and --max-time is a hard ceiling."""
-    # "--" terminates option parsing, so a URL beginning with a dash can never
-    # be read by curl as a flag. gate() rebuilds the target as
-    # scheme://host/robots.txt before calling here, so this is hardening for
-    # direct callers rather than a hole in the gate path itself.
-    # --proto pins the first hop to http(s) and --proto-redir every redirect
-    # -L follows, so neither the caller nor the site can steer curl to file:,
-    # gopher:, ftp: or any other protocol it was built with (GHSA-h8vc-753p-wpmh).
-    r = subprocess.run(
-        ['curl', '-sS', '-L', '--proto', '=http,https', '--proto-redir', '=http,https',
-         '--max-redirs', '5', '--max-time', '12', '-A', ua,
-         '-H', 'Accept: text/plain,*/*', '-w', '\n%{http_code}', '--', url],
-        # robots.txt is UTF-8 (RFC 9309). Unpinned, Turkish Windows decoded it as
-        # cp1254, where bytes like 0x81 are undefined: the pipe reader thread died,
-        # stdout came back None, and tr.indeed.com read as UNCONFIRMED.
-        capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=20)
-    if r.returncode != 0:
-        raise RuntimeError('curl exit %d' % r.returncode)
-    body, _, code = r.stdout.rpartition('\n')
-    return body, int(code or 0)
+    answering curl in under a second, and --max-time is a hard ceiling.
+
+    Redirects are followed here rather than by curl -L, so that every hop's
+    scheme and resolved addresses are checked before curl connects to it, and
+    --resolve pins curl to the addresses that were checked. Behind a proxy that
+    resolves names itself, the host is only pre-screened (see route()).
+
+    Error messages are fixed text: a redirect target is site-controlled and
+    never reaches the verdict line."""
+    deadline = time.monotonic() + 12
+    for _ in range(MAX_REDIRECTS + 1):
+        parts = urlsplit(url)
+        if parts.scheme not in ('http', 'https') or not parts.hostname:
+            raise RuntimeError('refusing a URL that is not http(s) with a host')
+        opts, env = route(parts)
+        remaining = deadline - time.monotonic()
+        if remaining < 1:
+            raise TimeoutError('robots.txt fetch exceeded the time limit')
+        # "--" terminates option parsing, so a URL beginning with a dash can never
+        # be read by curl as a flag. --proto pins the request to http(s)
+        # (GHSA-h8vc-753p-wpmh); --globoff keeps {a,b} and [1-9] literal, one URL.
+        r = subprocess.run(
+            ['curl', '-q', '-sS', '--globoff', '--proto', '=http,https', '--proto-redir', '=http,https',
+             '--max-redirs', '0', '--max-time', '%.1f' % remaining,
+             '--max-filesize', str(MAX_ROBOTS_BYTES), *opts, '-A', ua,
+             '-H', 'Accept: text/plain,*/*', '-w', '\n%{http_code} %{redirect_url}', '--', url],
+            capture_output=True, env=env, timeout=20)
+        if r.returncode not in (0, 63):
+            raise RuntimeError('curl exit %d' % r.returncode)
+        body, _, status = r.stdout.rpartition(b'\n')
+        code, _, location = status.decode('utf-8', 'replace').partition(' ')
+        if r.returncode == 63 or len(body) > MAX_ROBOTS_BYTES:
+            if code == '200':
+                raise RuntimeError('robots.txt is larger than %d bytes' % MAX_ROBOTS_BYTES)
+            body = b''
+        # robots.txt is UTF-8 (RFC 9309). Decoded as the locale's code page, Turkish
+        # Windows hit bytes cp1254 leaves undefined (0x81) and tr.indeed.com read as
+        # UNCONFIRMED.
+        body = body.decode('utf-8', 'replace')
+        if code not in ('301', '302', '303', '307', '308') or not location.strip():
+            return body, int(code or 0)
+        url = location.strip()
+    raise RuntimeError('more than %d redirects' % MAX_REDIRECTS)
 
 
 def is_robots_body(text):
@@ -111,14 +234,19 @@ def has_undecodable_rule(text):
     return False
 
 def _groups(text):
-    """user-agent -> [(is_allow, pattern)], tolerating blank lines inside a record.
+    """user-agent -> one [(is_allow, pattern)] list per record naming it,
+    tolerating blank lines inside a record.
+
+    Every agent of a record shares that record's one rule list, so a record
+    naming thousands of agents is not copied per agent, and rules that apply to
+    two agents are evaluated once (see _allowed).
 
     One leading U+FEFF is skipped, as Google's reference parser does. A file
     saved with a UTF-8 byte-order mark otherwise hid its first field: a leading
     "User-agent: *" went unseen, every rule in its group was dropped for want
     of an agent, and "Disallow: /" read as allow-all.
     """
-    out, agents, expect = {}, [], True
+    out, rules = {}, None
     for raw in text.removeprefix('\ufeff').splitlines():
         line = raw.split('#', 1)[0].strip()
         if not line or ':' not in line:
@@ -126,14 +254,13 @@ def _groups(text):
         field, _, value = line.partition(':')
         field, value = field.strip().lower(), value.strip()
         if field == 'user-agent':
-            if not expect:
-                agents, expect = [], True
-            agents.append(value.lower())
-            out.setdefault(value.lower(), [])
-        elif field in ('allow', 'disallow') and agents:
-            expect = False
-            for a in agents:
-                out[a].append((field == 'allow', value))
+            if rules is None or rules:
+                rules = []
+            records = out.setdefault(value.lower(), [])
+            if not records or records[-1] is not rules:
+                records.append(rules)
+        elif field in ('allow', 'disallow') and rules is not None:
+            rules.append((field == 'allow', value))
     return out
 
 def _match(pattern, path):
@@ -145,48 +272,56 @@ def _match(pattern, path):
     Under RFC 9309 section 2.2.2, '$' anchors the end of the URL only when
     at the end of the pattern; mid-pattern '$' is matched literally.
 
-    Matching is a table walk in O(len(pattern) * len(path)), never a regex.
-    Each '*' used to become '.*', and a non-matching rule with repeated
-    wildcard segments ("/*a*a*a...*b$") sent Python's backtracking engine into
-    exponential time - minutes at 16 segments - on a file the site controls
-    (GHSA-xhqf-8q8x-4jwm). Consecutive '*' match as one, as RFC 9309 implies.
+    Matching is a greedy left-to-right search (str.find) for the literal pieces
+    between '*'s, never a regex. Each '*' used to become '.*', and a
+    non-matching rule with repeated wildcard segments ("/*a*a*a...*b$") sent
+    Python's backtracking engine into exponential time - minutes at 16
+    segments - on a file the site controls (GHSA-xhqf-8q8x-4jwm). With only '*'
+    wildcards, the leftmost place for each piece leaves the most room for the
+    rest, so greedy search never misses a match. Consecutive '*' match as one.
     """
     if pattern == '':
         return -1
     pattern = unquote(pattern)
     end_anchor = pattern.endswith('$')
-    pat = re.sub(r'\*{2,}', '*', pattern[:-1] if end_anchor else pattern)
-    # reach[j] is True when the first j pattern characters match the path
-    # consumed so far. A '*' extends a match over any character (reach[j]
-    # carries forward) and also matches nothing (reach[j-1] on the same row).
-    reach = [True] + [False] * len(pat)
-    for j, c in enumerate(pat, 1):
-        if c != '*':
-            break
-        reach[j] = True
-    if reach[-1] and not end_anchor:
-        return len(pattern)
-    for ch in path:
-        step = [False] * (len(pat) + 1)
-        for j, c in enumerate(pat, 1):
-            if c == '*':
-                step[j] = step[j - 1] or reach[j]
-            elif c == ch:
-                step[j] = reach[j - 1]
-        reach = step
-        if reach[-1] and not end_anchor:
-            return len(pattern)      # a prefix match is enough without '$'
-    return len(pattern) if reach[-1] else -1
+    pieces = (pattern[:-1] if end_anchor else pattern).split('*')
+    if not path.startswith(pieces[0]):
+        return -1
+    pos, end = len(pieces[0]), len(path)
+    if end_anchor:
+        if len(pieces) == 1:
+            return len(pattern) if pos == end else -1
+        tail = pieces.pop()
+        if not path.endswith(tail):
+            return -1
+        end -= len(tail)
+    for piece in pieces[1:]:
+        pos = path.find(piece, pos, end)
+        if pos < 0:
+            return -1
+        pos += len(piece)
+    return len(pattern) if pos <= end else -1
 
-def allowed(text, agent, path):
-    g = _groups(text)
-    rules = g.get(agent.lower()) or g.get('*') or []
+def _longest(matches):
+    """(is_allow, match length) pairs -> (is_allow, length) of the longest match."""
     best_len, best_allow = -1, True
-    for is_allow, pat in rules:
-        n = _match(pat, path)
+    for is_allow, n in matches:
         if n > best_len or (n == best_len and n >= 0 and not is_allow):
             best_len, best_allow = n, is_allow      # ties -> Disallow wins (cautious)
-    return True if best_len < 0 else best_allow
+    return best_allow, best_len
+
+def _allowed(groups, agent, path, seen):
+    """`seen` caches each shared rule list's result by identity across agents."""
+    records = groups.get(agent.lower())
+    if not any(records or ()):
+        records = groups.get('*', [])
+    for rules in records:
+        if id(rules) not in seen:
+            seen[id(rules)] = _longest((a, _match(p, path)) for a, p in rules)
+    return _longest(seen[id(rules)] for rules in records)[0]
+
+def allowed(text, agent, path):
+    return _allowed(_groups(text), agent, path, {})
 
 def gate(url):
     parts = urlsplit(url)  # urlsplit lower-cases the scheme
@@ -199,13 +334,15 @@ def gate(url):
     path = unquote(parts.path) or '/'
     if parts.query:
         path += '?' + unquote(parts.query)
+    if len(path) > MAX_PATH:
+        return 1, f'UNCONFIRMED (path longer than {MAX_PATH} characters) - do not retry, go to step 3'
     robots = f'{parts.scheme}://{parts.netloc}/robots.txt'
     body, last = None, 'no attempt'
     for ua in ('Claude-User', BROWSER):
         try:
             text, code = _fetch(robots, ua)
         except Exception as e:
-            last = type(e).__name__; continue
+            last = str(e) if type(e) is RuntimeError else type(e).__name__; continue
         if code == 404:
             return 0, 'ALLOWED - no robots.txt published'
         if code == 200:
@@ -219,8 +356,10 @@ def gate(url):
         last = 'HTTP %d' % code
     if body is None:
         return 1, 'UNCONFIRMED (%s) - do not retry, go to step 3' % last
-    for a in ('Claude-User', '*'):
-        if not allowed(body, a, path):
+    groups, seen = _groups(body), {}
+    # Without a Claude-User group both checks read the same '*' rules.
+    for a in ('Claude-User', '*') if 'claude-user' in groups else ('Claude-User',):
+        if not _allowed(groups, a, path, seen):
             return 1, f'DISALLOWED for {a} - do not retry, go to step 3'
     return 0, 'ALLOWED - robots.txt permits this path'
 
