@@ -19,8 +19,11 @@ Properties, each pinned by tests/test_fetch_page.py:
     GET, including redirect targets, and a non-zero gate exits 1 with its
     message; no flag skips it. The retry is for firewalls on sites whose
     published policy allows access, never for sites that said no.
-  * Fetched content never lands in the repo. --out defaults to the system temp
-    directory and a path that resolves inside the repo root is refused.
+  * Fetched content never lands in the repo or outside the temp directory.
+    --out defaults to the system temp directory; a path that, or whose
+    directory, resolves inside the repo root or outside the system temp
+    directory and /tmp (not on Windows) is refused, as is one that cannot be
+    resolved.
   * Bounded: 45 s, 5 redirects, 10 MB - on both the curl and the urllib path,
     and the size cap is applied after Content-Encoding is undone.
 
@@ -207,6 +210,14 @@ def _default_out(url: str) -> Path:
     return Path(tempfile.gettempdir()) / f"fetch_page_{digest}.html"
 
 
+def _inside_temp(path: Path) -> bool:
+    resolved = path.resolve()
+    roots = {Path(tempfile.gettempdir()).resolve()}
+    if os.name != "nt":
+        roots.add(Path("/tmp").resolve())
+    return any(resolved.is_relative_to(root) for root in roots)
+
+
 def _inside_repo(path: Path) -> bool:
     # Compare by identity, not by spelling: on a case-insensitive filesystem
     # (macOS and Windows defaults) `/users/x/repo/notes.md` resolves to a
@@ -252,7 +263,7 @@ def main(argv=None) -> int:
     )
     parser.add_argument("url")
     parser.add_argument("--out", type=Path, default=None,
-                        help="where to save the body (default: system temp dir; never inside the repo)")
+                        help="where to save the body: the file and its directory must be in the system temp dir or /tmp (not on Windows), never inside the repo (default: system temp dir)")
     parser.add_argument("--text", action="store_true", help="also print the tag-stripped text")
     parser.add_argument("--max-chars", type=int, default=6000, help="cap for --text (default 6000)")
     args = parser.parse_args(argv)
@@ -263,10 +274,24 @@ def main(argv=None) -> int:
         return 2
 
     out = args.out if args.out is not None else _default_out(args.url)
-    if _inside_repo(out):
+    try:
+        out = out.expanduser()
+        in_repo = _inside_repo(out.resolve()) or _inside_repo(out.parent.resolve())
+        in_temp = _inside_temp(out) and _inside_temp(out.parent)
+    except (OSError, RuntimeError) as exc:
+        print(f"fetch_page: cannot resolve the --out path ({out}): {exc}", file=sys.stderr)
+        return 2
+    if in_repo:
         print(
             f"fetch_page: refusing to write inside the repo ({out}); fetched content is "
             "untrusted and belongs in the session scratchpad or the temp directory",
+            file=sys.stderr,
+        )
+        return 2
+    if not in_temp:
+        print(
+            f"fetch_page: refusing to write outside the temp directory ({out}); fetched content "
+            "is untrusted and belongs in the session scratchpad or the temp directory",
             file=sys.stderr,
         )
         return 2

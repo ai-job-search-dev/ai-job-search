@@ -18,6 +18,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
@@ -683,6 +684,253 @@ class InputHandling(GuardFixture):
                 self.assertIn("refusing to write inside the repo", err)
                 self.assertFalse(target.exists())
                 self.assertNotIn("saved=", out)
+
+    def test_out_in_home_directory_is_refused(self):
+        target = Path.home() / f".posting_guard_test_{os.getpid()}"
+        self.addCleanup(lambda: target.unlink(missing_ok=True))
+        code, out, err = self.run_main("--text", "--out", str(target), stdin_text="Job.\nPlain.\n")
+        self.assertEqual(code, 2, err)
+        self.assertIn("outside the temp directory", err)
+        self.assertFalse(target.exists())
+        self.assertNotIn("saved=", out)
+
+    @unittest.skipUnless(os.name == "nt", "/tmp is a temp directory outside Windows")
+    def test_out_and_in_under_slash_tmp_are_refused_on_windows(self):
+        root = Path("/tmp").resolve()
+        if root.is_relative_to(Path(tempfile.gettempdir()).resolve()):
+            self.skipTest("/tmp resolves into the temp directory here")
+        target = root / f"posting_guard_test_{os.getpid()}.py"
+        self.addCleanup(lambda: target.unlink(missing_ok=True))
+        code, out, err = self.run_main("--text", "--out", str(target), stdin_text="Job.\n")
+        self.assertEqual(code, 2, err)
+        self.assertIn("outside the temp directory", err)
+        self.assertFalse(target.exists())
+        code, out, err = self.run_main("--in", str(target), "--text")
+        self.assertEqual(code, 2, err)
+        self.assertIn("refusing to read", err)
+
+    def test_in_outside_allowed_locations_is_refused_before_reading(self):
+        outside = Path(sys.executable).resolve()
+        if any(outside.is_relative_to(Path(root).resolve()) for root in (tempfile.gettempdir(), "/tmp")):
+            self.skipTest("the interpreter lives under the temp directory")
+        code, out, err = self.run_main("--in", str(outside), "--text")
+        self.assertEqual(code, 2, err)
+        self.assertIn("refusing to read", err)
+        self.assertNotIn("--- text ---", out)
+
+    def test_in_through_a_symlink_that_leaves_the_temp_directory_is_refused(self):
+        outside = Path(sys.executable).resolve()
+        if any(outside.is_relative_to(Path(root).resolve()) for root in (tempfile.gettempdir(), "/tmp")):
+            self.skipTest("the interpreter lives under the temp directory")
+        link = self.tmp / "bin"
+        try:
+            link.symlink_to(outside.parent, target_is_directory=True)
+        except OSError as exc:
+            self.skipTest(f"symlinks unavailable: {exc}")
+        code, out, err = self.run_main("--in", str(link / outside.name), "--text")
+        self.assertEqual(code, 2, err)
+        self.assertIn("refusing to read", err)
+
+    def test_in_inside_the_repo_outside_documents_applications_is_refused(self):
+        code, out, err = self.run_main("--in", str(Path(posting_guard.ROOT) / "CLAUDE.md"), "--text")
+        self.assertEqual(code, 2, err)
+        self.assertIn("refusing to read", err)
+        self.assertNotIn("--- text ---", out)
+
+    def test_symlinks_into_the_repo_are_refused_for_in_and_out(self):
+        repo = Path(posting_guard.ROOT)
+        file_link = self.tmp / "claude.md"
+        dir_link = self.tmp / "claude-dir"
+        try:
+            file_link.symlink_to(repo / "CLAUDE.md")
+            dir_link.symlink_to(repo / ".claude", target_is_directory=True)
+        except OSError as exc:
+            self.skipTest(f"symlinks unavailable: {exc}")
+        code, out, err = self.run_main("--in", str(file_link), "--text")
+        self.assertEqual(code, 2, err)
+        self.assertNotIn("--- text ---", out)
+        target = repo / ".claude" / f"posting_guard_test_{os.getpid()}.md"
+        self.addCleanup(lambda: target.unlink(missing_ok=True))
+        code, out, err = self.run_main("--text", "--out", str(dir_link / target.name), stdin_text="Job.\n")
+        self.assertEqual(code, 2, err)
+        self.assertFalse(target.exists())
+
+    @unittest.skipIf(os.name == "nt", "HOME does not drive expanduser on Windows")
+    def test_out_with_tilde_is_written_where_it_was_checked(self):
+        home = self.tmp / "home"
+        home.mkdir()
+        cwd = self.tmp / "cwd"
+        cwd.mkdir()
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(cwd)
+        with mock.patch.dict(os.environ, {"HOME": str(home)}):
+            code, out, err = self.run_main("--text", "--out", "~/clean.txt", stdin_text="Job.\n")
+        self.assertEqual(code, 0, err)
+        self.assertTrue((home / "clean.txt").exists())
+        self.assertFalse((cwd / "~").exists())
+
+    def documents_folder(self, name):
+        folder = Path(posting_guard.ROOT) / "documents" / name / f"_posting_guard_test_{os.getpid()}"
+        folder.mkdir()
+        self.addCleanup(shutil.rmtree, folder, ignore_errors=True)
+        return folder
+
+    def test_in_under_documents_applications_and_postings_is_read(self):
+        for name in ("applications", "postings"):
+            with self.subTest(name=name):
+                posting = self.documents_folder(name) / "job_posting.md"
+                posting.write_text("Saved posting.", encoding="utf-8")
+                code, out, err = self.run_main("--in", str(posting), "--text")
+                self.assertEqual(code, 0, err)
+                self.assertIn("Saved posting.", self.text_of(out))
+
+    def test_in_through_a_link_under_documents_that_leaves_it_is_refused(self):
+        outside = REPO_ROOT / f".posting_guard_outside_test_{os.getpid()}"
+        outside.mkdir()
+        self.addCleanup(shutil.rmtree, outside, ignore_errors=True)
+        (outside / "job_posting.md").write_text("Outside content.", encoding="utf-8")
+        kinds = {"symlink": lambda link: link.symlink_to(outside, target_is_directory=True)}
+        if os.name == "nt":
+            import _winapi
+            kinds["junction"] = lambda link: _winapi.CreateJunction(str(outside), str(link))
+        for name in ("applications", "postings"):
+            folder = self.documents_folder(name)
+            for kind, make_link in kinds.items():
+                with self.subTest(name=name, kind=kind):
+                    link = folder / kind
+                    try:
+                        make_link(link)
+                    except OSError as exc:
+                        self.skipTest(f"{kind} unavailable: {exc}")
+                    self.addCleanup(os.unlink, link)
+                    code, out, err = self.run_main("--in", str(link / "job_posting.md"), "--text")
+                    self.assertEqual(code, 2, err)
+                    self.assertIn("refusing to read", err)
+                    self.assertNotIn("Outside content.", out)
+
+    def test_in_under_a_documents_folder_that_is_itself_a_link_is_refused(self):
+        repo = self.tmp / "repo"
+        targets = {repo / "private": "Private content."}
+        outside = REPO_ROOT / f".posting_guard_outside_test_{os.getpid()}"
+        if not any(outside.is_relative_to(Path(root).resolve()) for root in (tempfile.gettempdir(), "/tmp")):
+            self.addCleanup(shutil.rmtree, outside, ignore_errors=True)
+            targets[outside] = "Outside content."
+        for target, content in targets.items():
+            (target / "postings").mkdir(parents=True)
+            for folder in (target, target / "postings"):
+                (folder / "job_posting.md").write_text(content, encoding="utf-8")
+        kinds = {"symlink": lambda target, link: link.symlink_to(target, target_is_directory=True)}
+        if os.name == "nt":
+            import _winapi
+            kinds["junction"] = lambda target, link: _winapi.CreateJunction(str(target), str(link))
+        with mock.patch.object(posting_guard, "ROOT", repo):
+            for spot in ("documents", "documents/applications", "documents/postings"):
+                link = repo / spot
+                link.parent.mkdir(exist_ok=True)
+                posting = link / ("postings/job_posting.md" if spot == "documents" else "job_posting.md")
+                for target, content in targets.items():
+                    for kind, make_link in kinds.items():
+                        with self.subTest(spot=spot, target=target.name, kind=kind):
+                            try:
+                                make_link(target, link)
+                            except OSError as exc:
+                                self.skipTest(f"{kind} unavailable: {exc}")
+                            try:
+                                code, out, err = self.run_main("--in", str(posting), "--text")
+                            finally:
+                                os.unlink(link)
+                            self.assertEqual(code, 2, err)
+                            self.assertIn("refusing to read", err)
+                            self.assertNotIn(content, out)
+
+    def test_in_or_out_that_cannot_be_resolved_fails_cleanly(self):
+        for error in (OSError(22, "Invalid argument"), RuntimeError("Symlink loop")):
+            for argv in (("--in", str(self.write("posting.txt", "Job.\n"))), ("--out", str(self.tmp / "clean.txt"))):
+                with self.subTest(error=type(error).__name__, flag=argv[0]):
+                    with mock.patch.object(Path, "resolve", side_effect=error):
+                        code, out, err = self.run_main(*argv, "--text", stdin_text="Job.\n")
+                    self.assertEqual(code, 2, err)
+                    self.assertIn("cannot resolve", err)
+                    self.assertNotIn("--- text ---", out)
+
+    @unittest.skipIf(os.name == "nt", "~user expands to a guessed path on Windows")
+    def test_in_or_out_under_an_unknown_users_home_fails_cleanly(self):
+        for flag in ("--in", "--out"):
+            with self.subTest(flag=flag):
+                code, out, err = self.run_main(flag, f"~no_such_user_{os.getpid()}/x.txt", "--text", stdin_text="Job.\n")
+                self.assertEqual(code, 2, err)
+                self.assertIn("cannot resolve", err)
+
+    def hardlink_from_outside(self, content):
+        outside = REPO_ROOT / f".posting_guard_link_test_{os.getpid()}"
+        outside.write_text(content, encoding="utf-8")
+        self.addCleanup(lambda: outside.unlink(missing_ok=True))
+        link = self.tmp / "linked.txt"
+        try:
+            os.link(outside, link)
+        except OSError as exc:
+            self.skipTest(f"hardlinks unavailable: {exc}")
+        return outside, link
+
+    def test_in_hardlinked_to_a_file_outside_the_temp_directory_is_refused(self):
+        outside, link = self.hardlink_from_outside("Outside content.")
+        code, out, err = self.run_main("--in", str(link), "--text")
+        self.assertEqual(code, 2, err)
+        self.assertIn("refusing to read", err)
+        self.assertNotIn("Outside content.", out)
+
+    def test_out_hardlinked_to_a_file_outside_the_temp_directory_is_not_written_through(self):
+        outside, link = self.hardlink_from_outside("Original.")
+        code, out, err = self.run_main("--text", "--out", str(link), stdin_text="Job.\n")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(outside.read_text(encoding="utf-8"), "Original.")
+        self.assertEqual(link.read_text(encoding="utf-8"), "Job.\n")
+
+    def test_out_that_is_an_existing_directory_fails_cleanly(self):
+        code, out, err = self.run_main("--text", "--out", str(self.tmp), stdin_text="Job.\n")
+        self.assertEqual(code, 2, err)
+        self.assertIn("cannot write", err)
+
+    def test_in_with_dotdot_leaving_the_temp_directory_is_refused(self):
+        outside = Path(sys.executable).resolve()
+        if any(outside.is_relative_to(Path(root).resolve()) for root in (tempfile.gettempdir(), "/tmp")):
+            self.skipTest("the interpreter lives under the temp directory")
+        escape = self.tmp.joinpath(*[".."] * len(self.tmp.resolve().parts), *outside.parts[1:])
+        code, out, err = self.run_main("--in", str(escape), "--text")
+        self.assertEqual(code, 2, err)
+        self.assertIn("--in takes a file", err)
+
+    def test_in_that_is_a_directory_fails_cleanly(self):
+        code, out, err = self.run_main("--in", str(self.tmp), "--text")
+        self.assertEqual(code, 2, err)
+        self.assertIn("cannot read input", err)
+
+    def test_out_replaces_an_existing_symlink_instead_of_writing_through_it(self):
+        target = self.tmp / "target.txt"
+        target.write_text("Original.", encoding="utf-8")
+        link = self.tmp / "clean.txt"
+        try:
+            link.symlink_to(target)
+        except OSError as exc:
+            self.skipTest(f"symlinks unavailable: {exc}")
+        code, out, err = self.run_main("--text", "--out", str(link), stdin_text="Job.\n")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(target.read_text(encoding="utf-8"), "Original.")
+        self.assertFalse(link.is_symlink())
+        self.assertEqual(link.read_text(encoding="utf-8"), "Job.\n")
+
+    def test_out_through_a_repo_symlink_into_the_temp_directory_is_refused(self):
+        target = self.tmp / "target.txt"
+        link = REPO_ROOT / f".posting_guard_symlink_test_{os.getpid()}"
+        try:
+            link.symlink_to(target)
+        except OSError as exc:
+            self.skipTest(f"symlinks unavailable: {exc}")
+        self.addCleanup(lambda: link.unlink(missing_ok=True))
+        code, out, err = self.run_main("--text", "--out", str(link), stdin_text="Job.\n")
+        self.assertEqual(code, 2, err)
+        self.assertTrue(link.is_symlink())
+        self.assertFalse(target.exists())
 
     def test_out_outside_the_repo_still_writes(self):
         target = self.tmp / "cleaned.txt"
