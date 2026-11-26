@@ -43,7 +43,7 @@ Checks:
    would run before every portal CLI.
 4. Skill and command frontmatter — every `allowed-tools` entry in
    .claude/skills/*/SKILL.md, .agents/skills/*/SKILL.md and
-   .claude/commands/*.md must be in ALLOWED_SKILL_TOOLS (a portal skill may
+   .claude/commands/**/*.md must be in ALLOWED_SKILL_TOOLS (a portal skill may
    instead grant exactly its own CLI). Claude Code pre-approves these for the
    turn that invokes the skill, with no prompt, regardless of workspace trust,
    so the frontmatter is a second permission allowlist. Catches bare Bash and
@@ -144,6 +144,13 @@ REQUIRED_ASK_RULES = [
     # writing either is the same widening (GHSA-hf4m). check 3 refuses any copy.
     "Edit(**/bunfig.toml)",
     "Edit(**/.npmrc)",
+    # Also read by `bun run` from the repo root with no prompt: a root
+    # node_modules/<package> answers a bare import the portal's own
+    # cli/node_modules does not have (a portal copied in but not yet installed).
+    # It is gitignored, so CI never sees it; only a prompt can. A .env NODE_PATH
+    # does the same, but needs no ask rule: the Read(.env) and Read(.env.*) deny
+    # rules below also refuse writes to those files, in every mode.
+    "Edit(node_modules/**)",
     "Bash(git push:*)",
 ]
 

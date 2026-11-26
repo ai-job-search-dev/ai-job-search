@@ -229,6 +229,15 @@ class AskDenyRuleTests(GuardRepoFixture):
         # command line, so writing either must prompt.
         self.assertIn("Edit(**/bunfig.toml)", security_guards.REQUIRED_ASK_RULES)
         self.assertIn("Edit(**/.npmrc)", security_guards.REQUIRED_ASK_RULES)
+        # A root node_modules/<package> answers a bare import a portal has not
+        # installed itself; it is gitignored, so only a prompt stops it.
+        self.assertIn("Edit(node_modules/**)", security_guards.REQUIRED_ASK_RULES)
+        # A .env NODE_PATH does the same. Claude Code refuses writes to a file
+        # under a Read deny rule (probed on 2.1.332 in auto mode: "File is
+        # covered by a Read deny rule ... cannot be written"), so these two deny
+        # rules are what keep .env and .env.* from being planted.
+        self.assertIn("Read(.env)", security_guards.REQUIRED_DENY_RULES)
+        self.assertIn("Read(.env.*)", security_guards.REQUIRED_DENY_RULES)
         self.assertIn("Bash(git push:*)", security_guards.REQUIRED_ASK_RULES)
         # The posting integrity gate runs inside fetch agents with no prompt.
         self.assertIn("Bash(python tools/posting_guard.py:*)", security_guards.ALLOWED_PERMISSIONS)

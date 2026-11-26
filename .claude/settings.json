@@ -36,6 +36,7 @@
       "Edit(salary_lookup.py)",
       "Edit(**/bunfig.toml)",
       "Edit(**/.npmrc)",
+      "Edit(node_modules/**)",
       "Bash(git push:*)"
     ],
     "deny": [
