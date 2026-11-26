@@ -37,9 +37,10 @@ Checks:
    do not read it. A .gitignore must be UTF-8.
 3. .agents/**/package.json — no npm/bun lifecycle scripts (preinstall,
    install, postinstall, preprepare, prepare, postprepare, prepack), no
-   trustedDependencies, no workspaces, and no bunfig.toml or .npmrc beside
-   the manifest. Catches code execution smuggled into `bun install`, and a
-   registry swap.
+   trustedDependencies, no workspaces, and no bunfig.toml or .npmrc anywhere
+   in the repo outside node_modules. Catches code execution smuggled into
+   `bun install`, a registry swap, and a root bunfig.toml whose `preload`
+   would run before every portal CLI.
 4. Skill and command frontmatter — every `allowed-tools` entry in
    .claude/skills/*/SKILL.md, .agents/skills/*/SKILL.md and
    .claude/commands/*.md must be in ALLOWED_SKILL_TOOLS (a portal skill may
@@ -124,7 +125,10 @@ REQUIRED_ASK_RULES = [
     "Edit(.claude/settings.local.json)",
     "Edit(.claude/skills/*/SKILL.md)",
     # A command's frontmatter may carry allowed-tools too (check 4 reads it).
-    "Edit(.claude/commands/*.md)",
+    # Every depth: Claude Code loads namespaced commands from subfolders, and
+    # auto mode wrote .claude/commands/<dir>/<name>.md with no prompt under a
+    # top-level-only *.md rule (GHSA-7hw2).
+    "Edit(.claude/commands/**)",
     "Edit(.claude/agents/**)",
     "Edit(.github/**)",
     "Edit(tools/security_guards.py)",
@@ -134,6 +138,12 @@ REQUIRED_ASK_RULES = [
     "Edit(tools/**)",
     "Edit(.agents/**)",
     "Edit(salary_lookup.py)",
+    # Files Bun loads by itself from the folder it runs in, with no path on the
+    # command line: a bunfig.toml `preload` runs before any portal CLI, and
+    # .npmrc reconfigures installs. Portal CLIs run from the repo root, so
+    # writing either is the same widening (GHSA-hf4m). check 3 refuses any copy.
+    "Edit(**/bunfig.toml)",
+    "Edit(**/.npmrc)",
     "Bash(git push:*)",
 ]
 
@@ -283,7 +293,9 @@ FORBIDDEN_SCRIPTS = {
 # beside the manifest reconfigures the install itself (registry, scopes,
 # cache), so every dependency can come from a server the portal's author
 # picked; both are refused for the same reason. tools/install_portal_clis.py
-# skips all of these.
+# skips all of these. Bun also reads a bunfig.toml from the folder it runs in,
+# which for every portal CLI is the repo root, so the guard refuses either file
+# anywhere in the repo (check_install_config_files).
 FORBIDDEN_MANIFEST_KEYS = {"trustedDependencies", "workspaces"}
 INSTALL_CONFIG_FILES = ("bunfig.toml", ".npmrc")
 
@@ -773,13 +785,32 @@ def check_package_manifests() -> None:
                 f"{relpath}: workspaces is forbidden - each workspace package brings its own "
                 "lifecycle scripts, which this check never reads, into `bun install`."
             )
-        for name in INSTALL_CONFIG_FILES:
-            config = manifest.parent / name
-            if config.exists():
+
+
+def check_install_config_files() -> None:
+    """No bunfig.toml or .npmrc anywhere in the repo, outside node_modules.
+
+    Bun reads both from the folder it runs in, with no path on the command
+    line. Every portal CLI runs from the repo root (`bun run
+    .agents/skills/<name>/cli/src/cli.ts`), so a root bunfig.toml with
+    `preload` runs its script before any portal, under the portal's own grant
+    (GHSA-hf4m). One beside a portal manifest reconfigures `bun install`
+    (registry, scopes, trusted packages) for every fork user (GHSA-wq7j). The
+    template ships neither, so any copy fails, tracked or not. Names compare
+    case-insensitively: a Windows or macOS checkout opens BUNFIG.TOML as
+    bunfig.toml.
+    """
+    wanted = {name.casefold() for name in INSTALL_CONFIG_FILES}
+    for dirpath, dirnames, filenames in os.walk(ROOT):
+        dirnames[:] = [d for d in dirnames if d.casefold() not in (".git", "node_modules")]
+        for name in filenames:
+            if name.casefold() in wanted:
+                rel = (Path(dirpath) / name).relative_to(ROOT).as_posix()
                 errors.append(
-                    f"{config.relative_to(ROOT)}: a {name} beside a portal manifest is forbidden - "
-                    "it reconfigures `bun install` itself (registry, scopes, trusted packages) for "
-                    "every fork user."
+                    f"{rel}: a {name} in the repo is forbidden - Bun reads it by itself from the "
+                    "folder it runs in, so at the repo root its `preload` runs code before every "
+                    "portal CLI, and beside a portal manifest it reconfigures `bun install` "
+                    "(registry, scopes) for every fork user."
                 )
 
 
@@ -921,6 +952,7 @@ def main() -> int:
     check_gitignore()
     check_subdirectory_gitignores()
     check_package_manifests()
+    check_install_config_files()
     check_tracked_paths()
     check_skill_tool_grants()
     check_agent_tool_grants()
@@ -931,7 +963,7 @@ def main() -> int:
         return 1
     print(
         "security_guards: OK (permissions allowlist, hooks allowlist, gitignore rules, "
-        "no symlinked .gitignore, package manifests, no tracked node_modules, "
+        "no symlinked .gitignore, package manifests, no bunfig.toml/.npmrc, no tracked node_modules, "
         "settings.local.json, non-directory or aliased .claude, skill/command allowed-tools, "
         "load-time commands, agent tools and modes)"
     )

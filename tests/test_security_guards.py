@@ -219,7 +219,16 @@ class AskDenyRuleTests(GuardRepoFixture):
         # one must prompt - otherwise a steered session could add
         # `allowed-tools: Bash` to apply.md with no prompt and the next /apply
         # would be pre-approved for bare Bash.
-        self.assertIn("Edit(.claude/commands/*.md)", security_guards.REQUIRED_ASK_RULES)
+        # GHSA-7hw2: Claude Code loads namespaced commands from subfolders of
+        # .claude/commands/, so the rule covers every depth, not only *.md at
+        # the top.
+        self.assertIn("Edit(.claude/commands/**)", security_guards.REQUIRED_ASK_RULES)
+        self.assertNotIn("Edit(.claude/commands/*.md)", security_guards.REQUIRED_ASK_RULES)
+        # GHSA-hf4m: Bun reads bunfig.toml (whose `preload` runs code before any
+        # portal CLI) and .npmrc from the folder it runs in, with no path on the
+        # command line, so writing either must prompt.
+        self.assertIn("Edit(**/bunfig.toml)", security_guards.REQUIRED_ASK_RULES)
+        self.assertIn("Edit(**/.npmrc)", security_guards.REQUIRED_ASK_RULES)
         self.assertIn("Bash(git push:*)", security_guards.REQUIRED_ASK_RULES)
         # The posting integrity gate runs inside fetch agents with no prompt.
         self.assertIn("Bash(python tools/posting_guard.py:*)", security_guards.ALLOWED_PERMISSIONS)
@@ -1290,6 +1299,32 @@ class ManifestGuardTests(GuardRepoFixture):
                 self.assertEqual(result.returncode, 1, result.stdout)
                 self.assertIn(name, result.stdout)
                 self.assertIn("example-search/cli/" + name, result.stdout.replace("\\", "/"))
+
+    # GHSA-hf4m: Bun also reads bunfig.toml from the folder it runs in, and
+    # every portal CLI runs from the repo root, so a root bunfig.toml with
+    # `preload` runs its script before any portal. The template ships no
+    # bunfig.toml or .npmrc anywhere, so any copy fails, in any letter case
+    # (a Windows or macOS checkout opens BUNFIG.TOML as bunfig.toml).
+    def test_install_config_file_anywhere_fails(self):
+        for rel in ("bunfig.toml", ".npmrc", "BUNFIG.TOML", ".agents/skills/bunfig.toml", "docs/.npmrc"):
+            with self.subTest(path=rel):
+                config = self.root / rel
+                config.parent.mkdir(parents=True, exist_ok=True)
+                config.write_text('preload = ["./x.js"]\n', encoding="utf-8")
+                try:
+                    result = run_guards(self.root)
+                finally:
+                    config.unlink()
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn(rel, result.stdout.replace("\\", "/"))
+
+    def test_install_config_file_inside_node_modules_passes(self):
+        # A dependency's own config file is not repo code, as with manifests.
+        config = self.manifest.parent / "node_modules" / "some-dep" / "bunfig.toml"
+        config.parent.mkdir(parents=True)
+        config.write_text('preload = ["./x.js"]\n', encoding="utf-8")
+        result = run_guards(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_malformed_manifest_shape_fails_cleanly(self):
         for data, message in [
