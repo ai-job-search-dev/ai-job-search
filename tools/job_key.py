@@ -378,7 +378,7 @@ def main() -> int:
     ap.add_argument("--title")
     ap.add_argument("--url", default="")
     ap.add_argument("--audit", nargs="?", const=str(STATE), metavar="STATE_JSON")
-    ap.add_argument("--migrate", action="store_true", help="with --audit: rewrite drifted keys in place (backup first)")
+    ap.add_argument("--migrate", action="store_true", help="with --audit: rewrite drifted company_title keys in place (backup first; malformed and legacy keys are only reported)")
     args = ap.parse_args()
 
     if args.migrate and not args.audit:
