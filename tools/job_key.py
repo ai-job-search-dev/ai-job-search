@@ -38,9 +38,10 @@ Usage:
   python3 tools/job_key.py --audit job_scraper/seen_jobs.json
   python3 tools/job_key.py --audit --migrate
 
-`--audit --migrate` rewrites keys that no longer match the current rule, in
-place: backup first, old->new reported, a new key that already exists is
-reported and left alone, and a second run changes nothing.
+`--audit --migrate` rewrites, in place, the company_title keys that no longer
+match the current rule: backup first, old->new reported, a new key that already
+exists is reported and left alone, and a second run changes nothing. Malformed
+keys and legacy three-part keys are reported by the audit, not renamed.
 
 Exit 0 when a key is produced, or when an audit finds nothing. Exit 1 when an
 audit finds violations.
