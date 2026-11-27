@@ -649,5 +649,45 @@ class TestSalaryFileEncoding(unittest.TestCase):
         self.assertNotIn("Unexpected UTF-8 BOM", result.stderr)
 
 
+class ScriptFolderImportTests(unittest.TestCase):
+    """`python salary_lookup.py` is pre-approved and runs from the repo root.
+
+    Run as a script, Python puts the script's own folder first on sys.path, so
+    a json.py (or argparse.py, unicodedata.py, a json/ package) written into the
+    repo root would be imported in place of the standard module and run with no
+    prompt. salary_lookup.py imports nothing from the repo, so it must never
+    import from its own folder.
+    """
+
+    SCRIPT = Path(salary_lookup.__file__).resolve()
+    MARKER = "PLANTED_MODULE_RAN"
+
+    def _run_with(self, planted):
+        folder = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, folder, ignore_errors=True)
+        shutil.copy(self.SCRIPT, folder / "salary_lookup.py")
+        for rel in planted:
+            path = folder / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(f"print({self.MARKER!r})\n", encoding="utf-8")
+        return subprocess.run(
+            [sys.executable, "salary_lookup.py", "--help"],
+            cwd=folder, capture_output=True, text=True, encoding="utf-8", check=False,
+        )
+
+    def test_planted_modules_beside_the_script_are_not_imported(self):
+        for planted in (["json.py"], ["argparse.py"], ["unicodedata.py"], ["json/__init__.py"]):
+            with self.subTest(planted=planted):
+                result = self._run_with(planted)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertNotIn(self.MARKER, result.stdout + result.stderr)
+                self.assertIn("usage: salary_lookup.py", result.stdout)
+
+    def test_import_as_a_module_keeps_sys_path(self):
+        # The tests (and any caller) import salary_lookup; only a script run
+        # drops the folder, so importing it never changes the caller's path.
+        self.assertIn(str(Path(salary_lookup.__file__).resolve().parent), [str(Path(p).resolve()) for p in sys.path if p])
+
+
 if __name__ == "__main__":
     unittest.main()

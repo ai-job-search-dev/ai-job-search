@@ -17,9 +17,25 @@ Usage:
     python salary_lookup.py --list-all
 """
 
+import os
+import sys
+
+# Run as a script, Python puts this file's folder (the repo root) first on
+# sys.path, so a json.py, argparse.py or json/ package written there would be
+# imported in place of the standard module and run under the pre-approved
+# `python salary_lookup.py` rule, with no prompt. Nothing here imports from the
+# repo, so the folder comes off the path before any other import. In the
+# pre-approved form Python has already loaded os and sys before this file runs,
+# so a planted copy of either is never read (`python -S` would be different, but
+# it does not match the allow rule). realpath on both sides, because on POSIX
+# sys.path[0] is the resolved folder even when the script path goes through a
+# symlink.
+if __name__ == "__main__":
+    _HERE = os.path.normcase(os.path.dirname(os.path.realpath(__file__)))
+    sys.path[:] = [p for p in sys.path if os.path.normcase(os.path.realpath(p or os.curdir)) != _HERE]
+
 import json
 import math
-import sys
 import re
 import argparse
 import unicodedata

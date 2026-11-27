@@ -27,13 +27,16 @@
       "Edit(.claude/settings.json)",
       "Edit(.claude/settings.local.json)",
       "Edit(.claude/skills/*/SKILL.md)",
-      "Edit(.claude/commands/*.md)",
+      "Edit(.claude/commands/**)",
       "Edit(.claude/agents/**)",
       "Edit(.github/**)",
       "Edit(tools/security_guards.py)",
       "Edit(tools/**)",
       "Edit(.agents/**)",
       "Edit(salary_lookup.py)",
+      "Edit(**/bunfig.toml)",
+      "Edit(**/.npmrc)",
+      "Edit(node_modules/**)",
       "Bash(git push:*)"
     ],
     "deny": [
