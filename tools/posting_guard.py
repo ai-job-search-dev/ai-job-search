@@ -10,8 +10,9 @@ evaluates anything:
   * hidden HTML (display:none, visibility:hidden, opacity:0, font-size:0,
     color:transparent, clip/clip-path, off-screen positioning, a zero-height
     or zero-width box with overflow:hidden, the `hidden` attribute,
-    aria-hidden; the style value is read the way a browser reads it, with
-    entities decoded and CSS comments removed) - removed from the text; its content is scanned,
+    aria-hidden, a <dialog> without `open`; the style value is read the way a
+    browser reads it, with entities decoded and CSS comments removed) -
+    removed from the text; its content is scanned,
     and reported as excerpts under `hidden_blocks`. Comments and
     script/style/noscript/svg/template blocks are removed and scanned too but
     not listed (every page has them);
@@ -320,8 +321,17 @@ def _style(attrs: dict) -> str:
     return CSS_COMMENT.sub("", html.unescape(attrs.get("style", "")))
 
 
-def _is_hidden(raw_attrs: str) -> bool:
+# Elements the browser's own stylesheet hides unless an attribute opens them
+# (`dialog:not([open]) { display: none }`). A cookie-consent or share dialog
+# is markup on many real career sites and its text is never on screen until
+# a script opens it, so it reads like a display:none block.
+CLOSED_UNLESS_OPEN = {"dialog"}
+
+
+def _is_hidden(raw_attrs: str, name: str = "") -> bool:
     attrs = _attrs(raw_attrs)
+    if name in CLOSED_UNLESS_OPEN and "open" not in attrs:
+        return True
     if "hidden" in attrs or attrs.get("aria-hidden", "").strip().lower() == "true":
         return True
     style = _style(attrs)
@@ -402,7 +412,7 @@ def clean_html(markup: str):
                 pop_to(index)
             continue  # a closer with no matching opener is ignored
         is_nav = bool(nav_at) or name == "nav" or _attrs(raw_attrs).get("role", "").strip().lower() == "navigation"
-        is_hidden = (hidden_at is not None) or _is_hidden(raw_attrs)
+        is_hidden = (hidden_at is not None) or _is_hidden(raw_attrs, name)
         if is_hidden and not is_nav:
             for u in URL.findall(html.unescape(raw_attrs)):
                 hidden_parts.append(u)
@@ -416,7 +426,7 @@ def clean_html(markup: str):
         idx = len(stack) - 1
         if is_nav:
             nav_at.add(idx)
-        if hidden_at is None and _is_hidden(raw_attrs):
+        if hidden_at is None and _is_hidden(raw_attrs, name):
             hidden_at = idx
     emit(markup[pos:])
     if hidden_at is not None:
