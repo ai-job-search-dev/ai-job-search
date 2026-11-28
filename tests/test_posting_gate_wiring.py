@@ -55,6 +55,45 @@ class OtherFrontDoors(unittest.TestCase):
         text = (REPO / ".claude" / "commands" / "outcome.md").read_text(encoding="utf-8")
         self.assertIn("posting_guard", text)
 
+    def test_upskill_targeted_fetch_is_gated(self):
+        """/upskill <URL> WebFetches a posting and read it straight as content;
+        the Oct 18 trust-boundary line told it the text was untrusted but gave
+        it no gate and no Bash to run one with. Pin the step and the grant."""
+        path = REPO / ".claude" / "skills" / "upskill" / "SKILL.md"
+        text = path.read_text(encoding="utf-8")
+        targeted = re.search(r"### Targeted mode(.*?)(?=\n## Step 3)", text, re.DOTALL).group(1)
+        self.assertIn("posting_guard", targeted)
+        self.assertIn("--text", targeted)
+        self.assertIn("${SCRATCHPAD:?", targeted)
+        self.assertNotRegex(targeted, r"\$SCRATCHPAD/", "use ${SCRATCHPAD:?...} so an unset variable fails loudly")
+        tools = re.search(r"^allowed-tools:\s*(.*)$", text, re.M).group(1)
+        for spelling in ("python", "python3"):
+            self.assertIn(f"Bash({spelling} tools/posting_guard.py:*)", tools,
+                          "the gate is a python tool; without a scoped Bash grant the step cannot run it")
+
+    def test_every_spec_that_webfetches_a_posting_names_the_gate(self):
+        """Derived, not listed: any command or skill spec that fetches a posting
+        with WebFetch must name the gate somewhere, so the next front door that
+        appears fails here instead of reading raw third-party text."""
+        specs = sorted(
+            list((REPO / ".claude" / "commands").glob("*.md"))
+            + list((REPO / ".claude" / "skills").glob("*/SKILL.md"))
+        )
+        fetches_posting = re.compile(r"WebFetch[^\n]{0,80}\bposting\b", re.IGNORECASE)
+        # /scrape's WebSearch branch fetches a posting only to fill the listing
+        # fields (title, company, URL); the text itself is read by /rank, whose
+        # posting-scorer runs the gate. Every other fetch reads the posting.
+        hands_off_to_rank = {".claude/skills/job-scraper/SKILL.md"}
+        ungated = [
+            p.relative_to(REPO).as_posix()
+            for p in specs
+            if p.relative_to(REPO).as_posix() not in hands_off_to_rank
+            and fetches_posting.search(p.read_text(encoding="utf-8"))
+            and "posting_guard" not in p.read_text(encoding="utf-8")
+        ]
+        self.assertIn(".claude/skills/upskill/SKILL.md", [p.relative_to(REPO).as_posix() for p in specs if fetches_posting.search(p.read_text(encoding="utf-8"))])
+        self.assertEqual(ungated, [], "these specs WebFetch a posting without naming the gate")
+
     def test_interview_fetch_fallback_is_gated(self):
         text = INTERVIEW.read_text(encoding="utf-8")
         step1 = re.search(r"## Step 1: Load the Application Context(.*?)(?=\n## Step 2)", text, re.DOTALL).group(1)
