@@ -1,5 +1,5 @@
 ---
-framework_version: 1.2.7
+framework_version: 1.2.8
 ---
 
 # Job Evaluation Framework
@@ -16,13 +16,15 @@ Read the posting's eligibility / work rights / "who can apply" section **verbati
 |-----------------|---------|
 | Names a **citizenship or permanent-residency requirement** ("must be a citizen of X", "permanent resident", "PR required", "full working rights" where the employer means citizen/PR) | **FAIL — hard stop.** Do not score, do not draft. Quote the exact wording back to the user. |
 | Requires a **security clearance** at any level | **FAIL** in most countries, since clearance is normally gated on citizenship. Verify the specific scheme rather than assuming. |
+| States that it **does not sponsor or support** work authorisation ("we do not offer visa sponsorship", "no sponsorship available", "must already have the right to work without sponsorship", "we cannot support visa or work-authorisation applications") | **FAIL — hard stop**, unless the candidate already holds the right to work there. Quote the exact wording back to the user. |
 | **Explicitly names** the candidate's permit class, or says "international applicants welcome", "visa holders considered", "we sponsor" | **PASS** — verified acceptance. Worth noting as a positive in the application. |
 | **Silent** on citizenship or residency | **PROCEED, but mark unverified.** Check the employer's own careers or international-applicant page before drafting. |
 
-**Two rules that are easy to get wrong:**
+**Three rules that are easy to get wrong:**
 
-1. **Silence is not permission.** Large graduate programs frequently gate eligibility on their own website rather than in the job ad. Highest-risk categories: professional-services firms, government and defence, banking, telecommunications, and anything touching critical infrastructure.
-2. **A company-wide "we accept international applicants" statement is not role-level permission.** The common pattern is a general welcome followed by a *named list* of the specific programs or service lines it covers. Confirm the **specific posting or stream** appears on that list before drafting.
+1. **A keyword hit is not evidence of support.** "Visa", "sponsorship" and "relocation" appear in postings that refuse them. Read the whole sentence and its neighbours before classifying; a search for "visa sponsorship" also returns "we do not offer visa sponsorship". Treat conditional wording ("where necessary", "may be considered") as unverified and say so, and quote the sentence you relied on.
+2. **Silence is not permission.** Large graduate programs frequently gate eligibility on their own website rather than in the job ad. Highest-risk categories: professional-services firms, government and defence, banking, telecommunications, and anything touching critical infrastructure.
+3. **A company-wide "we accept international applicants" statement is not role-level permission.** The common pattern is a general welcome followed by a *named list* of the specific programs or service lines it covers. Confirm the **specific posting or stream** appears on that list before drafting.
 
 **Report an eligibility failure to the user with the quoted source** rather than silently dropping the role. They may know something about their own status that the profile does not record.
 
