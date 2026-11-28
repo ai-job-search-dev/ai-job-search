@@ -54,15 +54,14 @@ without either the mode is guessed from the content, which is a fallback, not
 a documented path. Output: the verdict line, a `--- findings ---` block (JSON
 with --json), then `--- text ---` and the cleaned text, or `saved=<path>` when
 --out is given. Exit 0 when a posting is evaluated; 1 when the input has no text
-to evaluate (the verdict is `posting_guard: refused (no text to evaluate)`; the
-run writes no cleaned posting and removes an existing --out file, so a cleaned
-posting left there by an earlier run is never read as this one). An input whose
-only content is hidden text that raises a ⚠ signal is not refused: it keeps its
-⚠ verdict and exits 0 with an empty cleaned text, so the alarm still reaches the
-user, and a caller still has no posting to evaluate. 2 when --in cannot be read,
-is a hard link, or lies outside the temp directory, /tmp (not on Windows),
-documents/applications/ and documents/postings/, or --out cannot be written
-(or, on a refused run, cannot be removed) or it or its directory points
+to evaluate: the run writes no cleaned posting and removes an existing --out
+file, so a cleaned posting left there by an earlier run is never read as this
+one. The verdict on exit 1 is `posting_guard: refused (no text to evaluate)`,
+except for an input whose only content is hidden text raising a ⚠ signal: that
+keeps its ⚠ verdict and findings, so the alarm still reaches the user. 2 when
+--in cannot be read, is a hard link, or lies outside the temp directory, /tmp
+(not on Windows), documents/applications/ and documents/postings/, or --out
+cannot be written (or, on exit 1, cannot be removed) or it or its directory points
 inside this repository or outside the temp directory and /tmp (not on
 Windows), or either path cannot be resolved. --out is replaced, never
 written through (the cleaned posting is untrusted text and belongs in the
@@ -637,8 +636,13 @@ def main(argv=None) -> int:
     print(findings["verdict"])
     print("--- findings ---")
     print(json.dumps(findings, ensure_ascii=False, indent=2) if args.json else _plain_findings(findings))
+    # No cleaned text means nothing to evaluate, whatever the verdict says: a
+    # page whose only content is flagged hidden text keeps its ⚠ verdict (the
+    # alarm is for the user) but exits 1 like a refusal, so a caller can branch
+    # on the exit code alone and never evaluates an empty posting.
+    no_text = not cleaned
     if args.out is not None:
-        if findings["verdict"] != NO_TEXT_VERDICT:
+        if not no_text:
             try:
                 args.out.parent.mkdir(parents=True, exist_ok=True)
                 fd, tmp_name = tempfile.mkstemp(dir=args.out.parent, prefix=".posting_guard.", suffix=".tmp")
@@ -661,7 +665,7 @@ def main(argv=None) -> int:
     else:
         print("--- text ---")
         print(cleaned)
-    return 1 if findings["verdict"] == NO_TEXT_VERDICT else 0
+    return 1 if no_text else 0
 
 
 if __name__ == "__main__":
