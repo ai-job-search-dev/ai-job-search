@@ -38,11 +38,17 @@ The command is **silently optional**: when the destination is not reachable, the
 
 ## Step 2: Build the Sync Set (local data only - no external calls yet)
 
+> **Windows:** run these tools as `python`, not `python3`.
+
 Validate the cheap, local precondition before creating anything external. A run with nothing to sync must exit with **zero side effects** - no database created, no state file written.
 
 1. Read `job_scraper/seen_jobs.json` and `job_search_tracker.csv` (either may be missing).
 2. Select `job_scraper/seen_jobs.json` entries with status `ranked` whose `rank_score` meets the threshold from Step 0. `--all` lifts the threshold entirely.
-3. Every tracker row joins the sync set (an applied-to job always syncs, ranked or not), matched to `job_scraper/seen_jobs.json` entries case-insensitively on company + title where possible (the tracker's `role` column against the entry's `title` field — entries carry `title`, not `role`). Tracker rows with no `job_scraper/seen_jobs.json` entry sync too - build their Key as `<company>_<role>` lowercased with underscores.
+3. Every tracker row joins the sync set (an applied-to job always syncs, ranked or not), matched to `job_scraper/seen_jobs.json` entries case-insensitively on company + title where possible (the tracker's `role` column against the entry's `title` field — entries carry `title`, not `role`). Tracker rows with no `job_scraper/seen_jobs.json` entry sync too. For these tracker-only jobs, generate the Key with the same helper `/scrape` uses, passing the tracker's `company`, `role` and `source` (the posting URL, empty when absent):
+   ```bash
+python3 tools/job_key.py --company "<company>" --title "<role>" --url "<source>"
+   ```
+   Use its stdout verbatim. A matched scraper entry still uses its **stored** key, never a newly generated replacement. This keeps a direct `/apply` → `/notion-sync` run on the same key when `/scrape` later discovers that posting.
 4. `job_scraper/seen_jobs.json` entries with status `expired` join the sync set regardless of score as update-only candidates. An entry selected only because it is `expired` and has no matching tracker row can update an existing page, but never creates a page or writes a body. If a matching tracker row exists, it remains an ordinary sync item and tracker status precedence applies.
 5. **Status precedence:** the tracker wins. A job that is `ranked` in `job_scraper/seen_jobs.json` but `interview` in the tracker syncs as `interview`. Jobs only in `job_scraper/seen_jobs.json` keep their stored status. **Deadline precedence: the tracker wins too** - the tracker's `deadline` (written by `/apply` from the posting the application was actually built on) overrides the `job_scraper/seen_jobs.json` value; jobs only in `job_scraper/seen_jobs.json` keep the scraper's stored deadline. Omit the property when neither states one, and **never reconcile the two by picking the earlier or later date** - both were read from the posting at different times, and the safe-looking `min()` substitutes a date the user never applied against.
 6. **If the sync set is empty** (no ranked entries meet the threshold and there are no tracker rows), say "Nothing to sync - run `/scrape` and `/rank` first" (or, when jobs exist but all score below the threshold, say so and suggest `--min-score`/`--all`) and **stop**.
@@ -75,7 +81,7 @@ Validate the cheap, local precondition before creating anything external. A run 
    | CV file | rich text | tracker `cv_file` column - the filename only, never document content |
    | Cover letter | rich text | tracker `cover_letter_file` column - the filename only, never document content |
    | URL | url | posting URL |
-   | Key | rich text | the job's key in `job_scraper/seen_jobs.json` - dedup anchor, never edited by hand |
+   | Key | rich text | the stored scraper key, or the helper-generated tracker-only key from Step 2.3 - dedup anchor, never edited by hand |
 
    The tracker-sourced properties (Applied on, Channel, CV file, Cover letter) stay empty for jobs that have no tracker row. CV file and Cover letter fill in once `/apply` records the draft; Applied on stays empty until `/outcome` records the submission. Only filenames ever sync; document contents stay local.
 
