@@ -220,6 +220,8 @@ INSTRUCTION_PATTERNS = [re.compile(p, re.I) for p in (
     r"settings\.json",
     r"allowed-tools",
     r"\btool_use\b|\bfunction_call\b",
+    r"(?m)^\s*for\s+(?:llms?|ais?|chatgpt|claude|agents?)\s*[:：]",
+    r"\bwhen filling (?:out |in )?(?:this |the )?form\b.*\b(?:append|include|add)\s+(?:the\s+(?:following\s+)?|these\s+)words\b",
 )]
 WORD = re.compile(r"\w+", re.UNICODE)
 LATIN = re.compile(r"[A-Za-z]")
