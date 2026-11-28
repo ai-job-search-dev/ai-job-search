@@ -84,5 +84,50 @@ class TrustBoundaryWiring(unittest.TestCase):
         self.assertIn("framework_version: 1.1.9", text)
 
 
+class RefusedVerdictWiring(unittest.TestCase):
+    """#865: the gate's third outcome, `refused (no text to evaluate)`, means the
+    fetch or paste gave nothing readable - not that the posting is suspicious.
+    Every caller says what to do with it, quoting the verdict exactly as the tool
+    prints it, so renaming the string in the tool fails here instead of leaving
+    the callers to improvise."""
+
+    @classmethod
+    def setUpClass(cls):
+        source = (REPO / "tools" / "posting_guard.py").read_text(encoding="utf-8")
+        cls.verdict = re.search(r'^NO_TEXT_VERDICT = "([^"]+)"$', source, re.MULTILINE).group(1)
+
+    def test_every_caller_names_the_refused_verdict(self):
+        callers = [
+            APPLY,
+            INTERVIEW,
+            REPO / ".claude" / "commands" / "rank.md",
+            REPO / ".claude" / "commands" / "outcome.md",
+            REPO / ".claude" / "agents" / "posting-fetcher.md",
+            REPO / ".claude" / "agents" / "posting-scorer.md",
+            REPO / ".claude" / "skills" / "job-application-assistant" / "SKILL.md",
+        ]
+        for path in callers:
+            text = path.read_text(encoding="utf-8")
+            with self.subTest(caller=path.name):
+                self.assertIn(self.verdict, text)
+                # Exit 2 = the gate did not run; no caller may go on with ungated text.
+                self.assertRegex(text, r"(?i)exit 2 \(?(means )?the gate itself did not run")
+                self.assertRegex(text, r"(?i)never (read|archive)[^.]*ungated text")
+
+    def test_rank_records_a_refused_fetch_as_unreachable_not_scored(self):
+        for path in (REPO / ".claude" / "commands" / "rank.md", REPO / ".claude" / "agents" / "posting-scorer.md"):
+            text = path.read_text(encoding="utf-8")
+            line = next(l for l in text.splitlines() if self.verdict in l)
+            with self.subTest(caller=path.name):
+                self.assertIn("`unreachable`", line)
+                self.assertIn("never as scored", line)
+
+    def test_apply_never_evaluates_an_empty_posting(self):
+        text = APPLY.read_text(encoding="utf-8")
+        step0 = re.search(r"## Step 0: Parse Input(.*?)(?=\n## Step 1)", text, re.DOTALL).group(1)
+        self.assertIn(self.verdict, step0)
+        self.assertIn("Never evaluate fit on an empty posting", step0)
+
+
 if __name__ == "__main__":
     unittest.main()
