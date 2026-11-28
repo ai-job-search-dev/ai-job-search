@@ -112,6 +112,7 @@ class RefusedVerdictWiring(unittest.TestCase):
                 self.assertIn(self.verdict, text)
                 # Exit 2 = the gate did not run; no caller may go on with ungated text.
                 self.assertRegex(text, r"(?i)exit 2 \(?(means )?the gate itself did not run")
+                self.assertRegex(text, r"(?i)never (read|archive)[^.]*ungated text")
 
     def test_rank_records_a_refused_fetch_as_unreachable_not_scored(self):
         for path in (REPO / ".claude" / "commands" / "rank.md", REPO / ".claude" / "agents" / "posting-scorer.md"):
