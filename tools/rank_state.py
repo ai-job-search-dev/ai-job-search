@@ -312,6 +312,30 @@ def band(score: int) -> str:
     return "Poor Fit"
 
 
+def _persist_guard(entry: dict, result: dict) -> None:
+    # The scoring agent's posting_guard verdict line ("clean" or the ⚠ line).
+    # Additive and optional: an agent on an older prompt returns none, and
+    # nothing is written. Stored so a later reader can see why a row carried
+    # a marker without re-fetching the posting.
+    # Normalised so Step 5's "anything other than clean" rule holds whether
+    # the agent returned "clean" or the gate's first line verbatim: any clean
+    # verdict (with or without its context parenthetical) stores as "clean";
+    # a ⚠ verdict stores without the "posting_guard:" prefix. A refusal
+    # verdict ("refused (no text to evaluate)") is kept for diagnosis on
+    # unreachable fetches but is exempt from Step 5's suspicious-posting ⚠
+    # marker rule. A rescoring result without a guard drops a stale one -
+    # absence means "not run", and last run's verdict would mislabel this
+    # run's fetch.
+    guard = result.get("guard")
+    if isinstance(guard, str) and guard.strip():
+        text = guard.strip()
+        if text.lower().startswith("posting_guard:"):
+            text = text[len("posting_guard:"):].strip()
+        entry["guard"] = "clean" if text.lower().startswith("clean") else text[:200]
+    else:
+        entry.pop("guard", None)
+
+
 def cmd_apply(args) -> int:
     doc, seen = load_state(args.state)
     today = args.today
@@ -370,6 +394,7 @@ def cmd_apply(args) -> int:
             entry["first_unreachable"] = first.strftime(TIMESTAMP)
             if error:
                 entry["last_fetch_error"] = error
+            _persist_guard(entry, result)
             row = {
                 "key": key,
                 "title": entry.get("title"),
@@ -377,6 +402,7 @@ def cmd_apply(args) -> int:
                 "url": entry.get("url"),
                 "fetch_attempts": attempts,
                 "last_fetch_error": entry.get("last_fetch_error"),
+                "guard": entry.get("guard"),
             }
             if attempts >= UNREACHABLE_MAX_ATTEMPTS and now - first >= UNREACHABLE_MIN_SPAN:
                 # The retry fields stay on the entry as its history; `--all`
@@ -452,24 +478,7 @@ def cmd_apply(args) -> int:
             value = result.get(field)
             if isinstance(value, list):
                 entry[field] = [str(b) for b in value][:3]
-        # The scoring agent's posting_guard verdict line ("clean" or the ⚠ line).
-        # Additive and optional: an agent on an older prompt returns none, and
-        # nothing is written. Stored so a later reader can see why a row carried
-        # a marker without re-fetching the posting.
-        # Normalised so Step 5's "anything other than clean" rule holds whether
-        # the agent returned "clean" or the gate's first line verbatim: any clean
-        # verdict (with or without its context parenthetical) stores as "clean";
-        # a ⚠ verdict stores without the "posting_guard:" prefix. A rescoring
-        # result without a guard drops a stale one - absence means "not run",
-        # and last run's verdict would mislabel this run's fetch.
-        guard = result.get("guard")
-        if isinstance(guard, str) and guard.strip():
-            text = guard.strip()
-            if text.lower().startswith("posting_guard:"):
-                text = text[len("posting_guard:"):].strip()
-            entry["guard"] = "clean" if text.lower().startswith("clean") else text[:200]
-        else:
-            entry.pop("guard", None)
+        _persist_guard(entry, result)
 
         rows.append(
             {
