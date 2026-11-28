@@ -122,6 +122,29 @@ class SetupPathAWritesIntoSectionsTheShippedFilesHave(unittest.TestCase):
                 self.assertIn(name, headings, f"02-behavioral-profile.md has no '## {name}' heading")
 
 
+class SetupPortalStepEnablesTheCopiedPortal(unittest.TestCase):
+    """The Job portals step must flip `enabled: false` on a portal the user copied in.
+
+    #829 moved the portals to community-portals and dropped the sentence that
+    had /setup set `enabled: true` on the Danish boards. Those boards still
+    ship `enabled: false`, so a user who names one, pastes the copy prompt and
+    runs the installer gets a portal `/scrape` skips (`skipped (disabled):`),
+    with every result coming from WebSearch.
+    """
+
+    def test_job_portals_bullet_sets_enabled_true_after_the_copy(self):
+        lines = COMMAND.read_text(encoding="utf-8").splitlines()
+        start = next(i for i, line in enumerate(lines) if line.startswith("- **Job portals:**"))
+        end = next(i for i in range(start + 1, len(lines)) if lines[i].startswith("- **"))
+        bullet = "\n".join(lines[start:end])
+        self.assertIn("community-portals", bullet)
+        self.assertIn(
+            "`enabled: true`", bullet,
+            "the Job portals step must tell the agent to set `enabled: true` on a copied-in portal",
+        )
+        self.assertIn("`enabled: false`", bullet)
+
+
 class SetupPathAProjectsIngestion(unittest.TestCase):
     """Guards for /setup Path A document ingestion of documents/projects/."""
 
