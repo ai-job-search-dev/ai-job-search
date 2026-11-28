@@ -50,9 +50,10 @@ class ScrapeStateTests(unittest.TestCase):
 
     def test_one_malformed_portal_hit_does_not_stop_other_candidates(self):
         valid = {"title": "Builder", "company": "Fresh", "url": "https://jobs.test/fresh"}
-        out = self.run_tool("candidates", [valid, {"company": "Nobody", "url": "https://jobs.test/bad"}, None])
+        out = self.run_tool("candidates", [valid, {"company": "Nobody", "url": "https://jobs.test/bad"},
+                                           {"title": "Engineer", "url": "https://jobs.test/missing-company"}, None])
         self.assertEqual(out["selected"], [valid])
-        self.assertEqual([item["index"] for item in out["invalid"]], [1, 2])
+        self.assertEqual([item["index"] for item in out["invalid"]], [1, 2, 3])
 
     def test_unnamed_employer_is_a_posting_not_a_malformed_hit(self):
         # The portal contract (add-portal.md) says a missing value is null,
