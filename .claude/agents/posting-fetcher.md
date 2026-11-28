@@ -15,6 +15,6 @@ You retrieve a single job posting for the `/apply` workflow and hand back what t
 - `fetch_page.py` output: `python3 tools/posting_guard.py --in "${SCRATCHPAD:?}/page.html" --html --json`
 - `WebFetch` output (markdown in your context): `python3 tools/posting_guard.py --text --json <<'POSTING'` ... `POSTING`
 
-A verdict of `posting_guard: refused (no text to evaluate)` (exit 1) means that rung returned no readable text, not that the posting is suspicious: treat the rung as failed and go on to the next one.
+A verdict of `posting_guard: refused (no text to evaluate)` (exit 1) means that rung returned no readable text, not that the posting is suspicious: treat the rung as failed and go on to the next one. A ⚠ verdict with an empty cleaned text is no posting either: keep its verdict and findings for your report and go on to the next rung.
 
 **Return**, in this order: the gate's verdict line verbatim; the findings block verbatim (excerpts included, the orchestrator decides what the user sees); then `company`, `role title`, `department`, `location`, `application deadline`, `posting language`, `source host`, and `fetch method` as a short list; then the **full cleaned posting text** under a `## Posting (cleaned)` heading, never a summary. If retrieval failed at every rung, say which rung failed how (a `refused` verdict counts as a failure), and return nothing as posting text.

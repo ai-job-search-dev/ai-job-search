@@ -55,8 +55,11 @@ a documented path. Output: the verdict line, a `--- findings ---` block (JSON
 with --json), then `--- text ---` and the cleaned text, or `saved=<path>` when
 --out is given. Exit 0 when a posting is evaluated; 1 when the input has no text
 to evaluate (the verdict is `posting_guard: refused (no text to evaluate)`; the
-run writes nothing and removes an existing --out file, so a cleaned posting left
-there by an earlier run is never read as this one); 2 when --in cannot be read,
+run writes no cleaned posting and removes an existing --out file, so a cleaned
+posting left there by an earlier run is never read as this one). An input whose
+only content is hidden text that raises a ⚠ signal is not refused: it keeps its
+⚠ verdict and exits 0 with an empty cleaned text, so the alarm still reaches the
+user, and a caller still has no posting to evaluate. 2 when --in cannot be read,
 is a hard link, or lies outside the temp directory, /tmp (not on Windows),
 documents/applications/ and documents/postings/, or --out cannot be written
 (or, on a refused run, cannot be removed) or it or its directory points
