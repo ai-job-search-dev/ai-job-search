@@ -1,5 +1,5 @@
 ---
-framework_version: 1.2.7
+framework_version: 1.3.0
 ---
 
 # Job Evaluation Framework
@@ -9,6 +9,8 @@ framework_version: 1.2.7
 ## Eligibility Gate — run before scoring
 
 If the candidate is not a citizen or permanent resident of the country they are applying in, run this first. It is a hard filter, not a scoring dimension, and it is separate from work-permit *timing*: timing asks "can they work the required hours yet?", eligibility asks "are they permitted to hold this job at all?". A candidate can pass timing and still be categorically excluded.
+
+The candidate's status comes from the **Work authorization** line in CLAUDE.md / `01-candidate-profile.md`, which `/setup` asks for. Use the entry for the posting's country; a single entry with no country named covers every country. If that entry says citizen or permanent resident with no sponsorship needed, skip this gate entirely: no verdict, no marker, nothing to report. A "citizen" entry for a different country never skips it, and if no entry covers the posting's country, run the gate. If the line is absent (a profile set up before the field existed), run this gate only when the profile states elsewhere that the candidate is not a citizen or permanent resident. If the line is still the `[YOUR_WORK_AUTHORIZATION]` placeholder, ask the user once before scoring rather than assuming either way. A candidate who answered that they need visa sponsorship now or in the future fails any posting that says it will not sponsor ("unable to sponsor", "must be authorized to work without sponsorship"), the same as a citizenship requirement below.
 
 Read the posting's eligibility / work rights / "who can apply" section **verbatim** and classify:
 

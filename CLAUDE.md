@@ -30,6 +30,10 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 - **CV language:** [YOUR_CV_LANGUAGE] <!-- English unless your market expects otherwise; /setup asks -->
 
 - **Status:** [YOUR_EMPLOYMENT_STATUS]
+<!-- Work authorization: "Citizen or permanent resident; no sponsorship needed" when that holds in every
+country you apply in, otherwise your permit and your answer to "Will you now or in the future require visa
+sponsorship?", one entry per country. /setup asks. See 04-job-evaluation.md's Eligibility Gate. -->
+- **Work authorization:** [YOUR_WORK_AUTHORIZATION]
 - **LinkedIn headline:** "[YOUR_LINKEDIN_HEADLINE]"
 
 ### Education
