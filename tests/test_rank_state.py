@@ -77,10 +77,20 @@ class Candidates(RankStateCase):
         self.assertEqual([row["key"] for row in out["selected"]], ["a"])
         self.assertEqual(
             set(out["selected"][0]),
-            {"key", "title", "company", "url", "portal", "deadline", "posted_date"},
+            {"key", "title", "company", "url", "portal", "deadline", "posted_date", "employment_type"},
             "the projection is the point: strengths/gaps and every other stored field "
             "stay on disk rather than entering the conversation",
         )
+
+    def test_employment_type_is_projected_with_null_for_entries_without_one(self):
+        # /scrape stores the posting's employment_type (#619) and rank.md Step 5
+        # shows it on the shortlist line "because /scrape already stored the
+        # value" - but Step 1 forbids reading seen_jobs.json, so the only way the
+        # value reaches the report is through this projection. An entry that
+        # predates the field, or stored null, is emitted as null, not dropped.
+        self.write_state({"a": entry(employment_type="contract"), "b": entry(title="Other", employment_type=None), "c": entry(title="Older")})
+        out = self.run_tool("candidates", "--tracker", str(self.tmp / "none.csv"))
+        self.assertEqual([row["employment_type"] for row in out["selected"]], ["contract", None, None])
 
     def test_limit_defers_the_rest_and_reports_the_count(self):
         self.write_state({f"k{i}": entry(title=f"Role {i}") for i in range(25)})
@@ -448,6 +458,14 @@ class Apply(RankStateCase):
         self.assertEqual(stored["gaps"], ["g1"])
         self.assertEqual(stored["deadline"], "2026-09-05")
         self.assertTrue(out["ranked"][0]["urgent"], "a deadline inside 7 days carries the urgency marker")
+
+    def test_employment_type_is_echoed_in_the_ranked_row(self):
+        # Step 5 is written from apply's rows without re-reading state, so the
+        # stored employment_type has to ride along like posted_date does.
+        self.write_state({"a": entry(employment_type="contract"), "b": entry(title="Other")})
+        out = self.run_tool("apply", "--results", self.results([self._scored(), self._scored(key="b")]))
+        self.assertEqual({row["key"]: row["employment_type"] for row in out["ranked"]}, {"a": "contract", "b": None})
+        self.assertEqual(self.read_state()["a"]["employment_type"], "contract", "apply never rewrites the scraper's field")
 
     def test_expired_status_is_written_through(self):
         self.write_state({"a": entry()})
