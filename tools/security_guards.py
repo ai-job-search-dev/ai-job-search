@@ -653,10 +653,14 @@ def load_local_negations() -> set[str]:
     """Negations a fork lists in .github/security-guards-local.txt (empty if absent)."""
     if not LOCAL_NEGATIONS_FILE.is_file():
         return set()
+    # utf-8-sig: Windows editors prepend a BOM, which would otherwise ride along
+    # on the first negation and make it "not a negation". A file that is not
+    # UTF-8 at all (PowerShell 5.1's `>` and Out-File write UTF-16) is reported
+    # like any other unreadable guarded file, never as a traceback.
     try:
-        raw = LOCAL_NEGATIONS_FILE.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
-        errors.append(f".github/security-guards-local.txt: unreadable: {exc}")
+        raw = LOCAL_NEGATIONS_FILE.read_text(encoding="utf-8-sig").splitlines()
+    except (OSError, UnicodeDecodeError) as exc:
+        errors.append(f".github/security-guards-local.txt: unreadable (must be UTF-8): {exc}")
         return set()
     extra: set[str] = set()
     for number, line in enumerate(raw, start=1):
