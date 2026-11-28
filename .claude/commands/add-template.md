@@ -44,11 +44,12 @@ If `$ARGUMENTS` contains `--use <name>`:
    - **Engine/toolchain:** e.g. `lualatex`, `typst` (display label)
    - **Page limit:** `<N> page(s)`
    - **Fonts:** the full font summary line
+   - **Footer band:** `<pt>`, only if the manifest declares one
 6. Derive the template folder from the manifest path and verify `template<source-extension>` exists in the same folder. If it is missing, stop with an error; the template registration is incomplete.
 7. Derive `<type>` for Step 5 from the manifest path:
    - `templates/cv/<name>/TEMPLATE.md` -> `cv`
    - `templates/cover_letters/<name>/TEMPLATE.md` -> `cover_letters`
-8. Continue to Step 5 using the resolved `<name>`, `<type>`, `<source-extension>`, `<compile-command>`, engine/toolchain label, font summary, page limit, template skeleton path, and manifest path. Do not re-run Steps 1-4; `--use` switches an already-registered template.
+8. Continue to Step 5 using the resolved `<name>`, `<type>`, `<source-extension>`, `<compile-command>`, engine/toolchain label, font summary, page limit, footer band (if declared), template skeleton path, and manifest path. Do not re-run Steps 1-4; `--use` switches an already-registered template.
 
 ---
 
@@ -85,7 +86,8 @@ Collect:
    - **System / distribution fonts**: record the font name and note that the user's machine must have it installed.
 5. **Style rules** - anything the drafter must preserve when filling the template: color scheme, section order, heading style, spacing conventions, bullet formatting, date format.
 6. **Page limit** - hard page count for the compiled PDF. Default: **2 pages** for a CV, **1 page** for a cover letter. `/apply`'s compile-and-inspect loop enforces this.
-7. **Known pitfalls** (optional) - macros/rules that break with certain content (like the stock template's `\lettercontent{}`/`itemize` interaction), characters that need escaping, sections that must not be reordered.
+7. **Footer band** (optional) - `tools/verify_layout.py` treats the bottom 90pt of each page as the footer band, calibrated for the stock moderncv and cover.cls page numbers, and reports two lines inside it as body text colliding with the footer. A template that prints **no** footer (no page number, no footer line) and whose text area runs closer than 90pt to the page bottom trips that check on every full page. For such a template, record its bottom margin in points (LaTeX `geometry` `bottom=0.5in` is `36`; 1in = 72pt). Leave it unset for any template that prints a footer, so the default band still guards it.
+8. **Known pitfalls** (optional) - macros/rules that break with certain content (like the stock template's `\lettercontent{}`/`itemize` interaction), characters that need escaping, sections that must not be reordered.
 
 ---
 
@@ -112,6 +114,7 @@ Write into it:
 - **Page limit:** <N> page(s)
 - **Fonts:** <main font> (<bundled in fonts/ | system font - must be installed>)
 - **Class/packages:** <documentclass/imports and any non-standard packages, or "standard">
+- **Footer band:** <pt> (footer-less templates only - omit this line otherwise)
 
 ## Compile command
 
@@ -166,6 +169,7 @@ Insert (or replace, if one exists) this block immediately after the file's H1 ti
 > - **Compile command:** `<the full declared command>` (not the command named in the stock guidance below — `/apply`'s compile step must use this instead). Run it from the output directory. If it redirects to `build/`, the log is in `build/`, and `/apply`'s Step 5e cleanup must delete that `build/` folder too
 > - **Fonts:** <font summary, including any path note for bundled fonts>
 > - **Page limit:** exactly <N> page(s)
+> - **Footer band:** <pt>pt — `/apply` Step 5b passes `--footer-band <pt>` to `tools/verify_layout.py` (include this line only when the manifest declares a footer band)
 > - **Output file:** `cv/main_<company>_<role><source-extension>` / `cover_letters/cover_<company>_<role><source-extension>`; copy any class/package/font files the template needs into the output directory, or reference them by relative path
 <!-- END ACTIVE-TEMPLATE -->
 ```
